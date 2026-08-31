@@ -1,6 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4f-iv `b6a7d19`; 4f-iii `0ff4c2c`; 4f-ii `144bee6`; 4f-i `144e458`)
+**Last updated:** 2026-08-31 (4f-v item-picker-drawer implemented, local commit pending — see
+"Prior slice — 4f-v"; 4f-iv `b6a7d19`; 4f-iii `0ff4c2c`; 4f-ii `144bee6`; 4f-i `144e458`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -274,16 +275,34 @@ modal composer is unchanged.
   form and disables submit until the change is confirmed or cancelled.
 - Files: `ActualWorkComposer.tsx`; tests: `ActualWorkComposer.test.tsx` (+18),
   `ActualWorkWorkspacePage.test.tsx` (+1).
-- **Deferred to 4f-v:** portal/floating search-results popover (below).
+- **Deferred to 4f-v:** search-results surface rework (now the item-picker drawer, below).
 
-### Next code slice — 4f-v inline search-results popover (fresh session)
+### Prior slice — 4f-v Actual Work item-picker drawer (local commit pending)
 
-UI-only, `web/ophalo-app`. Give `ActualWorkSearchAndAdd`'s results list a portal/`position: fixed`
-anchored popover so it sits above the pinned footer and the central scroll region on
-constrained-height screens and large result sets, flipping upward when the anchor is low. New
-positioning primitive (repo has no `createPortal` / floating-ui today) — its own gate, jsdom-safe
-positioning stubs like the ticket-context band's clamp. Enhancement only; the 4f-iv mode switch is
-the fundamental fix for the screenshots.
+Frontend-only, `web/ophalo-app`. **2 prod + 2 test** (children/slot approach — kept
+`ActualWorkSearchAndAdd` private, avoided a composer↔drawer circular import; the preflight's
+3rd extraction file was not needed). Supersedes the dropped portal/popover 4f-v plan.
+
+- **`ActualWorkItemPickerDrawer.tsx` (new):** `ResponsiveSheet` shell (`labelledBy` heading
+  "Add work & materials", `initialFocus` → hosted search input, "Done" `KeepButton` footer,
+  `backdropClosable={false}` → Done + Escape only). Takes the search element as `children` and an
+  optional `connectionFailureBanner` node rendered above it. Presentation-only.
+- **`ActualWorkComposer.tsx`:** inline (`presentation === "inline"`) presentation only —
+  `searchAndAdd` extracted to a local element reused by both paths; new `pickerOpen` state; a
+  persistent "Add work/material lines" trigger button replaces the inline `ActualWorkSearchAndAdd`
+  at the top of "Active visit draft"; `{inline && pickerOpen && <ActualWorkItemPickerDrawer>}`
+  hosts it. `openPicker()` sets `emptyDraftMode` "work" when the draft is empty (neutral/zero-line
+  → work). The composer-level `ConnectionFailureBanner` is suppressed while the drawer is open and
+  rendered inside it instead. Two force-close effects: `pickerAllowed`
+  (`!readOnly && !needsPerformer && !changingPerformer`) and last-line-removed. Modal (non-inline)
+  branch renders `searchAndAdd` directly — unchanged. `onActivate` prop + its focus/keystroke
+  handlers removed from `ActualWorkSearchAndAdd` (no remaining callers; modal never used it).
+- Tests: `ActualWorkItemPickerDrawer.test.tsx` (+4); `ActualWorkComposer.test.tsx` — reworked the
+  two search-in-capture-area tests for the drawer, +7 (open/multi-add/Done/Escape, results in
+  drawer, the three close-on-invalid transitions incl. read-only, connection-failure banner in
+  drawer); added a jsdom `Element.prototype.scrollIntoView` stub.
+- Verification: frontend suite 907/907, `tsc` clean, `check:tokens` passed, `git diff --check`
+  clean. No backend / API-client / routing / migration change.
 
 ### Next code slice — 4g request-close eligibility gate (fresh session)
 

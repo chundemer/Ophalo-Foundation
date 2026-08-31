@@ -33,6 +33,7 @@ type SetVisitNoteOutcome = "set" | "too-long" | "stale" | "failed";
  * server rejected the outcome enum value); `failed` keeps the local edit for a retry. */
 type SetZeroLineDispositionOutcome = "set" | "invalid" | "stale" | "failed";
 import { ConnectionFailureBanner } from "./ConnectionFailureBanner";
+import { ActualWorkItemPickerDrawer } from "./ActualWorkItemPickerDrawer";
 import { announcePolite } from "../../lib/liveAnnouncer";
 
 type ActualWorkDraft = NonNullable<ActualWorkHistoryResult["openDraft"]>;
@@ -176,10 +177,28 @@ export function ActualWorkComposer({
   const isEmptyDraftInline =
     inline && !readOnly && !needsPerformer && !changingPerformer && draft.lines.length === 0;
 
-  function focusSearch() {
-    // The search input is not mounted in "neutral"/"zero-line" mode; wait a frame for the switch.
-    requestAnimationFrame(() => searchInputRef.current?.focus());
+  // BL136 4f-v: the inline (workspace-route) presentation moves search + catalog results + the
+  // custom-item path into a dedicated right-side drawer that stays open for multi-add, instead of
+  // an inline dropdown. Opening it from the neutral empty-draft choice commits to "work" mode so a
+  // close with nothing added lands on the zero-line escape hatch, not the two-choice card.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  function openPicker() {
+    if (isEmptyDraftInline) setEmptyDraftMode("work");
+    setPickerOpen(true);
   }
+  // The drawer must not survive a transition into a state where line entry is disallowed or the
+  // recorded-line surface it was opened over no longer exists: the performer gate opening, the
+  // draft going read-only/submitted, or the last recorded line being removed all force it closed.
+  const pickerAllowed = inline && !readOnly && !needsPerformer && !changingPerformer;
+  useEffect(() => {
+    if (!pickerAllowed) setPickerOpen(false);
+  }, [pickerAllowed]);
+  const prevPickerLineCountRef = useRef(draft.lines.length);
+  useEffect(() => {
+    if (prevPickerLineCountRef.current > 0 && draft.lines.length === 0) setPickerOpen(false);
+    prevPickerLineCountRef.current = draft.lines.length;
+  }, [draft.lines.length]);
+
   function focusZeroLineOutcome() {
     // The footer stays mounted across mode toggles; give React a frame to render the fields.
     requestAnimationFrame(() => {
@@ -258,6 +277,22 @@ export function ActualWorkComposer({
       discardTriggerRef.current?.focus();
     };
   }, [showDiscardConfirm, discardMutation.isPending]);
+
+  // Search + catalog/assembly results + custom-item path. The modal (non-inline) presentation
+  // renders this directly in the composer; the inline (workspace-route) presentation hosts the
+  // same element inside `ActualWorkItemPickerDrawer` (BL136 4f-v).
+  const searchAndAdd = (
+    <ActualWorkSearchAndAdd
+      ref={searchInputRef}
+      actualWorkId={draft.id}
+      version={draft.concurrencyVersion}
+      defaultPerformerName={draft.defaultPerformerDisplayName ?? null}
+      onCommitted={onCommitted}
+      onConflict={onConflict}
+      onConnectionFailure={reportConnectionFailure}
+      onConnectionRecovered={clearConnectionFailure}
+    />
+  );
 
   const composerBody = (
     <>
@@ -341,7 +376,7 @@ export function ActualWorkComposer({
           </div>
         )}
 
-        {connectionFailure && (
+        {connectionFailure && !(inline && pickerOpen) && (
           <ConnectionFailureBanner
             message={connectionFailure.message}
             onRetry={retryConnectionFailure}
@@ -384,20 +419,35 @@ export function ActualWorkComposer({
                   }
                 />
               )}
-              {(!isEmptyDraftInline || emptyDraftMode !== "neutral") && (
-                <ActualWorkSearchAndAdd
-                  ref={searchInputRef}
-                  actualWorkId={draft.id}
-                  version={draft.concurrencyVersion}
-                  defaultPerformerName={draft.defaultPerformerDisplayName ?? null}
-                  onActivate={
-                    isEmptyDraftInline ? () => setEmptyDraftMode("work") : undefined
+              {!inline ? (
+                searchAndAdd
+              ) : (
+                (!isEmptyDraftInline || emptyDraftMode !== "neutral") && (
+                  <button
+                    type="button"
+                    onClick={openPicker}
+                    className={`inline-flex items-center gap-1 self-start rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-2.5 py-1.5 text-xs font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add work/material lines
+                  </button>
+                )
+              )}
+              {inline && pickerOpen && (
+                <ActualWorkItemPickerDrawer
+                  onClose={() => setPickerOpen(false)}
+                  initialFocus={searchInputRef}
+                  connectionFailureBanner={
+                    connectionFailure && (
+                      <ConnectionFailureBanner
+                        message={connectionFailure.message}
+                        onRetry={retryConnectionFailure}
+                        isRetrying={isRetryingConnectionFailure}
+                      />
+                    )
                   }
-                  onCommitted={onCommitted}
-                  onConflict={onConflict}
-                  onConnectionFailure={reportConnectionFailure}
-                  onConnectionRecovered={clearConnectionFailure}
-                />
+                >
+                  {searchAndAdd}
+                </ActualWorkItemPickerDrawer>
               )}
             </>
           )}
@@ -412,10 +462,7 @@ export function ActualWorkComposer({
                   <div className="mt-1.5 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        setEmptyDraftMode("work");
-                        focusSearch();
-                      }}
+                      onClick={openPicker}
                       className={`inline-flex items-center gap-1 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-2.5 py-1 text-xs font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
                     >
                       <Plus className="h-3.5 w-3.5" /> Add work/material lines
@@ -437,7 +484,7 @@ export function ActualWorkComposer({
                 </div>
               ) : emptyDraftMode === "work" ? (
                 <p className="text-[11px] text-[var(--ophalo-muted)]">
-                  No items added yet. Search above, or{" "}
+                  No items added yet. Use “Add work/material lines” above, or{" "}
                   <button
                     type="button"
                     onClick={() => {
@@ -989,10 +1036,6 @@ interface ActualWorkSearchAndAddProps {
   // unless the recorder picks a different technician; existing lines cannot be re-attributed (no
   // backend route).
   defaultPerformerName: string | null;
-  // BL136 large-ticket density: fired on first focus/keystroke so the inline workspace can switch
-  // the empty-draft surface into "work" mode (collapsing the zero-line panel). Undefined outside
-  // the empty-draft inline state.
-  onActivate?: () => void;
   onCommitted: () => Promise<void>;
   onConflict: (message?: string) => void;
   onConnectionFailure: (message: string, retry: () => void) => void;
@@ -1006,7 +1049,6 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
     actualWorkId,
     version,
     defaultPerformerName,
-    onActivate,
     onCommitted,
     onConflict,
     onConnectionFailure,
@@ -1151,11 +1193,7 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
             ref={ref}
             type="text"
             value={searchText}
-            onFocus={() => onActivate?.()}
-            onChange={(e) => {
-              onActivate?.();
-              setSearchText(e.target.value);
-            }}
+            onChange={(e) => setSearchText(e.target.value)}
             placeholder="Search by name or SKU..."
             className={INPUT_CLS}
           />

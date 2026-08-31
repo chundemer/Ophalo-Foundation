@@ -104,6 +104,10 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ActualWor
   return { ...utils, onClose, onCommitted, onConflict, onDismissNotice, onRetryReconciliation, onSubmitted, onDiscarded, onSetDefaultPerformer, onSetVisitNote, onSetZeroLineDisposition, onHandOffToOffice };
 }
 
+// jsdom has no layout engine: the composer's post-mode-switch `scrollIntoView` call would throw
+// inside its `requestAnimationFrame` callback and surface as an unhandled error.
+if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = vi.fn();
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetFieldScopeSearch.mockResolvedValue({ items: [], limit: 20, hasMore: false, nextCursor: null });
@@ -931,20 +935,21 @@ describe("ActualWorkComposer", () => {
       expect(screen.queryByLabelText("Visit outcome")).not.toBeInTheDocument();
     });
 
-    it("collapses the zero-line form when the technician activates search", async () => {
+    it("collapses the zero-line form when the item picker is opened from that mode", async () => {
       const user = userEvent.setup();
       renderComposer({ presentation: "inline", isWide: false });
 
       await user.click(screen.getByRole("button", { name: "Record a zero-line outcome" }));
       expect(screen.getByLabelText("Visit outcome")).toBeInTheDocument();
 
-      // Search stays reachable in zero-line mode; touching it selects work mode.
-      await user.type(screen.getByPlaceholderText(/Search by name or SKU/), "filt");
+      // The persistent trigger stays reachable in zero-line mode; opening the picker selects work.
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
 
+      expect(screen.getByRole("dialog", { name: "Add work & materials" })).toBeInTheDocument();
       expect(screen.queryByLabelText("Visit outcome")).not.toBeInTheDocument();
     });
 
-    it("keeps the first search results within the non-scrolled capture area", async () => {
+    it("opens catalog search + results inside the item-picker drawer", async () => {
       const user = userEvent.setup();
       mockGetFieldScopeSearch.mockResolvedValue({
         items: [
@@ -954,16 +959,148 @@ describe("ActualWorkComposer", () => {
         hasMore: false,
         nextCursor: null,
       });
-      const { container } = renderComposer({ presentation: "inline", isWide: false });
+      renderComposer({ presentation: "inline", isWide: false });
 
       await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+      const drawer = screen.getByRole("dialog", { name: "Add work & materials" });
       await user.type(screen.getByPlaceholderText(/Search by name or SKU/), "filter");
 
       const result = await screen.findByRole("button", { name: /Air filter 20x25/ });
-      const scrollRegion = container.querySelector(".overflow-y-auto");
-      // The result renders inside the single capture scroll region and that region is not scrolled.
-      expect(scrollRegion?.contains(result)).toBe(true);
-      expect(scrollRegion?.scrollTop ?? 0).toBe(0);
+      expect(drawer.contains(result)).toBe(true);
+    });
+
+    it("keeps the item-picker drawer open after an add and closes it only on Done or Escape", async () => {
+      const user = userEvent.setup();
+      mockAddActualWorkLine.mockResolvedValue({ lineId: "line-2", actualWorkConcurrencyVersion: "v1" });
+      renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+      await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "gasket");
+      await user.click(await screen.findByText("Add as custom item"));
+      await user.type(screen.getByPlaceholderText("Describe the item"), "Rubber gasket");
+      await user.click(screen.getByRole("button", { name: "Add item" }));
+      await waitFor(() => expect(mockAddActualWorkLine).toHaveBeenCalled());
+
+      // The drawer is a focused multi-add phase: it stays mounted after a successful add.
+      expect(screen.getByRole("dialog", { name: "Add work & materials" })).toBeInTheDocument();
+
+      await user.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog", { name: "Add work & materials" })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+      await user.click(screen.getByRole("button", { name: "Done" }));
+      expect(screen.queryByRole("dialog", { name: "Add work & materials" })).not.toBeInTheDocument();
+    });
+
+    it("forces the item picker closed when the performer gate re-opens", async () => {
+      const user = userEvent.setup();
+      renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+      expect(screen.getByRole("dialog", { name: "Add work & materials" })).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Change" }));
+
+      expect(await screen.findByLabelText("Technician")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Add work & materials" })).not.toBeInTheDocument();
+    });
+
+    it("forces the item picker closed when the draft becomes read-only", async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderComposer({
+        presentation: "inline",
+        isWide: false,
+        draft: emptyDraft({ lines: [draftLine] }),
+      });
+
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+      expect(screen.getByRole("dialog", { name: "Add work & materials" })).toBeInTheDocument();
+
+      rerender(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <ActualWorkComposer
+            draft={emptyDraft({ lines: [draftLine], status: "Submitted" })}
+            presentation="inline"
+            conflictNotice={null}
+            isWide={false}
+            onClose={vi.fn()}
+            onCommitted={vi.fn()}
+            onConflict={vi.fn()}
+            onDismissNotice={vi.fn()}
+            onRetryReconciliation={vi.fn()}
+            onSubmitted={vi.fn()}
+            onDiscarded={vi.fn()}
+            onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
+            onSetVisitNote={vi.fn().mockResolvedValue("set")}
+            onSetZeroLineDisposition={vi.fn().mockResolvedValue("set")}
+            onHandOffToOffice={vi.fn().mockResolvedValue("handed-off")}
+          />
+        </QueryClientProvider>,
+      );
+
+      expect(screen.queryByRole("dialog", { name: "Add work & materials" })).not.toBeInTheDocument();
+    });
+
+    it("forces the item picker closed when the last recorded line is removed", async () => {
+      const user = userEvent.setup();
+      mockRemoveActualWorkLine.mockResolvedValue(undefined);
+
+      function Harness() {
+        const [lines, setLines] = useState([draftLine]);
+        return (
+          <ActualWorkComposer
+            draft={emptyDraft({ lines })}
+            presentation="inline"
+            conflictNotice={null}
+            isWide={false}
+            onClose={vi.fn()}
+            onCommitted={async () => setLines([])}
+            onConflict={vi.fn()}
+            onDismissNotice={vi.fn()}
+            onRetryReconciliation={vi.fn()}
+            onSubmitted={vi.fn()}
+            onDiscarded={vi.fn()}
+            onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
+            onSetVisitNote={vi.fn().mockResolvedValue("set")}
+            onSetZeroLineDisposition={vi.fn().mockResolvedValue("set")}
+            onHandOffToOffice={vi.fn().mockResolvedValue("handed-off")}
+          />
+        );
+      }
+
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <Harness />
+        </QueryClientProvider>,
+      );
+
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+      expect(screen.getByRole("dialog", { name: "Add work & materials" })).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Remove Filter" }));
+
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("dialog", { name: "Add work & materials" }),
+        ).not.toBeInTheDocument(),
+      );
+    });
+
+    it("renders the connection-failure banner inside the drawer while it is open", async () => {
+      const user = userEvent.setup();
+      mockAddActualWorkLine.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+      renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+      await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "gasket");
+      await user.click(await screen.findByText("Add as custom item"));
+      await user.type(screen.getByPlaceholderText("Describe the item"), "Rubber gasket");
+      await user.click(screen.getByRole("button", { name: "Add item" }));
+
+      const banner = await screen.findByRole("alert");
+      const drawer = screen.getByRole("dialog", { name: "Add work & materials" });
+      expect(drawer.contains(banner)).toBe(true);
+      expect(banner).toHaveTextContent("Couldn't add actual work.");
     });
 
     it("hides the zero-line form and blocks submission while the performer gate is re-opened", async () => {
