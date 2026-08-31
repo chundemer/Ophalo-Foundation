@@ -890,6 +890,229 @@ describe("ActualWorkComposer", () => {
       expect(screen.getByText("Auto-saved")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Submit visit to office" })).toBeInTheDocument();
     });
+
+    it("is a single bounded capture scroll surface with no dialog chrome", () => {
+      const { container } = renderComposer({ presentation: "inline", isWide: false });
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(container.querySelectorAll(".overflow-y-auto")).toHaveLength(1);
+    });
+
+    it("starts an empty draft in the neutral choice with no expanded zero-line fields", () => {
+      renderComposer({ presentation: "inline", isWide: false });
+
+      expect(screen.getByText("Choose how to record this visit")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Add work\/material lines/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Record a zero-line outcome" })).toBeInTheDocument();
+      // No outcome/note form, and no search field, until a path is chosen.
+      expect(screen.queryByLabelText("Visit outcome")).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/Search by name or SKU/)).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Submit visit to office" })).toBeDisabled();
+    });
+
+    it("shows the zero-line outcome/note form only after choosing that path", async () => {
+      const user = userEvent.setup();
+      renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: "Record a zero-line outcome" }));
+
+      expect(screen.getByLabelText("Visit outcome")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/Completion note/)).toBeInTheDocument();
+      expect(screen.queryByText("Choose how to record this visit")).not.toBeInTheDocument();
+    });
+
+    it("switches to work mode from the neutral choice and shows search, not the zero-line form", async () => {
+      const user = userEvent.setup();
+      renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+
+      expect(screen.getByPlaceholderText(/Search by name or SKU/)).toBeInTheDocument();
+      expect(screen.queryByLabelText("Visit outcome")).not.toBeInTheDocument();
+    });
+
+    it("collapses the zero-line form when the technician activates search", async () => {
+      const user = userEvent.setup();
+      renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: "Record a zero-line outcome" }));
+      expect(screen.getByLabelText("Visit outcome")).toBeInTheDocument();
+
+      // Search stays reachable in zero-line mode; touching it selects work mode.
+      await user.type(screen.getByPlaceholderText(/Search by name or SKU/), "filt");
+
+      expect(screen.queryByLabelText("Visit outcome")).not.toBeInTheDocument();
+    });
+
+    it("keeps the first search results within the non-scrolled capture area", async () => {
+      const user = userEvent.setup();
+      mockGetFieldScopeSearch.mockResolvedValue({
+        items: [
+          { id: "c1", kind: "CatalogItem", displayName: "Air filter 20x25", sku: "AF-1", defaultItemCount: null },
+        ],
+        limit: 20,
+        hasMore: false,
+        nextCursor: null,
+      });
+      const { container } = renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+      await user.type(screen.getByPlaceholderText(/Search by name or SKU/), "filter");
+
+      const result = await screen.findByRole("button", { name: /Air filter 20x25/ });
+      const scrollRegion = container.querySelector(".overflow-y-auto");
+      // The result renders inside the single capture scroll region and that region is not scrolled.
+      expect(scrollRegion?.contains(result)).toBe(true);
+      expect(scrollRegion?.scrollTop ?? 0).toBe(0);
+    });
+
+    it("hides the zero-line form and blocks submission while the performer gate is re-opened", async () => {
+      const user = userEvent.setup();
+      renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: "Record a zero-line outcome" }));
+      expect(screen.getByLabelText("Visit outcome")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Change" }));
+
+      // Performer gate is open → mode surface is suspended: no outcome/note, no submit.
+      expect(await screen.findByLabelText("Technician")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Visit outcome")).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/Completion note/)).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Submit visit to office" })).toBeDisabled();
+
+      // Cancelling the change restores the chosen zero-line mode.
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(screen.getByLabelText("Visit outcome")).toBeInTheDocument();
+    });
+
+    it("returns the empty-draft surface to neutral after the last line is removed", async () => {
+      const user = userEvent.setup();
+      mockRemoveActualWorkLine.mockResolvedValue(undefined);
+
+      function Harness() {
+        const [lines, setLines] = useState([draftLine]);
+        return (
+          <ActualWorkComposer
+            draft={emptyDraft({ lines })}
+            presentation="inline"
+            conflictNotice={null}
+            isWide={false}
+            onClose={vi.fn()}
+            onCommitted={async () => setLines([])}
+            onConflict={vi.fn()}
+            onDismissNotice={vi.fn()}
+            onRetryReconciliation={vi.fn()}
+            onSubmitted={vi.fn()}
+            onDiscarded={vi.fn()}
+            onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
+            onSetVisitNote={vi.fn().mockResolvedValue("set")}
+            onSetZeroLineDisposition={vi.fn().mockResolvedValue("set")}
+            onHandOffToOffice={vi.fn().mockResolvedValue("handed-off")}
+          />
+        );
+      }
+
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <Harness />
+        </QueryClientProvider>,
+      );
+
+      expect(screen.queryByText("Choose how to record this visit")).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Remove Filter" }));
+
+      expect(await screen.findByText("Choose how to record this visit")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Visit outcome")).not.toBeInTheDocument();
+    });
+
+    it("removes every zero-line and mode control from the DOM once a line exists", () => {
+      renderComposer({
+        presentation: "inline",
+        isWide: false,
+        draft: emptyDraft({ lines: [draftLine] }),
+      });
+
+      expect(screen.queryByLabelText("Visit outcome")).not.toBeInTheDocument();
+      expect(screen.queryByText("Choose how to record this visit")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Record a zero-line outcome" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("shows a compact confirmed-performer summary with a safe Change path", async () => {
+      const user = userEvent.setup();
+      const { onSetDefaultPerformer } = renderComposer({ presentation: "inline", isWide: false });
+
+      expect(screen.getByText(/Performed by/)).toBeInTheDocument();
+      expect(screen.getByText("Sam Field")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Change" }));
+
+      // Explicit gate re-opens; nothing auto-saved just by opening it.
+      const select = await screen.findByLabelText("Technician");
+      expect(onSetDefaultPerformer).not.toHaveBeenCalled();
+      // Line entry is blocked until re-confirmation.
+      expect(screen.queryByPlaceholderText(/Search by name or SKU/)).not.toBeInTheDocument();
+
+      await user.selectOptions(select, "au-tech");
+      await user.click(screen.getByRole("button", { name: "Confirm technician" }));
+      expect(onSetDefaultPerformer).toHaveBeenCalledWith("au-tech");
+    });
+
+    it("lets Change be cancelled back to the summary without saving", async () => {
+      const user = userEvent.setup();
+      const { onSetDefaultPerformer } = renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: "Change" }));
+      await user.click(await screen.findByRole("button", { name: "Cancel" }));
+
+      expect(onSetDefaultPerformer).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Change" })).toBeInTheDocument();
+    });
+
+    it("collapses an empty visit note to an affordance that expands and still autosaves on blur", async () => {
+      const user = userEvent.setup();
+      const { onSetVisitNote } = renderComposer({ presentation: "inline", isWide: false });
+
+      expect(screen.queryByLabelText("Visit note")).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Add visit note" }));
+
+      const textarea = screen.getByLabelText("Visit note");
+      await user.type(textarea, "Replaced capacitor");
+      await user.tab();
+
+      await waitFor(() => expect(onSetVisitNote).toHaveBeenCalledWith("Replaced capacitor"));
+    });
+
+    it("keeps a non-empty visit note visible with no affordance", () => {
+      renderComposer({
+        presentation: "inline",
+        isWide: false,
+        draft: emptyDraft({ visitNote: "Prior note" }),
+      });
+
+      expect(screen.getByLabelText("Visit note")).toHaveValue("Prior note");
+      expect(screen.queryByRole("button", { name: "Add visit note" })).not.toBeInTheDocument();
+    });
+
+    it("keeps key line-item actions accessible in the compact row and reveals detail on expand", async () => {
+      const user = userEvent.setup();
+      renderComposer({
+        presentation: "inline",
+        isWide: false,
+        draft: emptyDraft({ lines: [{ ...draftLine, note: "torn seal" }] }),
+      });
+
+      expect(screen.getByRole("button", { name: "Edit Filter" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Remove Filter" })).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Show details for Filter" }));
+      expect(screen.getByText("torn seal")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Edit Filter" }));
+      expect(screen.getByLabelText("Quantity")).toHaveValue(2);
+    });
   });
 
   describe("desktop composer formatting", () => {

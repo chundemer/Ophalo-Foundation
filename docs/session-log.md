@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4f-iii workspace shell + ticket-context band `0ff4c2c`; 4f-ii `144bee6`; 4f-i `144e458`)
+**Last updated:** 2026-08-30 (4f-iv large-ticket capture density — local, pending commit; 4f-iii `0ff4c2c`; 4f-ii `144bee6`; 4f-i `144e458`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -242,6 +242,47 @@ reviewed and approved for commit.
   `ActualWorkWorkspacePage.test.tsx`, `ActualWorkComposer.test.tsx`.
 - Follow-up (non-blocking, deferred): shared `formatServiceAddress(detail)` helper (now inlined in
   3 places); optional deliberate focus target on draft entry; `Escape → onExit` on the route.
+
+### Prior slice — 4f-iv large-ticket capture density (local, pending commit)
+
+UI-only, `web/ophalo-app`. 1 production + 2 test files. No backend / API-client / migration.
+Frontend suite 898/898, `tsc` clean, `check:tokens` passed, `git diff --check` clean. All changes
+gated on `ActualWorkComposer` `presentation === "inline"` (workspace route); the Request Detail
+modal composer is unchanged.
+
+- **Compact desktop line rows** (`ActualWorkDraftLine`, inline): dense single line —
+  disclosure chevron · name · qty/unit · performer · note marker · icon Edit/Remove. Note text and
+  the full quantity/note edit form move into a per-row `aria-expanded`/`aria-controls` detail
+  panel. Edit form extracted to a shared `editFields` fragment reused by the modal path.
+- **Compact confirmed-performer** (`ActualWorkPerformerSummary`, inline): `Performed by <name> ·
+  Change`. Change re-opens the same explicit `ActualWorkPerformerGate` (new `onCancel` +
+  `initialSelectedId`); no auto-save, add/search region removed from the DOM until re-confirmation.
+- **Collapsible empty visit note** (`ActualWorkVisitNoteField` `collapsible`): empty → `+ Add visit
+  note` affordance expanding to the existing textarea; non-empty always shown; blur autosave
+  unchanged.
+- **Explicit empty-draft mode switch** (`emptyDraftMode: neutral | work | zero-line` in
+  `ActualWorkComposer`, zero-lines only): neutral shows the two choices and *no* outcome/note
+  fields; work shows search/results; zero-line shows the footer form. `ActualWorkSubmitFooter`
+  gains `showZeroLineForm` — the form and the zero-line `canSubmit` path render only in zero-line
+  mode; the footer instance stays mounted across toggles so local outcome/note input is not lost.
+  `ActualWorkSearchAndAdd` gains `onActivate` (focus/keystroke) → selects work mode and collapses
+  the zero-line form. Removing the last line returns the surface to neutral (prev-count ref). A
+  reopened draft with a persisted outcome starts in zero-line. Any line present strips all
+  mode/zero-line controls from the DOM as before. `showZeroLineForm` is guarded by the full
+  `isEmptyDraftInline` predicate, so re-opening the performer gate mid-zero-line suspends the
+  form and disables submit until the change is confirmed or cancelled.
+- Files: `ActualWorkComposer.tsx`; tests: `ActualWorkComposer.test.tsx` (+18),
+  `ActualWorkWorkspacePage.test.tsx` (+1).
+- **Deferred to 4f-v:** portal/floating search-results popover (below).
+
+### Next code slice — 4f-v inline search-results popover (fresh session)
+
+UI-only, `web/ophalo-app`. Give `ActualWorkSearchAndAdd`'s results list a portal/`position: fixed`
+anchored popover so it sits above the pinned footer and the central scroll region on
+constrained-height screens and large result sets, flipping upward when the anchor is low. New
+positioning primitive (repo has no `createPortal` / floating-ui today) — its own gate, jsdom-safe
+positioning stubs like the ticket-context band's clamp. Enhancement only; the 4f-iv mode switch is
+the fundamental fix for the screenshots.
 
 ### Next code slice — 4g request-close eligibility gate (fresh session)
 

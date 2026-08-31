@@ -216,6 +216,12 @@ describe("ActualWorkWorkspacePage", () => {
     expect(screen.queryByText("MOCK COMPOSER")).not.toBeInTheDocument();
   });
 
+  it("hosts the draft composer inline with no modal dialog chrome", async () => {
+    renderPage({ visit: "draft" });
+    expect(await screen.findByText("MOCK COMPOSER")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("redirects a narrow viewport back to Request Detail and renders nothing", async () => {
     mediaMatches = false;
     stubMatchMedia();

@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, ChevronRight, Lock, X } from "lucide-react";
+import { Check, ChevronRight, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
 import { KeepModal } from "../../components/keep/KeepModal";
 import { KeepButton } from "../../components/keep/KeepButton";
 import {
@@ -140,10 +140,54 @@ export function ActualWorkComposer({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
   const readOnly = submitted || draft.status !== "Draft";
+  // BL136 large-ticket density: the workspace-route ("inline") presentation gets a compact
+  // desktop treatment (dense line rows, performer summary, collapsed visit-note / empty-draft
+  // affordances). The Request Detail modal presentation is unchanged.
+  const inline = presentation === "inline";
   // ADR-494 D2: no line-creation route opens until the Draft carries a ticket-default performer.
   // "Record my work" seeds it at create time; "Transcribe work" leaves it null and the gate below
   // collects + persists one first (and stays gated across a reload until the projection confirms).
   const needsPerformer = !readOnly && !draft.defaultPerformedByAccountUserId;
+  // ADR-494 D2: changing the ticket-default performer after confirmation re-opens the same
+  // explicit gate (no auto-save, no line entry until re-confirmed).
+  const [changingPerformer, setChangingPerformer] = useState(false);
+  async function handleSetDefaultPerformer(performerId: string | null) {
+    const outcome = await onSetDefaultPerformer(performerId);
+    if (outcome === "set") setChangingPerformer(false);
+    return outcome;
+  }
+
+  // BL136 large-ticket density: on the inline workspace an empty draft is an explicit mode switch,
+  // not a screen that renders every path at once. "neutral" offers the two choices; "work" gives
+  // search/results priority; "zero-line" shows the outcome/completion-note form. A reopened draft
+  // that already carries a persisted zero-line outcome starts in "zero-line". Modes only matter
+  // while the draft has zero lines — any line present collapses the whole apparatus.
+  const [emptyDraftMode, setEmptyDraftMode] = useState<"neutral" | "work" | "zero-line">(
+    draft.outcome ? "zero-line" : "neutral",
+  );
+  // Removing the last recorded line returns the empty-draft UI to the intelligible neutral choice
+  // rather than leaving a stale work/zero-line surface with nothing in it.
+  const prevLineCountRef = useRef(draft.lines.length);
+  useEffect(() => {
+    if (prevLineCountRef.current > 0 && draft.lines.length === 0) setEmptyDraftMode("neutral");
+    prevLineCountRef.current = draft.lines.length;
+  }, [draft.lines.length]);
+
+  const isEmptyDraftInline =
+    inline && !readOnly && !needsPerformer && !changingPerformer && draft.lines.length === 0;
+
+  function focusSearch() {
+    // The search input is not mounted in "neutral"/"zero-line" mode; wait a frame for the switch.
+    requestAnimationFrame(() => searchInputRef.current?.focus());
+  }
+  function focusZeroLineOutcome() {
+    // The footer stays mounted across mode toggles; give React a frame to render the fields.
+    requestAnimationFrame(() => {
+      const el = document.getElementById("actual-work-zeroline-outcome");
+      el?.scrollIntoView({ block: "center" });
+      (el as HTMLElement | null)?.focus();
+    });
+  }
 
   // Slice 5a: one composer-level connection-failure recovery point rather than six inline ones —
   // a later failure replaces the earlier one, since only one operation's recovery is ever pending
@@ -311,33 +355,102 @@ export function ActualWorkComposer({
             <span className="rounded border border-sky-300 bg-white px-2 py-0.5 text-xs font-semibold text-sky-800">Editable</span>
           </div>
           {needsPerformer && (
-            <ActualWorkPerformerGate onSetDefaultPerformer={onSetDefaultPerformer} />
+            <ActualWorkPerformerGate onSetDefaultPerformer={handleSetDefaultPerformer} />
           )}
-          {!readOnly && !needsPerformer && (
+          {!readOnly && !needsPerformer && changingPerformer && (
+            <ActualWorkPerformerGate
+              onSetDefaultPerformer={handleSetDefaultPerformer}
+              initialSelectedId={draft.defaultPerformedByAccountUserId ?? ""}
+              onCancel={() => setChangingPerformer(false)}
+            />
+          )}
+          {!readOnly && !needsPerformer && !changingPerformer && (
             <>
-              <ActualWorkPerformerCaption
-                name={draft.defaultPerformerDisplayName ?? null}
-                isSelf={
-                  !!currentAccountUserId &&
-                  draft.defaultPerformedByAccountUserId === currentAccountUserId
-                }
-              />
-              <ActualWorkSearchAndAdd
-                ref={searchInputRef}
-                actualWorkId={draft.id}
-                version={draft.concurrencyVersion}
-                defaultPerformerName={draft.defaultPerformerDisplayName ?? null}
-                onCommitted={onCommitted}
-                onConflict={onConflict}
-                onConnectionFailure={reportConnectionFailure}
-                onConnectionRecovered={clearConnectionFailure}
-              />
+              {inline ? (
+                <ActualWorkPerformerSummary
+                  name={draft.defaultPerformerDisplayName ?? null}
+                  isSelf={
+                    !!currentAccountUserId &&
+                    draft.defaultPerformedByAccountUserId === currentAccountUserId
+                  }
+                  onChange={() => setChangingPerformer(true)}
+                />
+              ) : (
+                <ActualWorkPerformerCaption
+                  name={draft.defaultPerformerDisplayName ?? null}
+                  isSelf={
+                    !!currentAccountUserId &&
+                    draft.defaultPerformedByAccountUserId === currentAccountUserId
+                  }
+                />
+              )}
+              {(!isEmptyDraftInline || emptyDraftMode !== "neutral") && (
+                <ActualWorkSearchAndAdd
+                  ref={searchInputRef}
+                  actualWorkId={draft.id}
+                  version={draft.concurrencyVersion}
+                  defaultPerformerName={draft.defaultPerformerDisplayName ?? null}
+                  onActivate={
+                    isEmptyDraftInline ? () => setEmptyDraftMode("work") : undefined
+                  }
+                  onCommitted={onCommitted}
+                  onConflict={onConflict}
+                  onConnectionFailure={reportConnectionFailure}
+                  onConnectionRecovered={clearConnectionFailure}
+                />
+              )}
             </>
           )}
         <div className="space-y-2">
           {draft.lines.length === 0 &&
-            (readOnly || needsPerformer ? (
+            (readOnly || needsPerformer || changingPerformer ? (
               <p className="text-xs text-[var(--ophalo-muted)]">No items added yet.</p>
+            ) : inline ? (
+              emptyDraftMode === "neutral" ? (
+                <div className="rounded-lg border border-dashed border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5">
+                  <p className="text-xs font-semibold text-[var(--ophalo-ink)]">Choose how to record this visit</p>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmptyDraftMode("work");
+                        focusSearch();
+                      }}
+                      className={`inline-flex items-center gap-1 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-2.5 py-1 text-xs font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Add work/material lines
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmptyDraftMode("zero-line");
+                        focusZeroLineOutcome();
+                      }}
+                      className={`inline-flex items-center gap-1 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-2.5 py-1 text-xs font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+                    >
+                      Record a zero-line outcome
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[11px] text-[var(--ophalo-muted)]">
+                    A zero-line outcome is for diagnostic-only, no work authorized, or no access.
+                  </p>
+                </div>
+              ) : emptyDraftMode === "work" ? (
+                <p className="text-[11px] text-[var(--ophalo-muted)]">
+                  No items added yet. Search above, or{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmptyDraftMode("zero-line");
+                      focusZeroLineOutcome();
+                    }}
+                    className={`font-medium text-[var(--keep-accent)] hover:underline rounded ${FOCUS_RING}`}
+                  >
+                    record a zero-line outcome
+                  </button>
+                  .
+                </p>
+              ) : null
             ) : (
               <div className="rounded-lg border border-dashed border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5 text-xs text-[var(--ophalo-muted)]">
                 <p className="font-semibold text-[var(--ophalo-ink)]">No items added yet.</p>
@@ -352,6 +465,7 @@ export function ActualWorkComposer({
               key={line.id}
               line={line}
               readOnly={readOnly}
+              presentation={presentation}
               actualWorkId={draft.id}
               version={draft.concurrencyVersion}
               onCommitted={onCommitted}
@@ -366,6 +480,7 @@ export function ActualWorkComposer({
           <ActualWorkVisitNoteField
             key={draft.visitNote ?? ""}
             initialValue={draft.visitNote ?? ""}
+            collapsible={inline}
             onSetVisitNote={onSetVisitNote}
           />
         )}
@@ -401,6 +516,10 @@ export function ActualWorkComposer({
         draft={draft}
         submitted={submitted}
         isWide={isWide}
+        showZeroLineForm={
+          draft.lines.length === 0 &&
+          (!inline || (isEmptyDraftInline && emptyDraftMode === "zero-line"))
+        }
         onSaveDraft={onClose}
         onSetZeroLineDisposition={onSetZeroLineDisposition}
         onConflict={onConflict}
@@ -662,10 +781,14 @@ function ActualWorkHandoffControl({
  * this subtree unmounts; every other outcome keeps the selector in place. */
 function ActualWorkPerformerGate({
   onSetDefaultPerformer,
+  onCancel,
+  initialSelectedId = "",
 }: {
   onSetDefaultPerformer: (performerId: string | null) => Promise<SetDefaultPerformerOutcome>;
+  onCancel?: () => void;
+  initialSelectedId?: string;
 }) {
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(initialSelectedId);
   const [status, setStatus] = useState<"idle" | "saving" | "ineligible" | "stale" | "failed">("idle");
 
   const { data, isLoading } = useQuery({
@@ -698,7 +821,9 @@ function ActualWorkPerformerGate({
           <span aria-hidden="true" className="text-[var(--ophalo-danger)]">*</span>
         </p>
         <p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">
-          Required — add items after you pick the technician this ticket belongs to.
+          {onCancel
+            ? "Confirm the new technician for future items. Existing items keep their recorded performer."
+            : "Required — add items after you pick the technician this ticket belongs to."}
         </p>
       </div>
       <select
@@ -716,7 +841,17 @@ function ActualWorkPerformerGate({
         ))}
       </select>
       {message && <p className="text-xs text-[var(--ophalo-danger,#c0392b)]">{message}</p>}
-      <div className="min-[1001px]:flex min-[1001px]:justify-end">
+      <div className="flex flex-col gap-2 min-[1001px]:flex-row min-[1001px]:justify-end">
+        {onCancel && (
+          <KeepButton
+            variant="secondary"
+            disabled={status === "saving"}
+            onClick={onCancel}
+            className="w-full min-[1001px]:w-auto min-[1001px]:px-6"
+          >
+            Cancel
+          </KeepButton>
+        )}
         <KeepButton
           variant="teal"
           disabled={!selected || status === "saving"}
@@ -737,14 +872,35 @@ function ActualWorkPerformerGate({
  * `failed` are handled by the shared reconcile path in the hook. */
 function ActualWorkVisitNoteField({
   initialValue,
+  collapsible = false,
   onSetVisitNote,
 }: {
   initialValue: string;
+  collapsible?: boolean;
   onSetVisitNote: (visitNote: string | null) => Promise<SetVisitNoteOutcome>;
 }) {
   const [value, setValue] = useState(initialValue);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Inline workspace: an empty note starts as a compact affordance and expands to the textarea
+  // on request. A note that already has content is always shown.
+  const [expanded, setExpanded] = useState(!collapsible || initialValue.trim().length > 0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setExpanded(true);
+          requestAnimationFrame(() => textareaRef.current?.focus());
+        }}
+        className={`inline-flex items-center gap-1 rounded-lg border border-dashed border-[var(--ophalo-border)] px-2.5 py-1 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] ${FOCUS_RING}`}
+      >
+        <Plus className="h-3.5 w-3.5" /> Add visit note
+      </button>
+    );
+  }
 
   async function onBlur() {
     const next = value.trim();
@@ -767,6 +923,7 @@ function ActualWorkVisitNoteField({
         <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--ophalo-muted)]">Optional</span>
       </div>
       <textarea
+        ref={textareaRef}
         id="actual-work-visit-note"
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -794,6 +951,36 @@ function ActualWorkPerformerCaption({ name, isSelf }: { name: string | null; isS
   );
 }
 
+/** BL136 large-ticket density: the compact confirmed-performer state for the inline workspace —
+ * replaces the large gate once a ticket default exists. "Change" re-opens the explicit gate via
+ * the parent (no auto-save, no line entry until re-confirmed). */
+function ActualWorkPerformerSummary({
+  name,
+  isSelf,
+  onChange,
+}: {
+  name: string | null;
+  isSelf: boolean;
+  onChange: () => void;
+}) {
+  const label = name ?? (isSelf ? "you" : "an unnamed technician");
+  return (
+    <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-[var(--ophalo-muted)]">
+      <span>
+        Performed by <span className="font-medium text-[var(--ophalo-ink)]">{label}</span>
+      </span>
+      <span aria-hidden="true">·</span>
+      <button
+        type="button"
+        onClick={onChange}
+        className={`font-medium text-[var(--keep-accent)] hover:underline rounded ${FOCUS_RING}`}
+      >
+        Change
+      </button>
+    </p>
+  );
+}
+
 interface ActualWorkSearchAndAddProps {
   actualWorkId: string;
   version: string;
@@ -802,6 +989,10 @@ interface ActualWorkSearchAndAddProps {
   // unless the recorder picks a different technician; existing lines cannot be re-attributed (no
   // backend route).
   defaultPerformerName: string | null;
+  // BL136 large-ticket density: fired on first focus/keystroke so the inline workspace can switch
+  // the empty-draft surface into "work" mode (collapsing the zero-line panel). Undefined outside
+  // the empty-draft inline state.
+  onActivate?: () => void;
   onCommitted: () => Promise<void>;
   onConflict: (message?: string) => void;
   onConnectionFailure: (message: string, retry: () => void) => void;
@@ -815,6 +1006,7 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
     actualWorkId,
     version,
     defaultPerformerName,
+    onActivate,
     onCommitted,
     onConflict,
     onConnectionFailure,
@@ -959,7 +1151,11 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
             ref={ref}
             type="text"
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onFocus={() => onActivate?.()}
+            onChange={(e) => {
+              onActivate?.();
+              setSearchText(e.target.value);
+            }}
             placeholder="Search by name or SKU..."
             className={INPUT_CLS}
           />
@@ -1233,6 +1429,7 @@ function ActualWorkNudgeChips({
 interface ActualWorkDraftLineProps {
   line: ActualWorkLineHistoryEntry;
   readOnly: boolean;
+  presentation?: "modal" | "inline";
   actualWorkId: string;
   version: string;
   onCommitted: () => Promise<void>;
@@ -1254,6 +1451,7 @@ function ActualWorkLinePerformer({ name }: { name: string | null }) {
 function ActualWorkDraftLine({
   line,
   readOnly,
+  presentation = "modal",
   actualWorkId,
   version,
   onCommitted,
@@ -1262,6 +1460,7 @@ function ActualWorkDraftLine({
   onConnectionRecovered,
 }: ActualWorkDraftLineProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [quantity, setQuantity] = useState(String(line.actualQuantity));
   const [note, setNote] = useState(line.note ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -1324,42 +1523,8 @@ function ActualWorkDraftLine({
     );
   }
 
-  if (!isEditing) {
-    return (
-      <div className="rounded-lg border border-[var(--ophalo-border)] px-3 py-2 flex items-center justify-between gap-2">
-        <div>
-          <p className="text-sm text-[var(--ophalo-ink)]">{line.displayNameSnapshot}</p>
-          <p className="text-xs text-[var(--ophalo-muted)]">
-            {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""}
-            {line.note ? ` — ${line.note}` : ""}
-          </p>
-          <ActualWorkLinePerformer name={line.performerDisplayName} />
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setIsEditing(true)}
-            className={`text-xs font-medium text-[var(--keep-accent)] ${FOCUS_RING}`}
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            disabled={removeMutation.isPending}
-            onClick={() => removeMutation.mutate()}
-            className={`text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] ${FOCUS_RING} disabled:opacity-50`}
-          >
-            Remove
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-[var(--ophalo-border)] px-3 py-2 space-y-2">
-      <p className="text-sm text-[var(--ophalo-ink)]">{line.displayNameSnapshot}</p>
-      <ActualWorkLinePerformer name={line.performerDisplayName} />
+  const editFields = (
+    <>
       <div className="flex gap-2">
         <input
           type="number"
@@ -1399,6 +1564,122 @@ function ActualWorkDraftLine({
           Cancel
         </KeepButton>
       </div>
+    </>
+  );
+
+  // BL136 large-ticket density: the inline workspace uses a dense single-line collapsed row
+  // (name · qty/unit · performer · compact edit/remove) with note + editing behind a per-row
+  // disclosure. Modal presentation keeps the original stacked card below.
+  if (presentation === "inline" && !readOnly) {
+    const detailId = `aw-line-detail-${line.id}`;
+    const open = expanded || isEditing;
+    return (
+      <div className="rounded-lg border border-[var(--ophalo-border)]">
+        <div className="flex items-center gap-2 px-2.5 py-1.5">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={detailId}
+            onClick={() => {
+              const next = !open;
+              setExpanded(next);
+              if (!next) {
+                resetFields();
+                setIsEditing(false);
+              }
+            }}
+            className={`shrink-0 rounded p-0.5 text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] ${FOCUS_RING}`}
+          >
+            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-90" : ""}`} />
+            <span className="sr-only">
+              {open ? "Hide" : "Show"} details for {line.displayNameSnapshot}
+            </span>
+          </button>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 text-xs text-[var(--ophalo-muted)]">
+            <span className="truncate text-sm text-[var(--ophalo-ink)]">{line.displayNameSnapshot}</span>
+            <span>· {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""}</span>
+            <span>· {line.performerDisplayName ?? "Unknown performer"}</span>
+            {line.note ? (
+              <span title="Has a line note" aria-label="Has a line note">
+                ✎
+              </span>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setExpanded(true);
+                setIsEditing(true);
+              }}
+              className={`rounded p-1 text-[var(--keep-accent)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              <span className="sr-only">Edit {line.displayNameSnapshot}</span>
+            </button>
+            <button
+              type="button"
+              disabled={removeMutation.isPending}
+              onClick={() => removeMutation.mutate()}
+              className={`rounded p-1 text-[var(--ophalo-muted)] hover:text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-50 ${FOCUS_RING}`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span className="sr-only">Remove {line.displayNameSnapshot}</span>
+            </button>
+          </div>
+        </div>
+        {open && (
+          <div id={detailId} className="space-y-2 border-t border-[var(--ophalo-border)] px-2.5 py-2">
+            {isEditing ? (
+              editFields
+            ) : (
+              <p className="text-xs text-[var(--ophalo-muted)]">
+                {line.note ? line.note : "No note on this line."}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (!isEditing) {
+    return (
+      <div className="rounded-lg border border-[var(--ophalo-border)] px-3 py-2 flex items-center justify-between gap-2">
+        <div>
+          <p className="text-sm text-[var(--ophalo-ink)]">{line.displayNameSnapshot}</p>
+          <p className="text-xs text-[var(--ophalo-muted)]">
+            {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""}
+            {line.note ? ` — ${line.note}` : ""}
+          </p>
+          <ActualWorkLinePerformer name={line.performerDisplayName} />
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsEditing(true)}
+            className={`text-xs font-medium text-[var(--keep-accent)] ${FOCUS_RING}`}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            disabled={removeMutation.isPending}
+            onClick={() => removeMutation.mutate()}
+            className={`text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] ${FOCUS_RING} disabled:opacity-50`}
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-[var(--ophalo-border)] px-3 py-2 space-y-2">
+      <p className="text-sm text-[var(--ophalo-ink)]">{line.displayNameSnapshot}</p>
+      <ActualWorkLinePerformer name={line.performerDisplayName} />
+      {editFields}
     </div>
   );
 }
@@ -1407,6 +1688,11 @@ interface ActualWorkSubmitFooterProps {
   draft: ActualWorkDraft;
   submitted: boolean;
   isWide: boolean;
+  // BL136 large-ticket density: on the inline workspace the zero-line outcome/note form is shown
+  // only once the technician explicitly chooses that path. This component stays mounted across the
+  // mode toggle, so its local outcome/note state is not lost. Modal presentation always passes
+  // true when the draft has zero lines (unchanged behaviour).
+  showZeroLineForm: boolean;
   onSaveDraft: () => void;
   onConflict: (message?: string) => void;
   onConnectionFailure: (message: string, retry: () => void) => void;
@@ -1433,6 +1719,7 @@ function ActualWorkSubmitFooter({
   draft,
   submitted,
   isWide,
+  showZeroLineForm,
   onSaveDraft,
   onConflict,
   onConnectionFailure,
@@ -1508,7 +1795,12 @@ function ActualWorkSubmitFooter({
     );
   }
 
-  const canSubmit = zeroLine ? outcome !== "" && completionNote.trim().length > 0 : true;
+  // A zero-line draft can only be submitted once the outcome/note form is actually shown and both
+  // fields are truthful — in "neutral"/"work" mode (form hidden) Submit stays disabled so the
+  // technician commits to the zero-line path first.
+  const canSubmit = zeroLine
+    ? showZeroLineForm && outcome !== "" && completionNote.trim().length > 0
+    : true;
 
   return (
     <div
@@ -1517,7 +1809,7 @@ function ActualWorkSubmitFooter({
       }`}
     >
      <div className="space-y-2 min-[1001px]:mx-auto min-[1001px]:max-w-3xl">
-      {zeroLine && (
+      {showZeroLineForm && (
         <div className="space-y-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-3">
           <p className="text-xs text-[var(--ophalo-muted)]">
             No line items added — submit a zero-line outcome instead.
@@ -1597,7 +1889,7 @@ function ActualWorkSubmitFooter({
           Submit visit to office
         </button>
       </div>
-      {zeroLine && !canSubmit && (
+      {showZeroLineForm && !canSubmit && (
         <p className="text-center text-xs text-[var(--ophalo-muted)] min-[1001px]:text-right">
           Select an outcome and add a completion note, or add at least one item, before submitting.
         </p>
