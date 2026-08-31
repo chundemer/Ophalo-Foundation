@@ -35,7 +35,7 @@ Complete each numbered slice with focused automated coverage and a production-ca
 2. **Field-work correctness:** GAP-055. This is a P0 authorization/data-model correction and needs its own migration, API, UI, and concurrency test plan.
 3. **Phone and capture integrity:** GAP-016, GAP-021, GAP-051, then GAP-025. Consolidate the ADR-444 normalization path before extending fallback customer recognition.
 4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, and GAP-049. Decompose layout ownership before changing shared desktop/mobile behavior; then fix the review/completion hierarchy, schedule-control legibility, and bounded mutation, sharing, and follow-up defects.
-5. **Request-list product decision and core behavior:** GAP-027 (decision), then GAP-045, GAP-057, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. This locks row hierarchy before implementing queue context, sensible default selection, loading, filtering, scale/history, and small action-order polish. (GAP-060 Views-menu off-screen clipping — resolved, commit `b3573a7`.)
+5. **Request-list product decision and core behavior:** GAP-027 (decision), then GAP-045, GAP-057, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. This locks row hierarchy before implementing queue context, sensible default selection, loading, filtering, scale/history, and small action-order polish. (GAP-060 Views-menu off-screen clipping — resolved, commit `689c748`.)
 6. **Pilot operating loop and final usability review:** GAP-037 (after GAP-039), GAP-038, and GAP-054. Deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
 
 ## Active Work
