@@ -12,6 +12,14 @@ import { announcePolite } from "../../lib/liveAnnouncer";
 // precedence derivation; an unrecognized target/key combination fails safely with factual
 // "unavailable" feedback rather than falling back to capability-flag inference.
 
+// Locked advisory copy (RD-058B-2): "Mark work done" completes the request lifecycle only. It
+// applies wherever that action is offered — the no-attention Anchor primary and the demoted
+// active-attention control alike — because the caveat is about what the action does, not where it
+// sits. It does not notify the customer, does not complete internal financial review, and does
+// not resolve active attention or an open Actual Work draft.
+export const MARK_WORK_DONE_CONFIRMATION =
+  "This marks the request as Work completed. It does not notify the customer, does not complete internal financial review, and leaves any active attention or open Actual Work draft unresolved.";
+
 export interface PrimaryActionSlotProps {
   requestId: string;
   detail: KeepRequestDetailResult;
@@ -79,7 +87,7 @@ export function PrimaryActionSlot({
           onDetailUpdated={onDetailUpdated}
           label={action.label}
           targetStatus={targetStatus}
-          confirmationCopy={action.confirmationCopy}
+          confirmationCopy={action.key === "mark_work_done" ? MARK_WORK_DONE_CONFIRMATION : action.confirmationCopy}
         />
       );
     }
@@ -100,9 +108,11 @@ export function PrimaryActionUnavailable() {
 }
 
 // ---------------------------------------------------------------------------
-// Mark work done — server-authored secondary control (Session 0A). Anchor-only: its own
-// null-check already gates it to the (attention-active) case where the backend populates it, so
-// it never needs to move alongside the primary slot's attention/no-attention mount split.
+// Mark work done — server-authored secondary control (Session 0A). Its own null-check gates it to
+// the (attention-active) case where the backend populates it. RD-058B-2: it renders in the Work
+// Canvas after Actual Work and before the composer (desktop + mobile), a quiet contextual
+// lifecycle action — never an Anchor competitor to the attention primary. Its local confirm step
+// carries the shared `MARK_WORK_DONE_CONFIRMATION` advisory.
 // ---------------------------------------------------------------------------
 
 export function MarkWorkDoneSecondarySlot({
@@ -126,7 +136,7 @@ export function MarkWorkDoneSecondarySlot({
           onDetailUpdated={onDetailUpdated}
           label={secondary.label}
           targetStatus="resolved"
-          confirmationCopy={null}
+          confirmationCopy={MARK_WORK_DONE_CONFIRMATION}
           variant="secondary"
           accessibleSuffix="attention remains"
         />
@@ -271,8 +281,9 @@ function PrimaryMutationButton({
   // The demoted secondary (Mark work done, attention remains) must read its own consequence
   // before the user acts, not just be discoverable to screen readers.
   const visibleLabel = accessibleSuffix ? `${label}, ${accessibleSuffix}` : label;
-  // Server-authored copy (close_request) always wins; mark_work_done carries no server copy, so
-  // fall back to the app's existing local prompt for that mutation rather than showing nothing.
+  // Callers pass explicit copy for both mutations now — close_request's server-authored string and
+  // mark_work_done's shared `MARK_WORK_DONE_CONFIRMATION` advisory (RD-058B-2). The local fallback
+  // remains only as a last resort if a caller ever passes null.
   const confirmPrompt = confirmationCopy ?? (targetStatus === "resolved" ? "Confirm work is done?" : null);
 
   return (

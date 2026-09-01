@@ -122,8 +122,8 @@ terminal/lifecycle display mapping, and no count/list drift.
 
 ### RD-058B — Request Detail action hierarchy and review clarity
 
-Split into two accepted commits: **RD-058B-1** (internal financial review clarity) and
-**RD-058B-2** (action hierarchy).
+Delivered in two accepted commits: **RD-058B-1** (`2ae07d5`, internal financial review clarity) and
+**RD-058B-2** (action hierarchy). GAP-058 resolved.
 
 **Done (RD-058B-1, 2026-09-01):** `ActualWorkReviewCard` reframed — header **Internal financial
 review**, persistent sub-line "Reviews the submitted visit's financial details. Does not change the
@@ -135,13 +135,23 @@ announce "Internal financial review completed. The customer request status is un
 production + 4 test files. Focused 30 passed; `request-detail` + `requests` suites 478 passed;
 tsc / `check:tokens` / `vite build` / `git diff --check` clean. No server/policy change.
 
-**Remaining (RD-058B-2):** sole-primary attention treatment; remove the duplicate large Anchor
-`Contact customer` action (unconditional); alternate path `Resolve another way…`; relocate
-active-attention `Mark work done` to a quiet Work Canvas position (after Actual Work, before the
-composer), still gated on `availableActions.markWorkDoneSecondary`, with confirmation copy stating
-Work completed / no customer notification / no internal-review completion / attention + open-draft
-left unresolved; align the Anchor inner content to `max-w-4xl mx-auto w-full`. Carry active-
-attention, focus-order, and narrow/desktop verification.
+**Done (RD-058B-2, 2026-09-01):** During active attention `HeroAttentionBanner`'s server-authored
+`PrimaryActionSlot` is the only dominant action; `RequestDetailAnchor` renders no action while
+attention is active. The standalone Anchor `Contact customer` button is removed unconditionally
+(`KeepButton` import dropped) — contact stays in `CustomerContactStrip` / a server-routed
+`contact_sheet` primary. The banner's secondary reads `Resolve another way…` (same gate:
+`canAcknowledgeAttention && guidanceKey !== "acknowledge_attention"`) and opens the controlled
+`AttentionGuidanceDisclosure` (Why / Resolve by); focus returns to the inline info trigger on
+Escape. `MarkWorkDoneSecondarySlot` moved out of the Anchor into a quiet "Request lifecycle" block
+in `RequestDetailWorkCanvas` after Actual Work and before the composer, gated on
+`availableActions.markWorkDoneSecondary` (desktop + mobile). The shared `MARK_WORK_DONE_CONFIRMATION`
+advisory now backs the confirm step for both the no-attention Anchor primary and the demoted
+control. `RequestDetailAnchor`'s inner card is wrapped in `mx-auto w-full max-w-4xl` (content width
+matches the Canvas frame; a residual ~7.5px centre offset remains only while the Canvas scrollbar is
+present). 4 production + 4 test files. Full frontend suite 952 passed; tsc / `check:tokens` /
+`vite build` / `git diff --check` clean. Evidence: desktop attention + no-attention states, narrow
+(760px) canvas order, keyboard activation of `Resolve another way…` + Escape focus restoration, and
+150% zoom. No server/policy change.
 
 **Goal:** Ensure an Owner/Admin cannot confuse internal review, request completion, attention
 resolution, contact intent, or customer notification.

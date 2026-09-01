@@ -9,17 +9,20 @@ import {
 import { TodayPromiseBanner } from "./DetailHero";
 import { MobileContactLocationCard } from "./MobileContactLocationCard";
 import { UnifiedComposer, type UnifiedComposerHandle } from "./UnifiedComposer";
+import { MarkWorkDoneSecondarySlot } from "./PrimaryActionControl";
 import { KeepButton } from "../../components/keep/KeepButton";
 
 // RD-019A: the Work Canvas — the Workbench's sole vertical scroll surface (locked spec §1.2, §1.5,
 // §5, §7.1). This component is layout-only: it owns the canvas structure and region order and
-// nothing else. It fetches nothing, mutates nothing, and derives no action policy; the Actual Work,
+// nothing else. It fetches nothing and mutates nothing; it derives no action policy beyond reading
+// one server-authored flag to place the quiet lifecycle action (RD-058B-2). The Actual Work,
 // activity, and record-details regions arrive pre-built as props.
 //
-// Desktop module order: attention guidance -> Customer Need -> Actual Work context ->
-// communication -> record details -> activity. Mobile (Slice 3, 2026-08-26) inserts a
-// contact/service-location card after attention and swaps the last two: attention -> contact/
-// location -> Customer Need -> Actual Work -> communication -> activity -> record details.
+// Desktop module order: attention guidance -> Customer Need -> Actual Work context -> quiet
+// request-lifecycle action (server-gated, RD-058B-2) -> communication -> record details ->
+// activity. Mobile (Slice 3, 2026-08-26) inserts a contact/service-location card after attention
+// and swaps the last two: attention -> contact/location -> Customer Need -> Actual Work ->
+// lifecycle action -> communication -> activity -> record details.
 // Proposed Scope is explicitly deferred from this pilot Workbench (locked spec §1.7/§3).
 interface RequestDetailWorkCanvasProps
   extends Pick<
@@ -102,6 +105,22 @@ export function RequestDetailWorkCanvas({
 
         {/* 4. Work execution — Actual Work (capture, history, review, recovery), pre-built. */}
         {actualWorkSection}
+
+        {/* 4b. Quiet contextual request-lifecycle action (RD-058B-2). Server-authored: renders
+            only while `availableActions.markWorkDoneSecondary` is populated (active attention).
+            It is deliberately below Actual Work and above the composer, never in the Anchor and
+            never competing with the attention primary. The button's local confirm carries the
+            full "does not notify / does not complete review / attention unresolved" advisory. */}
+        {detail.availableActions.markWorkDoneSecondary && (
+          <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+            <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Request lifecycle</p>
+            <p className="mt-1 mb-3 text-xs text-[var(--ophalo-muted)]">
+              Marking work done changes only the request status — it does not notify the customer
+              or complete internal financial review.
+            </p>
+            <MarkWorkDoneSecondarySlot requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
+          </div>
+        )}
 
         {/* 5. Communication — composer only; Follow-Up/Planned-For and priority moved to the
             Anchor's compact Internal Planning strip (locked 2026-08-24). Desktop's one Log Contact

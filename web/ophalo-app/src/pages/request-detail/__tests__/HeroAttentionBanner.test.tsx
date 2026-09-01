@@ -43,7 +43,7 @@ function detailWith(
 }
 
 describe("HeroAttentionBanner — active Customer message (respond_to_customer)", () => {
-  it("shows the teal server-authored 'Respond to customer' primary action and the quiet Clear attention secondary", () => {
+  it("shows the teal server-authored 'Respond to customer' primary action and a non-primary 'Resolve another way…' link that opens the Why/Resolve-by guidance", async () => {
     const detail = detailWith("respond_to_customer", {
       canSendBusinessUpdate: true,
       canAcknowledgeAttention: true,
@@ -52,7 +52,12 @@ describe("HeroAttentionBanner — active Customer message (respond_to_customer)"
     render(<HeroAttentionBanner detail={detail} {...requiredProps()} />);
 
     expect(screen.getByRole("button", { name: "Respond to customer" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Clear attention" })).toBeInTheDocument();
+    const resolveAnother = screen.getByRole("button", { name: "Resolve another way…" });
+    expect(screen.queryByRole("button", { name: "Clear attention" })).not.toBeInTheDocument();
+
+    await userEvent.setup().click(resolveAnother);
+    expect(screen.getByText("Why")).toBeInTheDocument();
+    expect(screen.getByText("Resolve by")).toBeInTheDocument();
   });
 
   it("activates the inline composer when the teal primary action is clicked, not a new sheet", async () => {
@@ -69,7 +74,7 @@ describe("HeroAttentionBanner — active Customer message (respond_to_customer)"
 });
 
 describe("HeroAttentionBanner — active acknowledgement-only attention", () => {
-  it("renders Clear attention as the rail's filled primary action and omits the redundant secondary link", async () => {
+  it("routes acknowledgement through the server primary and omits the redundant 'Resolve another way…' link", async () => {
     const onOpenClearAttention = vi.fn();
     const detail = detailWith("acknowledge_attention", {
       canAcknowledgeAttention: true,
@@ -77,10 +82,10 @@ describe("HeroAttentionBanner — active acknowledgement-only attention", () => 
     });
     render(<HeroAttentionBanner detail={detail} {...requiredProps({ onOpenClearAttention })} />);
 
-    // acknowledge_attention already routes the primary CTA to Clear attention, so no redundant
-    // quiet secondary entry point renders alongside it.
+    // acknowledge_attention already routes the primary CTA to the acknowledge sheet, so no
+    // redundant non-primary entry point renders alongside it.
     expect(screen.getAllByRole("button", { name: "Acknowledge attention" })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Clear attention" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Resolve another way…" })).not.toBeInTheDocument();
 
     await userEvent.setup().click(screen.getByRole("button", { name: "Acknowledge attention" }));
     expect(onOpenClearAttention).toHaveBeenCalledTimes(1);
@@ -124,14 +129,14 @@ describe("HeroAttentionBanner — phone-width action wrapping", () => {
     expect(outerRow.className).toContain("flex-wrap");
 
     const primary = screen.getByRole("button", { name: "Respond to customer" });
-    const clear = screen.getByRole("button", { name: "Clear attention" });
+    const resolveAnother = screen.getByRole("button", { name: "Resolve another way…" });
     expect(banner.contains(primary)).toBe(true);
 
     const actionGroup = primary.closest("div")!;
     expect(actionGroup.className).toContain("shrink-0");
-    // Attention/no-attention primary-action exclusivity is unaffected: the secondary Clear
-    // attention link and the single server-authored primary action still co-exist here.
-    expect(actionGroup.contains(clear)).toBe(true);
+    // The non-primary "Resolve another way…" link and the single server-authored primary action
+    // share the shrink-0 action group; the outer row does the wrapping.
+    expect(actionGroup.contains(resolveAnother)).toBe(true);
   });
 });
 

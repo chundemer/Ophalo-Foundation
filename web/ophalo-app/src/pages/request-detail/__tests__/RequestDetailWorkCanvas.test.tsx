@@ -27,12 +27,16 @@ function baseDetail(): KeepRequestDetailResult {
   return mockRequestDetails["mock-req-001"];
 }
 
-function renderCanvas(isWide: boolean, reviewSuccessMsg: string | null = null) {
+function renderCanvas(
+  isWide: boolean,
+  reviewSuccessMsg: string | null = null,
+  detail: KeepRequestDetailResult = baseDetail(),
+) {
   return render(
     <RequestDetailWorkCanvas
       isWide={isWide}
       requestId="req-1"
-      detail={baseDetail()}
+      detail={detail}
       highlights={{}}
       showProminentFeedbackCard={false}
       onDetailUpdated={vi.fn()}
@@ -87,6 +91,33 @@ describe("RequestDetailWorkCanvas", () => {
       "region-activity",
     ]);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
+
+  it("places the quiet 'Mark work done' lifecycle block after Actual Work and before the composer only when the server authorizes it", () => {
+    const base = baseDetail();
+    const withoutSecondary = renderCanvas(true);
+    expect(withoutSecondary.queryByText("Request lifecycle")).toBeNull();
+    withoutSecondary.unmount();
+
+    const detail = {
+      ...base,
+      availableActions: {
+        ...base.availableActions,
+        markWorkDoneSecondary: { label: "Mark work done", target: "mutation" as const, consequence: "attention_remains" as const },
+      },
+    };
+    const { container, getByText, getByRole } = renderCanvas(true, null, detail);
+
+    expect(getByRole("button", { name: "Mark work done, attention remains" })).toBeInTheDocument();
+    const all = Array.from(container.querySelectorAll("[data-testid], p"));
+    const idx = (predicate: (el: Element) => boolean) => all.findIndex(predicate);
+    const actualWork = idx((el) => el.getAttribute("data-testid") === "region-actual-work");
+    const lifecycle = idx((el) => el.textContent === "Request lifecycle");
+    const communication = idx((el) => el.getAttribute("data-testid") === "region-communication");
+    expect(actualWork).toBeGreaterThanOrEqual(0);
+    expect(lifecycle).toBeGreaterThan(actualWork);
+    expect(communication).toBeGreaterThan(lifecycle);
+    expect(getByText(/does not notify the customer or complete internal financial review/i)).toBeInTheDocument();
   });
 
   it("announces the internal-financial-review success message as a status region when supplied", () => {

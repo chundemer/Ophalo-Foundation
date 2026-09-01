@@ -149,23 +149,28 @@ mutation-policy change, or changed lifecycle/attention semantics.
 
 ### GAP-058 — Actual Work review and request-completion actions compete on Request Detail
 
-**Status:** Open — partially addressed
+**Status:** Resolved — RD-058A (`c5796e0`), RD-058B-1 (`2ae07d5`), RD-058B-2 (`<pending>`)
 **Severity:** P1
 **Area:** Request Detail Actual Work review and lifecycle action hierarchy
 
-**Progress:** The read-only Actual Work Review queue projection now carries the factual request
+**Progress:** The read-only Actual Work Review queue projection carries the factual request
 lifecycle status; a row states both **Request: {lifecycle state}** and **Submitted visit awaiting
-internal financial review** (RD-058A, commit `c5796e0`). RD-058B-1 then reframed the review card as
+internal financial review** (RD-058A, commit `c5796e0`). RD-058B-1 reframed the review card as
 **Internal financial review** with the persistent sub-line "Reviews the submitted visit's financial
 details. Does not change the customer request.", renamed the action to **Complete internal financial
 review**, relabelled per-visit state as **Financial review pending** / **Financial review
 completed**, and made both success surfaces (Request Detail canvas banner and the wide-viewport
 Actual Work workspace route) announce "Internal financial review completed. The customer request
-status is unchanged." The remaining action-hierarchy work — sole-primary attention treatment,
-removal of the duplicate Anchor **Contact customer** action, **Resolve another way…**, quiet
-contextual placement of **Mark work done** with its full confirmation copy, and the shared
-Anchor/Work Canvas content boundary — is RD-058B-2 in
-[BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
+status is unchanged." RD-058B-2 completed the action hierarchy: during active attention the
+server-authored attention-resolution action is the only dominant action; the standalone Anchor
+**Contact customer** action is removed unconditionally (contact stays in Customer Contact / a
+server-routed contact-sheet primary); the non-primary alternate reads **Resolve another way…** and
+opens the Why/Resolve-by guidance disclosure; **Mark work done** moved from the Anchor to a quiet
+"Request lifecycle" block in the Work Canvas after Actual Work and before the composer (desktop and
+mobile), still gated on the server-provided secondary authorization; the **Mark work done** confirm
+step — Anchor primary and demoted control alike — carries the full advisory ("Work completed · no
+customer notification · no internal-review completion · attention/open draft unresolved"); and the
+Anchor inner card is bounded to `max-w-4xl mx-auto` to share the Work Canvas reading frame.
 
 When a request is in **Actual Work Review**, the page simultaneously presents the request-level **Mark work done** action and the review-card **Mark visit reviewed** action. The request can still show an early lifecycle state such as **Received**, making it unclear whether the operator is reviewing recorded work, completing the customer request, or expected to do both. A mistaken completion can change the customer-facing lifecycle before the required financial review is complete.
 

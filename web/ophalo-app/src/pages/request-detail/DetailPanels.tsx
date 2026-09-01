@@ -952,17 +952,21 @@ export function SourceMetaPanel({ detail, bare = false }: { detail: KeepRequestD
 // ---------------------------------------------------------------------------
 // Attention rail — one compact amber row (locked spec, 2026-08-24) carrying the
 // badge/label, an on-demand disclosure for why/resolve-by/evidence, the single
-// server-routed next-step CTA, and a secondary Clear attention entry when
-// acknowledgement is separately authorized. Conditional: absent entirely when
-// there is no active guidance. Customer Need (OriginalRequestCard) is now a
-// permanent, separate module — no longer coupled to this rail.
+// server-routed next-step CTA, and — when acknowledgement is separately authorized
+// but not itself the routed primary — a non-primary "Resolve another way…" link
+// that opens that same guidance disclosure (RD-058B-2, no casual dismissal).
+// Conditional: absent entirely when there is no active guidance. Customer Need
+// (OriginalRequestCard) is now a permanent, separate module — no longer coupled to
+// this rail.
 //
 // This banner is the sole renderer of the server-authored primary action while attention is
 // active (attention/no-attention mount split, 2026-08-25): the shared `PrimaryActionSlot`
 // (`PrimaryActionControl.tsx`) mounts here, beside the attention reason it resolves, and the
-// Anchor above the canvas does not mount it for the same request at the same time — the Anchor
-// only shows its own utility controls (Contact customer, demoted Mark work done) while attention
-// is active. Never derive a second, locally-guessed action from `guidanceKey` here — consume the
+// Anchor above the canvas does not mount it for the same request at the same time. While
+// attention is active the Anchor carries no lifecycle/contact action at all — the demoted
+// server-authorized "Mark work done" now lives in the Work Canvas after Actual Work (RD-058B-2),
+// and channel contact stays in Customer Contact. Never derive a second, locally-guessed action
+// from `guidanceKey` here — consume the
 // same `detail.availableActions.primaryAction` the shared slot reads.
 // ---------------------------------------------------------------------------
 
@@ -976,14 +980,26 @@ interface HeroAttentionBannerProps {
   onActivateCustomerUpdateComposer: () => void;
 }
 
-function AttentionGuidanceDisclosure({ guidance }: { guidance: AttentionGuidance }) {
-  const [isOpen, setIsOpen] = useState(false);
+// Controlled disclosure (RD-058B-2): `HeroAttentionBanner` owns the open state so the
+// non-primary "Resolve another way…" path can open this same Why/Resolve-by guidance module
+// rather than a separate acknowledge/clear sheet. Dismiss returns focus to the inline info
+// trigger, the disclosure's own control.
+function AttentionGuidanceDisclosure({
+  guidance,
+  open,
+  onOpenChange,
+}: {
+  guidance: AttentionGuidance;
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+}) {
+  const isOpen = open;
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const popoverId = useId();
 
   function dismiss() {
-    setIsOpen(false);
+    onOpenChange(false);
     triggerRef.current?.focus();
   }
 
@@ -1014,7 +1030,7 @@ function AttentionGuidanceDisclosure({ guidance }: { guidance: AttentionGuidance
         aria-expanded={isOpen}
         aria-controls={isOpen ? popoverId : undefined}
         aria-label="Why this needs attention"
-        onClick={() => (isOpen ? dismiss() : setIsOpen(true))}
+        onClick={() => (isOpen ? dismiss() : onOpenChange(true))}
         className="flex items-center justify-center rounded p-0.5 text-[var(--ophalo-attention)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ophalo-attention)]"
       >
         <Info className="h-4 w-4" />
@@ -1073,12 +1089,15 @@ export function HeroAttentionBanner({
   onActivateCustomerUpdateComposer,
 }: HeroAttentionBannerProps) {
   const guidance = buildAttentionGuidance(detail);
+  const [guidanceOpen, setGuidanceOpen] = useState(false);
   if (!guidance) return null;
 
   const isOverdue = detail.effectiveAttention.level === "overdue";
-  // Secondary Clear attention entry point: only when acknowledgement is separately authorized
-  // and isn't already the routed primary CTA (acknowledge_attention already routes there).
-  const showSecondaryClear =
+  // Non-primary alternate path (RD-058B-2): only when acknowledgement is separately authorized
+  // and isn't already the routed primary CTA (acknowledge_attention already routes there). It
+  // reads "Resolve another way…" and opens the Why/Resolve-by guidance disclosure — never a
+  // casual generic dismissal. The server-routed primary remains the sole dominant action.
+  const showResolveAnotherWay =
     detail.availableActions.canAcknowledgeAttention && detail.effectiveAttention.guidanceKey !== "acknowledge_attention";
 
   return (
@@ -1094,17 +1113,17 @@ export function HeroAttentionBanner({
             Needs attention
           </KeepBadge>
           <span className="text-sm font-semibold text-[var(--ophalo-ink)] truncate">{guidance.label}</span>
-          <AttentionGuidanceDisclosure guidance={guidance} />
+          <AttentionGuidanceDisclosure guidance={guidance} open={guidanceOpen} onOpenChange={setGuidanceOpen} />
         </div>
 
         <div className="flex shrink-0 items-center gap-3 ml-auto">
-          {showSecondaryClear && (
+          {showResolveAnotherWay && (
             <button
               type="button"
-              onClick={onOpenClearAttention}
+              onClick={() => setGuidanceOpen(true)}
               className="text-sm font-medium text-[var(--ophalo-attention)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ophalo-attention)] rounded"
             >
-              Clear attention
+              Resolve another way…
             </button>
           )}
           <PrimaryActionSlot

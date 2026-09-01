@@ -11,8 +11,10 @@ beforeEach(() => {
 });
 
 // Three-row desktop Anchor hierarchy (locked correction, 2026-08-22): one outer bordered/rounded
-// card with reference/status/attention (row 1 left), Log contact + primary action (row 1 right),
-// full-width customer identity (row 2), a divider, then three stable context columns (row 3).
+// card with reference/status/attention (row 1 left) and the no-attention lifecycle primary action
+// only (row 1 right, RD-058B-2), full-width customer identity (row 2), a divider, then three
+// stable context columns (row 3). The inner card is wrapped to `max-w-4xl mx-auto` so its content
+// shares the Work Canvas reading boundary (RD-058B-2).
 
 function baseDetail(): KeepRequestDetailResult {
   return {
@@ -70,6 +72,9 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     // Not a bare full-width strip — the Anchor is one rounded, bordered outer card
     const card = container.querySelector(".rounded-xl.border");
     expect(card).not.toBeNull();
+    // Inner content is bounded to the shared Work Canvas reading frame (RD-058B-2).
+    expect(card!.className).toContain("max-w-4xl");
+    expect(card!.className).toContain("mx-auto");
   });
 
   it("shows the filled primary action for an eligible, non-attention, non-Received request", () => {
@@ -87,33 +92,30 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     renderAnchor(detail);
 
     await userEvent.setup().click(screen.getByRole("button", { name: "Mark work done" }));
-    expect(screen.getByText("Confirm work is done?")).toBeInTheDocument();
+    // The confirm step carries the full factual advisory (RD-058B-2) — not only for the demoted
+    // active-attention control but for this no-attention Anchor primary too.
+    expect(
+      screen.getByText(
+        "This marks the request as Work completed. It does not notify the customer, does not complete internal financial review, and leaves any active attention or open Actual Work draft unresolved.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
-  it("does not mount the primary-action slot while active attention exists — HeroAttentionBanner owns it instead — but keeps the demoted Mark work done secondary", () => {
+  it("carries no action at all while active attention exists — no primary slot, no Contact customer, no demoted Mark work done (RD-058B-2)", () => {
     // mock-req-002: effectiveAttention.level is active (guidanceKey "respond_to_customer"). The
     // Anchor must not render detail.availableActions.primaryAction at all in this state (Session
-    // 0A attention/no-attention mount split, 2026-08-25) — see HeroAttentionBanner.test.tsx for
-    // coverage of the primary slot itself, including the respond_to_customer-falls-back-to-
-    // contact regression.
+    // 0A attention/no-attention mount split, 2026-08-25). RD-058B-2 also removes the standalone
+    // Contact customer action unconditionally and relocates the demoted Mark work done to the
+    // Work Canvas after Actual Work — so the Anchor's Row 1 right side is empty during attention.
     const detail = mockRequestDetails["mock-req-002"];
     renderAnchor(detail);
 
     expect(screen.queryByRole("button", { name: "Respond to customer" })).not.toBeInTheDocument();
-    const contactButton = screen.getByRole("button", { name: "Contact customer" });
-    expect(contactButton).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Contact customer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /mark work done/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close request" })).not.toBeInTheDocument();
-
-    // The consequence must be plainly visible before the user acts (2026-08-25 correction) — not
-    // hidden in an aria-label-only suffix — and the control must read as visibly subordinate to
-    // Contact customer, never an equal-weight outline button beside it.
-    const markWorkDoneButton = screen.getByRole("button", { name: "Mark work done, attention remains" });
-    expect(markWorkDoneButton).toBeInTheDocument();
-    expect(markWorkDoneButton.textContent).toBe("Mark work done, attention remains");
-    expect(markWorkDoneButton.className).not.toEqual(contactButton.className);
-    expect(markWorkDoneButton.className).not.toContain("border");
   });
 
   it("shows Close as the primary action when resolved, attention-free, and authorized", () => {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { PrimaryActionSlot } from "../PrimaryActionControl";
+import { PrimaryActionSlot, MarkWorkDoneSecondarySlot } from "../PrimaryActionControl";
 import { ApiError } from "../../../lib/apiClient";
 import { mockRequestDetails } from "../../../mocks/fixtures";
 import type { KeepRequestDetailResult } from "../../../lib/apiClient";
@@ -60,6 +60,56 @@ async function clickThenConfirm(user: ReturnType<typeof userEvent.setup>) {
 
 beforeEach(() => {
   mockPatchRequestStatus.mockReset();
+});
+
+describe("MarkWorkDoneSecondarySlot — quiet contextual lifecycle action (RD-058B-2)", () => {
+  function detailWithSecondary(): KeepRequestDetailResult {
+    const base = detailWithMarkWorkDone();
+    return {
+      ...base,
+      availableActions: {
+        ...base.availableActions,
+        primaryAction: null,
+        markWorkDoneSecondary: { label: "Mark work done", target: "mutation", consequence: "attention_remains" },
+      },
+    };
+  }
+
+  it("renders nothing without server authorization", () => {
+    const { container } = render(
+      <MarkWorkDoneSecondarySlot requestId="req-1" detail={detailWithMarkWorkDone()} onDetailUpdated={vi.fn()} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("is a quiet button whose visible text states the consequence and whose confirm carries the full advisory", async () => {
+    const user = userEvent.setup();
+    render(<MarkWorkDoneSecondarySlot requestId="req-1" detail={detailWithSecondary()} onDetailUpdated={vi.fn()} />);
+
+    const trigger = screen.getByRole("button", { name: "Mark work done, attention remains" });
+    expect(trigger.className).not.toContain("border");
+
+    await user.click(trigger);
+    expect(
+      screen.getByText(
+        "This marks the request as Work completed. It does not notify the customer, does not complete internal financial review, and leaves any active attention or open Actual Work draft unresolved.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("patches the request to resolved on confirm", async () => {
+    const user = userEvent.setup();
+    const onDetailUpdated = vi.fn();
+    const detail = detailWithSecondary();
+    mockPatchRequestStatus.mockResolvedValueOnce({ ...detail, version: "v2" });
+    render(<MarkWorkDoneSecondarySlot requestId="req-1" detail={detail} onDetailUpdated={onDetailUpdated} />);
+
+    await user.click(screen.getByRole("button", { name: "Mark work done, attention remains" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => expect(mockPatchRequestStatus).toHaveBeenCalledWith("req-1", { status: "resolved" }, "v1"));
+    await waitFor(() => expect(onDetailUpdated).toHaveBeenCalled());
+  });
 });
 
 describe("PrimaryActionControl — connection recovery", () => {
