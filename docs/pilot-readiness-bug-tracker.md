@@ -127,7 +127,11 @@ Implement ADR-492: retain canonical-customer matches, but render a request-phone
 
 ### GAP-019 — Request Detail needs durable shared responsive seams before further behavior changes
 
-**Status:** Open
+**Status:** Resolved — RD-019A (`ophalo-app`), behavior-preserving composition-seam extraction.
+`RequestDetailContent` is now a coordinator delegating to `useRequestDetailLayout` (both width
+rules + rail focus), `RequestDetailWorkCanvas` (layout-only canvas structure/order),
+`RequestDetailActualWorkSection` (Actual Work region from injected state + callbacks), and
+`RecordDetailsSection`. No API/DTO/authorization/mutation-policy/lifecycle/attention change.
 **Severity:** P1
 **Area:** `ophalo-app` Request Detail architecture
 

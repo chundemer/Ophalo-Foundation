@@ -87,6 +87,14 @@ measurements.
 **Proof:** focused composition tests plus current Request Detail tests; typecheck, token check,
 build, diff check, and narrow/wide manual comparison. No intentional screenshot difference.
 
+**Done (2026-09-01):** `RequestDetailContent` split into `useRequestDetailLayout` (both width
+predicates + action-rail focus state), `RequestDetailWorkCanvas` (layout-only canvas: single
+scroll surface, reading frame, wide/narrow region order), `RequestDetailActualWorkSection` (Actual
+Work capture/history/review/recovery region, driven only by injected state values and callbacks —
+route/retry decisions stay in the coordinator), and `RecordDetailsSection`. New
+`RequestDetailWorkCanvas.test.tsx`; existing Request Detail tests unchanged. tsc, `check:tokens`,
+`vite build`, `git diff --check` clean; request-detail vitest 411 passed.
+
 ### RD-058A — Actual Work Review queue facts
 
 **Goal:** Make the review queue truthful about both its submitted visit and its linked request.

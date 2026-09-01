@@ -1,34 +1,20 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useCallback } from "react";
 import { type KeepRequestDetailResult } from "../../lib/apiClient";
 import { type TimelineFilter } from "./TimelineEvent";
-import {
-  type RequestDetailLayoutProps,
-  ProminentFeedbackCard,
-  HeroAttentionBanner,
-  OriginalRequestCard,
-  RelatedWorkPanel,
-  CustomerSignalPanel,
-  FeedbackSummaryCard,
-  SourceMetaPanel,
-  WorkControlsGroup,
-} from "./DetailPanels";
-import { TodayPromiseBanner } from "./DetailHero";
+import { type RequestDetailLayoutProps } from "./DetailPanels";
 import { RequestDetailAnchor } from "./RequestDetailAnchor";
 import { MobileRequestAnchor, MobileActionRail } from "./MobileRequestAnchor";
-import { MobileContactLocationCard } from "./MobileContactLocationCard";
-import { UnifiedComposer, type UnifiedComposerHandle } from "./UnifiedComposer";
-import { KeepButton } from "../../components/keep/KeepButton";
+import { type UnifiedComposerHandle } from "./UnifiedComposer";
 import { RequestDetailActivity } from "./RequestDetailActivity";
-import { useActualWorkCapture } from "./useActualWorkCapture";
-import { ActualWorkCard } from "./ActualWorkCard";
+import { useActualWorkCapture, type ActualWorkEntryIntent } from "./useActualWorkCapture";
 import { useActualWorkHistory } from "./useActualWorkHistory";
-import { ActualWorkHistoryCard } from "./ActualWorkHistoryCard";
 import { ActualWorkComposer } from "./ActualWorkComposer";
 import { ActualWorkRecoveryDrawer } from "./ActualWorkRecoveryDrawer";
-import { TeamSection } from "./TeamSection";
-import { FOCUS_RING } from "./helpers";
 import { useActualWorkFinancialReview } from "./useActualWorkFinancialReview";
-import { ActualWorkReviewCard } from "./ActualWorkReviewCard";
+import { useRequestDetailLayout } from "./useRequestDetailLayout";
+import { RequestDetailWorkCanvas } from "./RequestDetailWorkCanvas";
+import { RequestDetailActualWorkSection } from "./RequestDetailActualWorkSection";
+import { RecordDetailsSection } from "./RecordDetailsSection";
 
 interface RequestDetailContentProps extends RequestDetailLayoutProps {
   detail: KeepRequestDetailResult;
@@ -56,13 +42,12 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
   onActualWorkReviewSuccess?: () => void;
 }
 
-// Work Canvas — the Workbench's sole vertical scroll surface (locked spec §1.2, §1.5, §5, §7.1).
-// Desktop module order: attention guidance -> Customer Need -> Actual Work context ->
-// communication -> record details -> activity. Mobile (Slice 3, 2026-08-26) inserts a
-// contact/service-location card after attention and swaps the last two: attention -> contact/
-// location -> Customer Need -> Actual Work -> communication -> activity -> record details.
-// Proposed Scope is explicitly deferred from this pilot Workbench (locked spec §1.7/§3) and is
-// not wired here.
+// RD-019A: this component is the page-level Request Detail coordinator. It owns authoritative
+// detail state wiring, the Actual Work hooks (capture/history/financial-review), replacement
+// recovery, the anchor slot, the mobile action rail, and the in-page modal/drawer surfaces.
+// Layout is delegated: `useRequestDetailLayout` centralizes the two width measurements and the
+// action-rail focus state; `RequestDetailWorkCanvas` owns canvas structure and region order;
+// `RequestDetailActualWorkSection` groups the Actual Work region from already-wired hooks.
 export function RequestDetailContent(props: RequestDetailContentProps) {
   const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess, onOpenClearAttention } = props;
   const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
@@ -70,21 +55,9 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const actualWorkCapture = useActualWorkCapture(requestId, props.currentAccountUserId);
   const actualWorkHistory = useActualWorkHistory(requestId);
 
-  // BL136 4f-i: the route-vs-modal decision must use the *viewport* 1001px predicate, matching
-  // `ActualWorkWorkspacePage`. In Workbench two-pane mode the detail container is < 1001px at
-  // viewports up to ~1360px (a 360px queue pane sits beside it), but a direct workspace deep-link
-  // renders the desktop workspace at those same viewports — so the container width (`isWide` below)
-  // would wrongly keep the in-page modal there. `matchMedia` mirrors the workspace page's own guard.
-  const [isViewportWide, setIsViewportWide] = useState(
-    () => typeof window?.matchMedia === "function" && window.matchMedia("(min-width: 1001px)").matches,
-  );
-  useEffect(() => {
-    if (typeof window?.matchMedia !== "function") return;
-    const mq = window.matchMedia("(min-width: 1001px)");
-    const sync = () => setIsViewportWide(mq.matches);
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
+  const { rootRef, isViewportWide, isWide, isTextEditing, handleCanvasFocus, handleCanvasBlur } =
+    useRequestDetailLayout();
+
   // On a wide viewport the capture entry point AND the Owner/Admin office financial review live on
   // the dedicated workspace route; below 1001px both stay on this page (the workspace has no narrow
   // form and redirects narrow deep-links back here). The two are mutually exclusive by width.
@@ -100,23 +73,6 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       : [],
   );
   const [recorderDrawerOpen, setRecorderDrawerOpen] = useState(false);
-
-  // Locked in keep-ui-design-model-v2.md §13 (build-log 133); duplicated rather than imported —
-  // same rule `RequestWorkbenchShell.tsx`'s `PROTECTED_WORKSPACE_MIN_PX` measures. This is the
-  // *container* width, used for Request Detail's own internal layout (mobile anchor / action
-  // rail / module order / the in-page composer's own `isWide` chrome).
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const [isWide, setIsWide] = useState(false);
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? 0;
-      setIsWide(width >= 1001);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
   // BL136 4e-iii: holds the successor Draft id when a replacement-copy correction succeeded but the
   // Draft could not be auto-opened (e.g. the acting user lacks ActualWorkCapture, or another
@@ -142,68 +98,77 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
     },
     [actualWorkFinancialReview, actualWorkHistory, actualWorkCapture, useWorkspaceRoute, props, requestId],
   );
-  // Editable capture states — the recorder's own resume/start affordance.
-  const actualWorkCaptureEditable = actualWorkCapture.state.status === "no-draft" || actualWorkCapture.state.status === "draft";
-  // Also render the compact strip for the non-actionable "another team member is recording this
-  // visit" state (GAP-055), so a qualified non-recorder still sees why there is no entry point.
-  const actualWorkCardVisible =
-    actualWorkCaptureEditable ||
-    actualWorkCapture.state.status === "held-by-other" ||
-    actualWorkCapture.state.status === "owner-recovery";
-  const actualWorkHistoryVisible =
-    actualWorkHistory.state.status === "error" ||
-    (actualWorkHistory.state.status === "loaded" && actualWorkHistory.state.submittedVisits.length > 0);
 
-  // Mobile action-rail hide/unpin while text is being entered (Slice 2, locked spec §4.2).
-  // Scoped `focus`/`blur` on the canvas root rather than document, and rather than threading a
-  // prop through every sheet/composer — React's `onFocus`/`onBlur` bubble via `focusin`/
-  // `focusout` under the hood, so one pair of handlers on the outer wrapper covers every
-  // descendant field with no cleanup/effect needed. `relatedTarget` guards the field-to-field
-  // flicker case (e.g. tabbing straight from one text field into another).
-  const [isTextEditing, setIsTextEditing] = useState(false);
-  const isTextEntryElement = useCallback((el: EventTarget | null): boolean => {
-    if (!(el instanceof HTMLElement)) return false;
-    const tag = el.tagName;
-    return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
-  }, []);
-  const handleCanvasFocus = useCallback(
-    (e: React.FocusEvent<HTMLDivElement>) => {
-      if (isTextEntryElement(e.target)) setIsTextEditing(true);
+  const openReplacementDraft = useCallback(
+    (successorId: string) => {
+      void actualWorkCapture
+        .openReplacementDraft(successorId)
+        .then((opened) => setReplacementRecoverySuccessorId(opened ? null : successorId));
     },
-    [isTextEntryElement],
+    [actualWorkCapture],
   );
-  const handleCanvasBlur = useCallback(
-    (e: React.FocusEvent<HTMLDivElement>) => {
-      if (!isTextEntryElement(e.target)) return;
-      if (isTextEntryElement(e.relatedTarget)) return;
-      setIsTextEditing(false);
+
+  // Route selection and retry policy stay here (RD-019A boundary): the section receives only the
+  // resulting callbacks.
+  const handleStartCapture = useCallback(
+    (intent?: ActualWorkEntryIntent) => {
+      if (useWorkspaceRoute) {
+        void actualWorkCapture.createDraft(intent).then((r) => {
+          if (r === "created" || r === "exists") props.onNavigateToActualWorkspace!(requestId, "draft");
+        });
+      } else {
+        void actualWorkCapture.startCapture(intent);
+      }
     },
-    [isTextEntryElement],
+    [useWorkspaceRoute, actualWorkCapture, props, requestId],
   );
+  const handleReviewSuccess = useCallback(() => {
+    void actualWorkHistory.retry();
+    void props.onActualWorkReviewSuccess?.();
+  }, [actualWorkHistory, props]);
 
   const activityBlock = (
     <RequestDetailActivity timelineFilter={props.timelineFilter} onTimelineFilterChange={props.onTimelineFilterChange} displayedEvents={props.displayedEvents} />
   );
 
   const recordDetailsBlock = (
-    <details className="group rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3">
-      <summary
-        className={`flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] ${FOCUS_RING} rounded`}
-      >
-        Record details
-        <span className="text-[var(--ophalo-muted)] transition-transform group-open:rotate-180">⌄</span>
-      </summary>
-      {/* Each panel self-hides (returns null) when it has nothing meaningful to show;
-          divide-y only borders elements with an actual preceding DOM sibling, so a hidden
-          panel never leaves a divider/empty gap. */}
-      <div className="mt-3 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
-        <CustomerSignalPanel detail={detail} bare />
-        <RelatedWorkPanel requestId={requestId} onNavigate={props.onNavigate} bare />
-        <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} bare />
-        {!showProminentFeedbackCard && <FeedbackSummaryCard detail={detail} bare />}
-        <SourceMetaPanel detail={detail} bare />
-      </div>
-    </details>
+    <RecordDetailsSection
+      detail={detail}
+      requestId={requestId}
+      showProminentFeedbackCard={showProminentFeedbackCard}
+      onDetailUpdated={onDetailUpdated}
+      onNavigate={props.onNavigate}
+    />
+  );
+
+  const actualWorkSection = (
+    <RequestDetailActualWorkSection
+      captureState={actualWorkCapture.state}
+      historyState={actualWorkHistory.state}
+      reviewState={actualWorkFinancialReview.state}
+      useWorkspaceRoute={useWorkspaceRoute}
+      canReviewActualWork={props.canReviewActualWork}
+      focusReviewOnMount={props.focusPanel === "actual-work-review"}
+      recoveryNotice={actualWorkCapture.recoveryNotice}
+      onDismissRecoveryNotice={actualWorkCapture.clearRecoveryNotice}
+      onStartCapture={handleStartCapture}
+      onReassignRecorder={() => setRecorderDrawerOpen(true)}
+      onRetryHistory={() => void actualWorkHistory.retry()}
+      onOpenVisit={
+        useWorkspaceRoute
+          ? (visitId) => props.onNavigateToActualWorkspace!(requestId, visitId)
+          : undefined
+      }
+      onRetryReview={() => void actualWorkFinancialReview.retry()}
+      onReview={actualWorkFinancialReview.review}
+      onResolveLine={actualWorkFinancialReview.resolveLine}
+      onRecordNoChargeDisposition={actualWorkFinancialReview.recordNoChargeDisposition}
+      onReplaceVisit={handleReplaceVisit}
+      isVisitMutating={actualWorkFinancialReview.isVisitMutating}
+      onReviewSuccess={handleReviewSuccess}
+      replacementRecoverySuccessorId={replacementRecoverySuccessorId}
+      onOpenReplacementDraft={openReplacementDraft}
+    />
   );
 
   return (
@@ -220,165 +185,30 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       ) : (
         <MobileRequestAnchor detail={detail} />
       )}
-      <div data-request-detail-work-canvas className="flex-1 min-h-0 min-w-0 overflow-y-auto px-4 md:px-6 py-5">
-      <div className="max-w-4xl mx-auto w-full space-y-3">
-        {/* 1. Active attention guidance */}
-        <div id="focus-panel-attention" className="space-y-3">
-          <HeroAttentionBanner
-            requestId={requestId}
-            detail={detail}
-            onDetailUpdated={onDetailUpdated}
-            onOpenClearAttention={onOpenClearAttention}
-            onRecordFollowUp={onRecordFollowUp}
-            onContactLaunched={onContactLaunched}
-            onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
-          />
-          <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} />
-        </div>
-
-        {/* 2. Contact/service location — mobile canvas only (Slice 3, 2026-08-26); desktop
-            keeps this content solely in RequestDetailAnchor/CustomerContactStrip. */}
-        {!isWide && (
-          <MobileContactLocationCard detail={detail} onContactLaunched={onContactLaunched} onEditLocation={onEditLocation} />
-        )}
-
-        {/* 3. Customer need — permanent, always mounted regardless of attention state
-            (locked spec, 2026-08-24: decoupled from the conditional attention rail). */}
-        <OriginalRequestCard detail={detail} />
-
-        {/* 4. Work execution — Actual Work, one compact module (locked exception, 2026-08-22:
-            capture and visit history share one enclosing card; visit history renders only when
-            visits actually exist, no "no visits submitted" filler). Whole module self-hides when
-            neither has content. */}
-        {(actualWorkCardVisible || actualWorkHistoryVisible) && (
-          <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
-            <ActualWorkCard
-              state={actualWorkCapture.state}
-              onStartCapture={(intent) => {
-                if (useWorkspaceRoute) {
-                  void actualWorkCapture.createDraft(intent).then((r) => {
-                    if (r === "created" || r === "exists") props.onNavigateToActualWorkspace!(requestId, "draft");
-                  });
-                } else {
-                  void actualWorkCapture.startCapture(intent);
-                }
-              }}
-              onReassignRecorder={() => setRecorderDrawerOpen(true)}
-              recoveryNotice={actualWorkCapture.recoveryNotice}
-              onDismissRecoveryNotice={actualWorkCapture.clearRecoveryNotice}
-              bare
-            />
-            {!actualWorkCaptureEditable && (
-              <ActualWorkHistoryCard
-                state={actualWorkHistory.state}
-                onRetry={() => void actualWorkHistory.retry()}
-                // BL136 4f-ii: on a wide viewport each submitted visit opens in the Actual Work
-                // workspace (where the Owner/Admin office region now lives); below 1001px the
-                // review card renders inline on this page instead, so no per-visit link is offered.
-                onOpenVisit={
-                  useWorkspaceRoute
-                    ? (visitId) => props.onNavigateToActualWorkspace!(requestId, visitId)
-                    : undefined
-                }
-                bare
-              />
-            )}
-          </div>
-        )}
-
-        {/* BL136 4f-ii: below 1001px only — on a wide viewport office financial review and the
-            "Correct this visit" affordance live exclusively on the workspace route. */}
-        {!useWorkspaceRoute && props.canReviewActualWork && (
-          <ActualWorkReviewCard
-            state={actualWorkFinancialReview.state}
-            onRetry={() => void actualWorkFinancialReview.retry()}
-            onReview={actualWorkFinancialReview.review}
-            onResolveLine={actualWorkFinancialReview.resolveLine}
-            onRecordNoChargeDisposition={actualWorkFinancialReview.recordNoChargeDisposition}
-            onReplace={handleReplaceVisit}
-            isVisitMutating={actualWorkFinancialReview.isVisitMutating}
-            focusOnMount={props.focusPanel === "actual-work-review"}
-            onReviewSuccess={() => {
-              void actualWorkHistory.retry();
-              void props.onActualWorkReviewSuccess?.();
-            }}
-          />
-        )}
-
-        {!useWorkspaceRoute && replacementRecoverySuccessorId && (
-          <div role="status" className="rounded-xl border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-4 py-3 text-sm text-[var(--ophalo-attention)]">
-            <p className="font-medium">The correction draft was created.</p>
-            <p className="mt-0.5 text-xs">Open it to review and submit the replacement visit.</p>
-            <KeepButton
-              variant="secondary"
-              className="mt-2"
-              onClick={() => {
-                void actualWorkCapture
-                  .openReplacementDraft(replacementRecoverySuccessorId)
-                  .then((opened) => setReplacementRecoverySuccessorId(opened ? null : replacementRecoverySuccessorId));
-              }}
-            >
-              Open replacement draft
-            </KeepButton>
-          </div>
-        )}
-
-        {/* 5. Communication — composer only; Follow-Up/Planned-For and priority moved to the
-            Anchor's compact Internal Planning strip (locked 2026-08-24). Desktop's one Log Contact
-            entry point lives in the Anchor; mobile's lives in the Contact/Location card above
-            (Slice 3), not duplicated here. */}
-        <div className="space-y-3">
-          {showProminentFeedbackCard && <ProminentFeedbackCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} onReviewSuccess={onReviewSuccess} />}
-          {props.reviewSuccessMsg && <div role="status" aria-live="polite" className="rounded-xl border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-4 py-3 text-sm text-[var(--ophalo-success)] font-medium">{props.reviewSuccessMsg}</div>}
-          <div
-            id="focus-panel-update"
-            tabIndex={-1}
-            className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)]"
-          >
-            <UnifiedComposer ref={composerRef} requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} customerUpdateDraft={props.customerUpdateDraft} onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange} customerUpdateDraftStatus={props.customerUpdateDraftStatus} onCustomerUpdateDraftStatusChange={props.onCustomerUpdateDraftStatusChange} highlight={highlights.sendUpdate} bare />
-          </div>
-        </div>
-
-        {/* Actionable, stays visible (not lower-frequency record context) */}
-        {!showProminentFeedbackCard && (
-          <WorkControlsGroup
-            requestId={requestId}
-            detail={detail}
-            onDetailUpdated={onDetailUpdated}
-            highlights={{ feedbackReview: "secondary" }}
-            onReviewSuccess={onReviewSuccess}
-          />
-        )}
-        {detail.availableActions.canCreateFollowUpRequest && (
-          <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
-            <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Follow-up work</p>
-            <p className="text-xs text-[var(--ophalo-muted)] mb-3">
-              This request is closed. Start a new request for any additional work needed.
-            </p>
-            <KeepButton variant="secondary" onClick={onCreateFollowUp} className="w-full">
-              Create follow-up request
-            </KeepButton>
-          </div>
-        )}
-
-        {/* 6/7. Activity and lower-frequency record context. Desktop keeps its locked order
-            (Record details above Activity, slice 5, 2026-08-23) — unchanged. Mobile's locked
-            canvas order (Slice 3, 2026-08-26) puts Activity above Record details, so the two
-            blocks below swap only when !isWide. Each still self-hides/collapses exactly as
-            before; only their relative order changes. */}
-        {isWide ? (
-          <>
-            {recordDetailsBlock}
-            {activityBlock}
-          </>
-        ) : (
-          <>
-            {activityBlock}
-            {recordDetailsBlock}
-          </>
-        )}
-      </div>
-      </div>
+      <RequestDetailWorkCanvas
+        isWide={isWide}
+        requestId={requestId}
+        detail={detail}
+        highlights={highlights}
+        showProminentFeedbackCard={showProminentFeedbackCard}
+        onDetailUpdated={onDetailUpdated}
+        onContactLaunched={onContactLaunched}
+        onEditLocation={onEditLocation}
+        onRecordFollowUp={onRecordFollowUp}
+        onCreateFollowUp={onCreateFollowUp}
+        onReviewSuccess={onReviewSuccess}
+        onOpenClearAttention={onOpenClearAttention}
+        onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
+        composerRef={composerRef}
+        customerUpdateDraft={props.customerUpdateDraft}
+        onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange}
+        customerUpdateDraftStatus={props.customerUpdateDraftStatus}
+        onCustomerUpdateDraftStatusChange={props.onCustomerUpdateDraftStatusChange}
+        reviewSuccessMsg={props.reviewSuccessMsg}
+        actualWorkSection={actualWorkSection}
+        activityBlock={activityBlock}
+        recordDetailsBlock={recordDetailsBlock}
+      />
       {!isWide && (
         <MobileActionRail
           {...layoutProps}
