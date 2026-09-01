@@ -374,6 +374,24 @@ Add an accessible clear control that restores the selected queue's unfiltered li
 
 Render **Update customer** before **Log contact** whenever both actions are allowed, including Needs Attention, Open Work, and narrow layouts. Share the ordering rule and cover visual plus focus order.
 
+### GAP-065A — An active Actual Work Draft no longer hides prior submitted visits (UI slice)
+
+**Status:** Resolved (`4fbda15`)
+**Severity:** P1 (narrow UI slice of GAP-065)
+**Area:** Request Detail — Actual Work section
+
+`RequestDetailActualWorkSection` now renders the submitted `ActualWorkHistoryCard` whenever visit
+history has content or errored, even while the current Actual Work capture state is an editable
+Draft. The no-filler Draft behavior is preserved (empty history still renders nothing). Review
+routing is unchanged: on a wide viewport each prior submitted visit still exposes **Open in
+workspace** and routes with that exact visit ID; narrow screens keep the inline review card and add
+no workspace route. Owner/Admin financial-review authorization is not broadened. Coverage:
+`RequestDetailActualWorkSection.test.tsx` (6 focused tests); `src/pages/request-detail` suite 425
+passed; tsc / `check:tokens` / `vite build` / `git diff --check` clean.
+
+The broader GAP-065 queue **Internal review pending** cue, the persistent Office Review navigation
+affordance, and the server-authoritative projection remain **Needs decision** below.
+
 ### GAP-037 — Pilot has no weekly, evidence-based value report
 
 **Status:** Open
