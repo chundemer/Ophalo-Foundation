@@ -1,7 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-01 — RD-059A (Internal Planning controls) implementation complete pending
-commit; GAP-059 addressed. Next session is Q-027A (Owner/Admin queue row hierarchy). Handoff detail
+**Last updated:** 2026-09-01 — RD-059A (Internal Planning controls) complete (`cf9adaf`); GAP-059 addressed. Next session is Q-027A (Owner/Admin queue row hierarchy). Handoff detail
 in [BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
@@ -53,8 +52,7 @@ Run the Claude sessions in this exact order, one accepted commit at a time:
    restores trigger focus) instead of an inline row that had expanded the Anchor and displaced the
    request identity. Full frontend suite 953 passed; tsc/`check:tokens`/`vite build`/`git diff
    --check` clean; visual evidence captured. No server/policy change.
-5. **RD-059A** — readable, keyboard-safe Internal Planning controls. ✅ implementation complete
-   (commit pending review): GAP-059 addressed. `TimingPanel` strip + full/`bare` modes now open the
+5. **RD-059A** — readable, keyboard-safe Internal Planning controls. ✅ complete (`cf9adaf`): GAP-059 resolved. `TimingPanel` strip + full/`bare` modes now open the
    first editor field on open, close on Escape (`preventDefault` + `stopPropagation`) and on Cancel
    with focus restored to the disclosure trigger, and announce save/conflict errors through
    `role="alert"` in the relevant editor. Locked planning-row copy applied: labels **Internal

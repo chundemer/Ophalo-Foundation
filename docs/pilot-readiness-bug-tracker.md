@@ -213,11 +213,11 @@ or change server lifecycle authority as a presentation fix.
 
 ### GAP-059 — Planned-work and internal-follow-up controls look disabled or unreadable
 
-**Status:** Open — RD-059A implementation complete, commit pending review
+**Status:** Resolved — RD-059A (`cf9adaf`)
 **Severity:** P1
 **Area:** Request Detail schedule and follow-up controls
 
-**Progress:** RD-059A applied the locked resolution to `TimingPanel` (Anchor `strip` row plus the
+RD-059A applied the locked resolution to `TimingPanel` (Anchor `strip` row plus the
 full-card and `bare` variants). Persistent labels are **Internal priority**, **Planned work date**,
 and **Internal follow-up (optional)**. Enabled empty controls now read **Set planned date** and
 **Set follow-up date** in normal-contrast ink with a leading calendar cue and no placeholder

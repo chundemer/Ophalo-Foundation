@@ -199,7 +199,7 @@ allow unauthorized editing, or render a read-only value as an enabled action.
 focus transfer, Escape/restore, Tab sequence, selected-value readability, and desktop/narrow
 layouts.
 
-**Completed (RD-059A, commit pending review):** `TimingPanel` `strip`, full-card, and `bare`
+**Completed (RD-059A, `cf9adaf`):** `TimingPanel` `strip`, full-card, and `bare`
 variants now focus the first editor field on open (`useEffect` on `expandedEditor`), close on
 Escape (`handleEditorKeyDown` → `preventDefault` + `stopPropagation` → `closeEditor`) and on
 Cancel, and restore focus to the disclosure trigger via `followUpTriggerRef` / `plannedTriggerRef`.
