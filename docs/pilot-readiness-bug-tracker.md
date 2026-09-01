@@ -33,7 +33,7 @@ Complete each numbered slice with focused automated coverage and a production-ca
 1. **Release safety and truthful public entry:** GAP-039, GAP-033, then GAP-040. Establish safe production observability and configuration validation first; make the public request journey and published claims truthful second. (GAP-056 customer SMS/QR handoff sender/business context — resolved, commit `0fc7a2a`.)
 2. **Field-work correctness:** No active item. (GAP-055 Actual Work recorder ownership — resolved across Batches A–D: migration/ownership `b3b3d41`, recorder authorization `d26b955` and `72ce6a5`, audited transfer `c7ce822`, and Owner/Admin recovery UI `de40491`.)
 3. **Phone and capture integrity:** GAP-016, GAP-021, GAP-051, then GAP-025. Consolidate the ADR-444 normalization path before extending fallback customer recognition.
-4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, and GAP-049. First establish shared responsive seams without behavior change; then make Owner/Admin review, lifecycle, attention, and timing actions unmistakable. See [BL137](build-log/137-request-detail-and-queue-usability-handoff.md) for the bounded execution order.
+4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, GAP-049, and GAP-063. First establish shared responsive seams without behavior change; then make Owner/Admin review, lifecycle, attention, and timing actions unmistakable. See [BL137](build-log/137-request-detail-and-queue-usability-handoff.md) for the bounded execution order.
 5. **Request-list core behavior:** GAP-027, then GAP-045, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. The row grammar is now locked: one lifecycle cue, one server-ranked exception cue, and one next-action line. Implement it after the Request Detail safety work; do not merge broad queue redesign into GAP-019/058/059. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
 6. **Pilot operating loop and final usability review:** GAP-037 (after GAP-039), GAP-038, and GAP-054. Deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
 
@@ -149,9 +149,17 @@ mutation-policy change, or changed lifecycle/attention semantics.
 
 ### GAP-058 — Actual Work review and request-completion actions compete on Request Detail
 
-**Status:** Open
+**Status:** Open — partially addressed
 **Severity:** P1
 **Area:** Request Detail Actual Work review and lifecycle action hierarchy
+
+**Progress:** The read-only Actual Work Review queue projection now carries the factual request
+lifecycle status; a row states both **Request: {lifecycle state}** and **Submitted visit awaiting
+internal financial review** (RD-058A, commit `c5796e0`). The Request Detail action hierarchy —
+review-card rename to **Complete internal financial review** with persistent "does not change the
+customer request" copy, quiet contextual placement of **Mark work done**, sole-primary attention
+treatment, and the shared Anchor/Work Canvas content boundary — remains open and is tracked by
+RD-058B in [BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
 
 When a request is in **Actual Work Review**, the page simultaneously presents the request-level **Mark work done** action and the review-card **Mark visit reviewed** action. The request can still show an early lifecycle state such as **Received**, making it unclear whether the operator is reviewing recorded work, completing the customer request, or expected to do both. A mistaken completion can change the customer-facing lifecycle before the required financial review is complete.
 
@@ -242,6 +250,34 @@ Route email containing a private tracker through the explicit share workflow. Op
 **Area:** Request Detail follow-up creation
 
 Reserve space for the provenance prefix and safely truncate copied source text so maximum-length closed requests can start a valid follow-up without changing the original record.
+
+### GAP-063 — Owners and Admins cannot classify a request as Spam or Test in Request Detail
+
+**Status:** Open
+**Severity:** P1
+**Area:** Request Detail Owner/Admin lifecycle controls
+
+The server already supports an auditable, terminal Spam/Test classification through
+`POST /keep/requests/{id}/classify` and returns the authoritative `availableActions.canClassify`
+permission flag. Request Detail does not expose that authorized action, so staff cannot remove a
+known spam submission or intentional test request through the product.
+
+**Locked resolution:** For an Owner or Admin on an active request with `canClassify`, expose a
+secondary lifecycle action offering **Mark as spam** and **Mark as test**. Require a clear,
+accessible confirmation before submit because the classification is terminal; allow an optional
+internal reason (maximum 500 characters). Replace authoritative detail with the response and show
+the resulting terminal status and existing internal timeline event. Do not expose the action to
+Operators/Viewers, send customer notification, alter the server authorization/state policy, or
+provide unclassification/reopen from the client.
+
+**Acceptance criteria:**
+
+- Owner/Admin users can classify an eligible request as Spam or Test after confirmation; the UI
+  refreshes to the server-returned terminal state.
+- The action is absent for ineligible roles and terminal requests, including when a stale client
+  view says it is available.
+- The reason field, confirmation, API/transport failure, and stale-version conflict states are
+  keyboard accessible and provide clear feedback without implying a successful mutation.
 
 ### GAP-027 — Request-list alerts compete and lifecycle state is hard to scan
 

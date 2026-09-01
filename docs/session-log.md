@@ -30,7 +30,13 @@ relevant build log.
 Run the Claude sessions in this exact order, one accepted commit at a time:
 
 1. **RD-019A** — behavior-preserving Request Detail composition seams. ✅ complete.
-2. **RD-058A** — Actual Work Review queue exposes factual request lifecycle status. ✅ complete.
+2. **RD-058A** — Actual Work Review queue exposes factual request lifecycle status. ✅ complete
+   (commit `c5796e0`): queue source row + entry carry the request lifecycle slug via the shared
+   exhaustive `KeepRequestDetailMapper.MapStatus`; membership/FIFO order/count unchanged; queue row
+   renders `Request: {statusLabel(...)}` plus `Submitted visit awaiting internal financial review`.
+   Integration `ActualWorkFinancialReadApiTests` 28 passed; new `ActualWorkReviewQueueList.test.tsx`;
+   tsc/`check:tokens`/`vite build`/`git diff --check` clean. GAP-058 remains open for the RD-058B
+   Request Detail action-hierarchy work.
 3. **RD-058B** — Request Detail action hierarchy and internal-review clarity. ← next.
 4. **RD-059A** — readable, keyboard-safe Internal Planning controls.
 5. **Q-027A** — Owner/Admin queue row hierarchy, badges, and selection/severity treatment.
