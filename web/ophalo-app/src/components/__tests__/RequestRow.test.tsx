@@ -617,6 +617,57 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(rowEl.className).toContain("border-l-[var(--ophalo-danger)]");
     expect(rowEl.className).toContain("ring-inset");
   });
+
+  // Q-027A: red is reserved for genuine overdue/high-risk work. Non-overdue priority/urgent
+  // business-waiting (server severity "priority") renders amber, not red.
+  it("Q-027A: non-overdue priority business-waiting renders an amber exception and rail, never red", () => {
+    const row = buildRow({
+      status: "in_progress",
+      businessPriority: null,
+      ranking: { rankingGroup: "priority_business_waiting", rankingOrder: 2, rankingReason: "priority_business_waiting", severity: "priority", isOverdue: false, elapsedSinceUtc: null, dueAtUtc: "2026-07-30T12:00:00Z", isPostClose: false },
+      attention: { attentionLevel: "needs_attention", waitingDirection: "business", attentionReason: null, priorityBand: "priority", attentionSinceUtc: null, nextAttentionAtUtc: "2026-07-30T12:00:00Z", firstResponseDueAtUtc: null, firstRespondedAtUtc: "2026-07-01T00:00:00Z", firstResponsePending: false, firstResponseOverdue: false },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    const rowEl = screen.getByRole("button", { name: /Jane Smith/ });
+    expect(rowEl.className).toContain("border-l-[var(--ophalo-attention)]");
+    expect(rowEl.className).not.toContain("border-l-[var(--ophalo-danger)]");
+    const badge = screen.getByText("Needs response");
+    expect(badge.className).toContain("var(--ophalo-attention)");
+    expect(badge.className).not.toContain("var(--ophalo-danger)");
+  });
+
+  it("Q-027A: genuinely overdue business-waiting keeps the red exception and rail", () => {
+    const row = buildRow({
+      status: "in_progress",
+      ranking: { rankingGroup: "overdue_business_waiting", rankingOrder: 1, rankingReason: "overdue_business_waiting", severity: "danger", isOverdue: true, elapsedSinceUtc: null, dueAtUtc: "2026-07-13T12:00:00Z", isPostClose: false },
+      attention: { attentionLevel: "none", waitingDirection: "none", attentionReason: null, priorityBand: "standard", attentionSinceUtc: null, nextAttentionAtUtc: null, firstResponseDueAtUtc: "2026-07-13T12:00:00Z", firstRespondedAtUtc: null, firstResponsePending: false, firstResponseOverdue: true },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    const rowEl = screen.getByRole("button", { name: /Jane Smith/ });
+    expect(rowEl.className).toContain("border-l-[var(--ophalo-danger)]");
+    const badge = screen.getByText(/Response overdue/);
+    expect(badge.className).toContain("var(--ophalo-danger)");
+  });
+
+  it("Q-027A: a complaint (server severity danger) stays red as genuine high-risk work", () => {
+    const row = buildRow({
+      status: "in_progress",
+      ranking: { rankingGroup: "priority_business_waiting", rankingOrder: 2, rankingReason: "priority_business_waiting", severity: "danger", isOverdue: false, elapsedSinceUtc: null, dueAtUtc: "2026-07-20T12:00:00Z", isPostClose: false },
+      attention: { attentionLevel: "needs_attention", waitingDirection: "business", attentionReason: "complaint", priorityBand: "priority", attentionSinceUtc: null, nextAttentionAtUtc: "2026-07-20T12:00:00Z", firstResponseDueAtUtc: null, firstRespondedAtUtc: "2026-07-01T00:00:00Z", firstResponsePending: false, firstResponseOverdue: false },
+      actions: { quickActions: [quickAction("open_detail", "detail"), quickAction("acknowledge_attention")] },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    const rowEl = screen.getByRole("button", { name: /Jane Smith/ });
+    expect(rowEl.className).toContain("border-l-[var(--ophalo-danger)]");
+    const badge = screen.getByText("Complaint");
+    expect(badge.className).toContain("var(--ophalo-danger)");
+  });
 });
 
 describe("buildCollapsedSummary — ADR-450 word-boundary/whitespace collapse", () => {

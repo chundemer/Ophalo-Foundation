@@ -238,6 +238,18 @@ waiting-on-customer, work-completed, closed, closed-with-unresolved-feedback, se
 overdue rows, and Office Review. Verify queue count/visible urgency agreement against the existing
 server contract.
 
+**Resolution (`<pending>`):** the locked row grammar was already implemented in `RequestRow.tsx`
+(one `StatusBadge`, one `resolveException` badge, one `Next:` line, terminal suppression, quiet
+`followUpMeta`/`actionSignalLine`); Office Review was already a separate surface. The one real
+defect: `severityToTone` collapsed the server's `"priority"` severity into the red (`danger`) tone,
+so non-overdue priority/urgent business-waiting rows showed a red badge + red left rail. Fixed to
+map only `"danger"` → red and `"priority"` → amber (`attention`). The `overdue_business_waiting`,
+overdue `due_follow_up_on`, and `feedback_pending` branches still hardcode `"danger"`; complaints
+and schedule/change-or-cancel arrive as server severity `"danger"` and stay red. No server, policy,
+ranking, count, or layout change. Regression tests added to `RequestRow.test.tsx`. Full frontend
+suite 980 passed; tsc / `check:tokens` / `vite build` / `git diff --check` clean; desktop +
+keyboard-focus + zoom evidence captured on an isolated harness.
+
 ## Session gates
 
 - Maximum one bounded change set per session; split before exceeding three mutation families,

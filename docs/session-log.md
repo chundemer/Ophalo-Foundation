@@ -1,6 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-01 — RD-059A (Internal Planning controls) complete (`cf9adaf`); GAP-059 addressed. Next session is Q-027A (Owner/Admin queue row hierarchy). Handoff detail
+**Last updated:** 2026-09-01 — Q-027A (queue row severity treatment) complete (`<pending>`); GAP-027 resolved. The BL137 Request Detail / queue usability sequence is done.
+Next tracker item is GAP-045 (Default Queue language). Handoff detail
 in [BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
@@ -27,51 +28,17 @@ relevant build log.
 
 ## Next implementation sequence
 
-Run the Claude sessions in this exact order, one accepted commit at a time:
+The BL137 Request Detail / queue usability sequence (RD-019A, RD-058A, RD-058B-1/2, RD-059A,
+Q-027A) is **complete**. Per-item detail lives in Git history and the
+[BL137](build-log/137-request-detail-and-queue-usability-handoff.md) resolution notes; GAP-019,
+GAP-058, GAP-059, and GAP-027 are resolved.
 
-1. **RD-019A** — behavior-preserving Request Detail composition seams. ✅ complete.
-2. **RD-058A** — Actual Work Review queue exposes factual request lifecycle status. ✅ complete
-   (commit `c5796e0`): queue source row + entry carry the request lifecycle slug via the shared
-   exhaustive `KeepRequestDetailMapper.MapStatus`; membership/FIFO order/count unchanged; queue row
-   renders `Request: {statusLabel(...)}` plus `Submitted visit awaiting internal financial review`.
-   Integration `ActualWorkFinancialReadApiTests` 28 passed; new `ActualWorkReviewQueueList.test.tsx`;
-   tsc/`check:tokens`/`vite build`/`git diff --check` clean. GAP-058 remains open for the RD-058B
-   Request Detail action-hierarchy work.
-3. **RD-058B-1** — Internal financial review clarity. ✅ complete (`2ae07d5`): review card reframed
-   as **Internal financial review** ("…does not change the customer request"), action → **Complete
-   internal financial review**, per-visit state → **Financial review pending/completed**, both
-   success surfaces announce the customer request status is unchanged.
-4. **RD-058B-2** — Request Detail action hierarchy. ✅ complete: during active attention the
-   server-authored attention action is sole-dominant; standalone Anchor **Contact customer** removed
-   unconditionally; non-primary alternate → **Resolve another way…** opening the Why/Resolve-by
-   guidance disclosure; **Mark work done** relocated to a quiet "Request lifecycle" block in the
-   Work Canvas after Actual Work, before the composer (desktop + mobile), still gated on
-   `markWorkDoneSecondary`; Anchor inner card bounded to `max-w-4xl mx-auto w-full`. Review fix:
-   both Mark work done controls (and Close request) confirm through one focused
-   `MutationConfirmDialog` (`KeepModal`-based, centered/bottom-sheet, Cancel-focused, Escape
-   restores trigger focus) instead of an inline row that had expanded the Anchor and displaced the
-   request identity. Full frontend suite 953 passed; tsc/`check:tokens`/`vite build`/`git diff
-   --check` clean; visual evidence captured. No server/policy change.
-5. **RD-059A** — readable, keyboard-safe Internal Planning controls. ✅ complete (`cf9adaf`): GAP-059 resolved. `TimingPanel` strip + full/`bare` modes now open the
-   first editor field on open, close on Escape (`preventDefault` + `stopPropagation`) and on Cancel
-   with focus restored to the disclosure trigger, and announce save/conflict errors through
-   `role="alert"` in the relevant editor. Locked planning-row copy applied: labels **Internal
-   priority** / **Planned work date** / **Internal follow-up (optional)**; enabled empty controls
-   read **Set planned date** / **Set follow-up date** in normal-contrast ink with a calendar cue and
-   no ellipsis; a restrained configuration checkmark shows for the current Internal priority
-   (including default Routine) and a persisted Planned work date only — never for an empty planned
-   date or the optional follow-up; read-only values drop the chevron/hover/button semantics and show
-   a persistent muted **Read only** caption. Existing date/reason validation, mutation/version/
-   conflict policy, and one-open-editor behavior unchanged; no server/policy change. 3 production
-   (`TimingPanel.tsx`, `DetailPanels.tsx`) + test files: new `TimingPanel.strip.test.tsx`, extended
-   `DetailPanels.priority.test.tsx` and `RequestDetailAnchor.test.tsx` (locked-copy rename). Full
-   frontend suite 977 passed; tsc/`check:tokens`/`vite build`/`git diff --check` clean; visual
-   evidence captured (desktop, narrow PWA, keyboard, zoom).
-6. **Q-027A** — Owner/Admin queue row hierarchy, badges, and selection/severity treatment. ← next.
-
-The full scope, exclusions, test proof, and source-of-truth decisions are in
-[BL137](build-log/137-request-detail-and-queue-usability-handoff.md). Do not pull GAP-047,
-GAP-048, GAP-049, filters, history, pagination, or generic queue redesign into these sessions.
+**Next batch: GAP-045** — Default Queue language does not explain work scope or prioritization.
+Replace implementation language with the locked Owner/Admin label **All work** and supporting copy
+explaining that open requests and review work are ranked with customer promises needing attention
+first; keep server queue/ranking authority unchanged. After GAP-045 the tracker order continues:
+GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, GAP-053. Do not pull GAP-047, GAP-048,
+GAP-049, filters, history, pagination, or generic queue redesign into these sessions.
 
 ## Deferred next work
 

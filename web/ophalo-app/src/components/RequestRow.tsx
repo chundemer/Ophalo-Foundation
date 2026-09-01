@@ -106,10 +106,15 @@ function isDateOnlyToday(isoDate: string): boolean {
   return isoDate === todayStr;
 }
 
+// GAP-027 / Q-027A: red is reserved for genuine overdue/high-risk work. The server severity
+// scale already separates "danger" (overdue, post-close feedback, complaint/schedule-change/
+// change-or-cancel, overdue follow-up) from "priority" (priority-band business-waiting that is
+// not overdue). Only "danger" earns the red tone here; "priority" renders amber like other
+// attention work. Overdue/feedback branches in resolveException still hardcode "danger".
 function severityToTone(severity: string): Tone | null {
   switch (severity) {
-    case "danger":
-    case "priority": return "danger";
+    case "danger": return "danger";
+    case "priority":
     case "attention": return "attention";
     default: return null; // "neutral" | "muted" — no ranked signal worth a pill.
   }
