@@ -97,6 +97,16 @@ route/retry decisions stay in the coordinator), and `RecordDetailsSection`. New
 
 ### RD-058A — Actual Work Review queue facts
 
+**Done (2026-09-01):** `ActualWorkReviewQueueSourceRow`/`ActualWorkReviewQueueEntry` carry the
+linked request's lifecycle status slug (via the shared exhaustive `KeepRequestDetailMapper.MapStatus`);
+`EfActualWorkFinancialReviewPersistence` selects `request.Status` on the existing join with no
+membership/order/count change; `requestStatus` added to the queue-row API response and the
+`apiClient.types.ts` type; `ActualWorkReviewQueueList` renders `Request: {statusLabel(...)}` and the
+constant `Submitted visit awaiting internal financial review` as distinct facts. 6 production + 3
+test files. Integration `ActualWorkFinancialReadApiTests` 28 passed (Received + review-pending and
+Resolved-still-in-queue mapping); new `ActualWorkReviewQueueList.test.tsx`; tsc, `check:tokens`,
+`vite build`, `git diff --check` clean.
+
 **Goal:** Make the review queue truthful about both its submitted visit and its linked request.
 
 **Scope:** Add the factual request lifecycle status to the read-only Actual Work Review queue

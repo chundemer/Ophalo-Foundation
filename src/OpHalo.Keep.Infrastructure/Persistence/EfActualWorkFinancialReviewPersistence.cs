@@ -20,11 +20,11 @@ public sealed class EfActualWorkFinancialReviewPersistence(OpHaloDbContext dbCon
                   && visit.ReviewedAtUtc == null
                   && visit.SupersededAtUtc == null
             orderby visit.SubmittedAtUtc, visit.Id
-            select new { visit, request.ReferenceCode, request.CustomerName };
+            select new { visit, request.ReferenceCode, request.CustomerName, request.Status };
 
         var results = await rows.ToListAsync(ct);
         return results
-            .Select(r => new ActualWorkReviewQueueSourceRow(r.visit, r.ReferenceCode, r.CustomerName))
+            .Select(r => new ActualWorkReviewQueueSourceRow(r.visit, r.ReferenceCode, r.CustomerName, r.Status))
             .ToArray();
     }
 

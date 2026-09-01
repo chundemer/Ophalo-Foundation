@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-01 — RD-019A (behavior-preserving Request Detail composition seams)
-complete; next session is RD-058A. Handoff detail in [BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
+**Last updated:** 2026-09-01 — RD-058A (Actual Work Review queue exposes request lifecycle status)
+complete; next session is RD-058B. Handoff detail in [BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
@@ -16,7 +16,7 @@ relevant build log.
 
 ## Current repository state
 
-- `main` includes RD-019A and is ahead of `origin/main`. Every Claude session must confirm current
+- `main` includes RD-019A and RD-058A and is ahead of `origin/main`. Every Claude session must confirm current
   worktree/branch state before editing.
 - The 4e–4f Actual Work pilot work is complete locally through item-picker drawer polish and
   keyboard navigation (`1fe8580`). It remains code-only after the 4e-i migration; durable detail is
@@ -30,8 +30,8 @@ relevant build log.
 Run the Claude sessions in this exact order, one accepted commit at a time:
 
 1. **RD-019A** — behavior-preserving Request Detail composition seams. ✅ complete.
-2. **RD-058A** — Actual Work Review queue exposes factual request lifecycle status. ← next.
-3. **RD-058B** — Request Detail action hierarchy and internal-review clarity.
+2. **RD-058A** — Actual Work Review queue exposes factual request lifecycle status. ✅ complete.
+3. **RD-058B** — Request Detail action hierarchy and internal-review clarity. ← next.
 4. **RD-059A** — readable, keyboard-safe Internal Planning controls.
 5. **Q-027A** — Owner/Admin queue row hierarchy, badges, and selection/severity treatment.
 

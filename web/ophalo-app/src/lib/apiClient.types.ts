@@ -1357,6 +1357,9 @@ export interface ActualWorkReviewQueueEntry {
   requestId: string;
   referenceCode: string;
   customerName: string;
+  // RD-058A: the linked request's factual lifecycle status slug (e.g. "received",
+  // "in_progress", "resolved"). Render via statusLabel(); never a request-status gate.
+  requestStatus: string;
   submittedAtUtc: string;
   hasIncompleteFinancialData: boolean;
   incompleteLineCount: number;

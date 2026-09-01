@@ -1361,6 +1361,7 @@ public static class KeepEndpoints
         requestId = entry.RequestId,
         referenceCode = entry.ReferenceCode,
         customerName = entry.CustomerName,
+        requestStatus = entry.RequestStatus,
         submittedAtUtc = entry.SubmittedAtUtc,
         hasIncompleteFinancialData = entry.HasIncompleteFinancialData,
         incompleteLineCount = entry.IncompleteLineCount,

@@ -1,12 +1,16 @@
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.Keep.Application.PriceBook;
 
 /// <summary>One submitted, not-yet-reviewed visit (lines included, for totals projection) joined to
 /// its request's navigation context (Batch 7, build-log/129). Totals/completeness are computed by
 /// <see cref="ActualWorkFinancialReadApiService"/> from <see cref="Visit"/>'s lines, not in this
-/// query — the same projection the single-visit financial detail read uses.</summary>
-public sealed record ActualWorkReviewQueueSourceRow(ActualWork Visit, string ReferenceCode, string CustomerName);
+/// query — the same projection the single-visit financial detail read uses. <see cref="RequestStatus"/>
+/// is the linked request's factual lifecycle status (RD-058A / BL137): the queue row exposes it
+/// alongside the submitted-visit review state; it is never a request-status gate or mutation.</summary>
+public sealed record ActualWorkReviewQueueSourceRow(
+    ActualWork Visit, string ReferenceCode, string CustomerName, KeepRequestStatus RequestStatus);
 
 /// <summary>
 /// Read-only persistence seam for the Owner/Admin financial review queue (Batch 7, build-log/129).

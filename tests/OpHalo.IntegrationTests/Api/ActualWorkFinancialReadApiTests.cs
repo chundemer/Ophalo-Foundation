@@ -68,6 +68,28 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         var row = body.EnumerateArray().Single();
         Assert.Equal(requestId, row.GetProperty("requestId").GetGuid());
         Assert.Equal("Jane Customer", row.GetProperty("customerName").GetString());
+        // RD-058A: the row is truthful about the linked request's lifecycle status. A newly
+        // received request with a submitted, unreviewed visit reads "received" here — the queue
+        // never collapses that into the submitted-visit review state.
+        Assert.Equal("received", row.GetProperty("requestStatus").GetString());
+    }
+
+    [Fact]
+    public async Task ReviewQueue_ReflectsLinkedRequestLifecycleStatus_WithoutGatingMembership()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("queue-lifecycle-status");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var visitId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+
+        await SetRequestStatusAsync(accountId, requestId, KeepRequestStatus.Resolved);
+
+        var body = await (await GetQueueAsync(ownerCookie)).Content.ReadFromJsonAsync<JsonElement>();
+
+        var row = body.EnumerateArray().Single(e => e.GetProperty("actualWorkId").GetGuid() == visitId);
+        // "Work completed" (resolved) request lifecycle plus a still-unreviewed submitted visit is a
+        // valid, expected combination; the lifecycle status does not remove the row from the queue.
+        Assert.Equal("resolved", row.GetProperty("requestStatus").GetString());
     }
 
     [Fact]
@@ -579,6 +601,17 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         var resolution = ActualWorkLineFinancialResolution.Create(
             accountId, visitId, lineId, sell, cost, basis, "office resolution", actorAccountUserId, resolvedAtUtc).Value;
         db.Add(resolution);
+        await db.SaveChangesAsync();
+    }
+
+    private async Task SetRequestStatusAsync(Guid accountId, Guid requestId, KeepRequestStatus status)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var request = await db.Set<KeepRequest>().FirstAsync(r => r.AccountId == accountId && r.Id == requestId);
+        Assert.True(request
+            .ChangeStatus(status, "status update", Guid.NewGuid(), "Owner", DateTime.UtcNow)
+            .IsSuccess);
         await db.SaveChangesAsync();
     }
 

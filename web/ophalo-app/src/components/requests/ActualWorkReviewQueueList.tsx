@@ -1,4 +1,5 @@
 import type { ActualWorkReviewQueueEntry } from "../../lib/apiClient";
+import { statusLabel } from "../../lib/requestStatus";
 import { formatDate } from "../../pages/request-detail/helpers";
 
 interface ActualWorkReviewQueueListProps {
@@ -71,6 +72,15 @@ export function ActualWorkReviewQueueList({
               <p className="text-sm font-semibold text-[var(--ophalo-ink)] truncate">{entry.customerName}</p>
               <p className="text-xs text-[var(--ophalo-muted)]">
                 {entry.referenceCode} · Submitted {formatDate(entry.submittedAtUtc)}
+              </p>
+              {/* RD-058A: the review queue is truthful about both facts — the linked request's
+                  lifecycle status and the submitted-visit review state — and never collapses one
+                  into the other. "Request: Received" + review pending is a valid combination. */}
+              <p className="text-xs text-[var(--ophalo-ink)] mt-1">
+                Request: {statusLabel(entry.requestStatus)}
+              </p>
+              <p className="text-xs text-[var(--ophalo-muted)]">
+                Submitted visit awaiting internal financial review
               </p>
             </div>
             <div className="shrink-0 text-right">

@@ -276,6 +276,7 @@ describe("Requests — Slice 8A / UI-004 amendment Actual Work Review (Office Re
         requestId: "req-1",
         referenceCode: "REQ-001",
         customerName: "Marcus Reyes",
+        requestStatus: "received",
         submittedAtUtc: "2026-08-20T12:00:00Z",
         hasIncompleteFinancialData: false,
         incompleteLineCount: 0,
