@@ -92,7 +92,11 @@ export function RequestDetailActualWorkSection({
             onDismissRecoveryNotice={onDismissRecoveryNotice}
             bare
           />
-          {!actualWorkCaptureEditable && (
+          {/* GAP-065A: a submitted-visit history renders whenever it has content, even while the
+              current capture state is an editable Draft — an active Draft must not hide earlier
+              locked visits or their Owner/Admin financial-review route. Non-editable states keep
+              rendering the card in their loading/idle phases as before. */}
+          {(!actualWorkCaptureEditable || actualWorkHistoryVisible) && (
             <ActualWorkHistoryCard
               state={historyState}
               onRetry={onRetryHistory}
