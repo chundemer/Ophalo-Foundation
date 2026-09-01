@@ -1,6 +1,6 @@
 # Request Detail / Workbench — Production Interaction Specification
 
-**Status:** Locked — approved 2026-08-22; amended 2026-08-22 for Actual Work-only pilot scope; amended 2026-08-25 for desktop closeout
+**Status:** Locked — approved 2026-08-22; amended 2026-08-22 for Actual Work-only pilot scope; amended 2026-08-25 for desktop closeout; amended 2026-09-01 for Owner/Admin action clarity
 **Purpose:** One implementation-facing specification of the already locked Request Detail decisions.
 **Authority:** UI-001 through UI-013 in the [V2 Decision Register](keep-ui-production-decision-register.md), plus ADR-380, ADR-434 through ADR-441, ADR-482, ADR-487, and server-authored detail/action metadata. Where a server response does not authorize an action, this specification requires the UI to omit it.
 
@@ -61,6 +61,28 @@ not change server authority, mutation behavior, or the mobile information archit
    Actual Work strip, including a zero-line draft. Submitted visits remain locked; draft state is
    neither a danger alert nor a completed outcome.
 
+### Amendment — Owner/Admin action clarity (2026-09-01)
+
+1. During active attention, the server-authorized attention-resolution action is the only visually
+   dominant next action. Channel-specific contact utilities stay in Customer Contact; a duplicate
+   large `Contact customer` anchor action is not rendered.
+2. The non-primary authorized alternative to the recommended attention action reads **Resolve
+   another way…** and opens the server-authorized guidance. The UI must not present a casual
+   generic `Clear attention` dismissal.
+3. **Mark work done** remains server-authorized request-lifecycle work. When active attention is
+   present, it is a quiet contextual lifecycle action below the attention and Actual Work/
+   communication context, not an Anchor competitor. Its confirmation states that it moves the
+   request to Work completed, does not notify the customer, does not complete internal financial
+   review, and leaves any stated attention/open-draft condition unresolved.
+4. Actual Work review is explicitly internal: the card reads **Internal financial review**, its
+   action reads **Complete internal financial review**, and it states that review does not change
+   the customer request. The Actual Work Review queue shows the associated factual request
+   lifecycle state beside the submitted-visit review state.
+5. The Request Anchor and Work Canvas share a horizontal content boundary. Internal Priority,
+   Planned Work Date, and Internal Follow-up remain in the Anchor planning row; enabled empty date
+   controls use normal-contrast action copy, while read-only values visibly identify themselves as
+   read only.
+
 ## 1. Product decisions
 
 1. Desktop is a two-pane workbench only when the application workspace is at least 1001 CSS px: a 320–360 px Request Queue, a 1 px divider, and a protected 640 px Workbench. Otherwise use one-pane Queue → Request drill-down. There is no manual Queue collapse control in this release.
@@ -95,7 +117,7 @@ not change server authority, mutation behavior, or the mobile information archit
 | Call | Persistent visible secondary in Anchor phone context | Launch is intent only; return may offer one non-blocking **Log contact** prompt. Desktop may use authorized QR handoff. |
 | Text | Persistent visible secondary in Anchor phone context when a valid number/affordance exists | Same intent-only/logging rule as Call. |
 | Email | Persistent visible secondary in Anchor contact context when a valid address/affordance exists | Same intent-only/logging rule as Call. |
-| Log external contact | Persistent visible secondary; may be the server-authorized primary when attention metadata explicitly recommends it | Drawer (full-height on mobile); durable log only after explicit confirmation. |
+| Log external contact | Persistent visible secondary in Customer Contact; may be the server-authorized primary when attention metadata explicitly recommends it | Drawer (full-height on mobile); durable log only after explicit confirmation. Do not duplicate it as a competing large Anchor action while attention has another primary. |
 | Send customer update | Visible first-canvas composition action; teal submit is primary only while its composer is active | Inline; label **Visible on the customer page**. Do not claim delivery/read/realtime. |
 | Add internal note | Visible first-canvas composition action, adjacent to update but visually secondary | Inline; label **Internal only**. |
 | Assign / reassign responsible owner | Persistent visible secondary in Anchor owner context | Inline assignment control. Omit when unauthorized. |
@@ -104,9 +126,9 @@ not change server authority, mutation behavior, or the mobile information archit
 | Set Follow Up On | Persistent visible secondary in first-canvas timing context | Inline; requires date + reason; note required for `other`. |
 | Complete or move Follow Up On | Relevant contextual module: active/due/overdue Follow Up card | Narrow resolution flow: complete (reason), move, or retain after activity. No silent clear. |
 | Set/change/remove Planned For | Persistent visible secondary in first-canvas timing context | Inline timing control; past date shows **Planned date passed**, not a missed customer promise. |
-| Clear / acknowledge authorized attention | Primary only when server-authorized as the current attention-resolution action; otherwise its explicit attention-guidance module | Attention guidance explains **Why** and **Resolve by**. Never a generic client “Resolve” action. |
+| Clear / acknowledge authorized attention | Primary only when server-authorized as the current attention-resolution action; otherwise its explicit attention-guidance module | Attention guidance explains **Why** and **Resolve by**. A non-primary alternate path may read **Resolve another way…** only when it opens this authorized guidance; never offer a casual generic dismissal. |
 | Capture/view Actual Work | Relevant contextual module only when entitled and authorized; capture opens as focused workspace | Price-blind factual capture. No right-rail card/composer. A compact open draft is explicitly marked **Draft — not submitted**; submitted history stays locked. |
-| Mark work done | Anchor primary when server authorizes completion and no active attention | If completion is authorized during attention, it may appear only as an explicit demoted warning action: **Mark work done, attention remains**. |
+| Mark work done | Anchor primary when server authorizes completion and no active attention; contextual lifecycle action below attention and Actual Work/communication when attention is active | During attention it is quiet and explicit, never an Anchor competitor. Confirmation explains Work completed, no customer notification, no internal-review completion, and any attention/open-draft condition that remains. |
 | Close request | Relevant closeout module / Anchor primary only when server authorizes `canClose` | Owner/Admin only; red filled action plus confirmation. Never a routine “More” action. |
 | Edit service location | Relevant contextual record-details module | Inline edit. Detail-owned; no generic Queue mutation. |
 | Set internal priority | First-canvas timing/planning context, aligned with Follow Up On and Planned For (locked exception, 2026-08-22 — see note below) | Inline edit. Must remain visually and semantically distinct from customer urgency. |

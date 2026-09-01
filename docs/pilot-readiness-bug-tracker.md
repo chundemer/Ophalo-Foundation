@@ -2,7 +2,7 @@
 
 **Purpose:** The live, forward-looking backlog for unresolved pilot-readiness work.
 
-**Last triaged:** 2026-08-31
+**Last triaged:** 2026-09-01
 
 Historical findings, resolved work, and superseded implementation notes were removed from this document. They remain in [the session log](session-log.md) and the relevant `docs/build-log/` records. A tracker item belongs here only while it has remaining work or an unresolved decision.
 
@@ -33,8 +33,8 @@ Complete each numbered slice with focused automated coverage and a production-ca
 1. **Release safety and truthful public entry:** GAP-039, GAP-033, then GAP-040. Establish safe production observability and configuration validation first; make the public request journey and published claims truthful second. (GAP-056 customer SMS/QR handoff sender/business context — resolved, commit `0fc7a2a`.)
 2. **Field-work correctness:** No active item. (GAP-055 Actual Work recorder ownership — resolved across Batches A–D: migration/ownership `b3b3d41`, recorder authorization `d26b955` and `72ce6a5`, audited transfer `c7ce822`, and Owner/Admin recovery UI `de40491`.)
 3. **Phone and capture integrity:** GAP-016, GAP-021, GAP-051, then GAP-025. Consolidate the ADR-444 normalization path before extending fallback customer recognition.
-4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, and GAP-049. Decompose layout ownership before changing shared desktop/mobile behavior; then fix the review/completion hierarchy, schedule-control legibility, and bounded mutation, sharing, and follow-up defects.
-5. **Request-list product decision and core behavior:** GAP-027 (decision), then GAP-045, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. This locks row hierarchy before implementing queue context, loading, filtering, scale/history, and small action-order polish. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
+4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, and GAP-049. First establish shared responsive seams without behavior change; then make Owner/Admin review, lifecycle, attention, and timing actions unmistakable. See [BL137](build-log/137-request-detail-and-queue-usability-handoff.md) for the bounded execution order.
+5. **Request-list core behavior:** GAP-027, then GAP-045, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. The row grammar is now locked: one lifecycle cue, one server-ranked exception cue, and one next-action line. Implement it after the Request Detail safety work; do not merge broad queue redesign into GAP-019/058/059. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
 6. **Pilot operating loop and final usability review:** GAP-037 (after GAP-039), GAP-038, and GAP-054. Deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
 
 ## Active Work
@@ -125,13 +125,23 @@ Authenticated PWA staff-facing formatting is complete. Finish native parity and 
 
 Implement ADR-492: retain canonical-customer matches, but render a request-phone-only hit as an explicit possible existing customer with up to three active-request cards and a clear choice to open, reuse, or create new. Never auto-select, link, navigate, or silently backfill; preserve exact, account-scoped normalized lookup and the no-candidate-cap protections.
 
-### GAP-019 — Request Detail needs layout decomposition before further behavior changes
+### GAP-019 — Request Detail needs durable shared responsive seams before further behavior changes
 
 **Status:** Open
 **Severity:** P1
 **Area:** `ophalo-app` Request Detail architecture
 
-Keep one controller for data and mutations, while extracting desktop/mobile composition and shared panels. Do not fork business behavior by device; shared callbacks, policy, accessibility, and concurrency behavior must remain common.
+**Locked resolution:** Keep one **page-level coordinator** for authoritative request-detail state,
+cache synchronization, navigation, overlays, and cross-feature policy. Shared feature controllers
+may own bounded local form state, mutations, retry snapshots, and conflict handling, provided that
+they consume the authoritative detail/version and return the authoritative replacement detail to the
+page coordinator. Desktop and mobile composition must never implement business behavior separately.
+
+Extract thin desktop and narrow/mobile composition wrappers plus coherent shared canvas regions.
+Preserve the distinct viewport-width Actual Work workspace-route rule and container-width Request
+Detail layout rule; they serve different purposes and must not be collapsed into one heuristic.
+This slice is behavior-preserving: no visual redesign, API/DTO change, authorization change,
+mutation-policy change, or changed lifecycle/attention semantics.
 
 ### GAP-058 — Actual Work review and request-completion actions compete on Request Detail
 
@@ -141,29 +151,69 @@ Keep one controller for data and mutations, while extracting desktop/mobile comp
 
 When a request is in **Actual Work Review**, the page simultaneously presents the request-level **Mark work done** action and the review-card **Mark visit reviewed** action. The request can still show an early lifecycle state such as **Received**, making it unclear whether the operator is reviewing recorded work, completing the customer request, or expected to do both. A mistaken completion can change the customer-facing lifecycle before the required financial review is complete.
 
-**Required resolution:** Make the two actions and their consequences unmistakable. The review card must explain that **Mark visit reviewed** completes only the internal financial review; the request-level lifecycle action must retain a distinct label, placement, and confirmation/copy that states its customer-work consequence. Review the queue/detail context so an Actual Work Review item does not imply that its request lifecycle has already advanced. Do not couple review completion to request completion or change server lifecycle authority as a presentation fix.
+**Locked resolution:** Make the two facts visually and semantically separate.
+
+- Extend the read-only Actual Work Review queue projection with the factual request lifecycle status.
+  A row states both **Request: {lifecycle state}** and **Submitted visit awaiting internal financial
+  review**; a `Received` request must never imply that it has advanced simply because a visit awaits
+  review.
+- Rename the card action to **Complete internal financial review** and place persistent copy on the
+  card: it reviews the submitted visit's financial details and **does not change the customer
+  request**. On success, announce that internal financial review completed and request status is
+  unchanged.
+- Retain server-authored **Mark work done** for the request lifecycle. With active attention, it is
+  a quiet, contextual lifecycle action below the attention and Actual Work/communication context,
+  not a competing anchor action. Its confirmation must state that it marks the request as Work
+  completed, does not notify the customer, does not complete internal financial review, and, where
+  applicable, leaves attention or an open Actual Work draft unresolved.
+- The attention-resolution action is the sole visually dominant action while attention is active.
+  Channel-specific Call/Text/Email/Share actions remain in Customer Contact; do not duplicate a
+  large `Contact customer` action in the anchor. A non-primary authorized alternate path is labelled
+  **Resolve another way…**, not `Clear attention`, and must expose the server-authorized guidance.
+- Align the Request Anchor and Work Canvas to one shared horizontal content boundary; keep the
+  compact planning row in the anchor.
+
+Do not hard-block request completion, couple completion to review, invent a client lifecycle policy,
+or change server lifecycle authority as a presentation fix.
 
 **Acceptance criteria:**
 
 - An Owner/Admin can distinguish financial-review completion from customer-request completion before acting.
 - A visit-review action cannot be mistaken for, or silently cause, a request status change; a request-completion action cannot be mistaken for review.
 - Desktop/mobile, keyboard focus order, permission variants, and the `Received` plus actual-work-review state have focused regression coverage.
+- The review queue, Request Detail, and confirmation copy distinguish request lifecycle, submitted
+  visit, internal review, customer notification, active attention, and open-draft facts without
+  implying that one action changes another.
 
-### GAP-059 — Planned-work and internal-follow-up selects look disabled or unreadable
+### GAP-059 — Planned-work and internal-follow-up controls look disabled or unreadable
 
 **Status:** Open
 **Severity:** P1
 **Area:** Request Detail schedule and follow-up controls
 
-The **Set planned work date…** and **Set internal follow-up…** controls use placeholder-like low-contrast text and a weak select affordance. In the observed Request Detail state, they visually read as unavailable rather than actionable controls, making a core scheduling/follow-up path easy to miss.
+The custom disclosure buttons that open the **Planned work date** and **Internal follow-up** date
+editors use placeholder-like low-contrast text and a weak affordance. In the observed Request
+Detail state, they visually read as unavailable rather than actionable controls, making a core
+scheduling/follow-up path easy to miss.
 
-**Required resolution:** Give enabled empty selects an accessible, readable empty-state treatment that is visually distinct from disabled controls and clearly indicates that a choice can be made. Preserve visible labels, native/select keyboard behavior, selected-value readability, focus indication, error/disabled states, and the existing mutation policy. Do not rely on color alone to distinguish enabled from disabled.
+**Locked resolution:** Preserve the compact three-field planning row and existing mutation policy,
+but distinguish an enabled disclosure button from a read-only value without relying on color.
+
+- Persistent labels are **Internal priority**, **Planned work date**, and **Internal follow-up**.
+- Enabled empty controls read **Set planned date** and **Set follow-up date** in normal-contrast text,
+  with calendar/disclosure cues and no placeholder ellipses.
+- Read-only values have no chevron/hover behavior and expose a visible **Read only** cue.
+- Enter/Space opens an editor and focuses its first field; Escape closes it and restores focus to its
+  trigger; normal Tab order reaches every form action. Errors remain associated with the relevant
+  editor and are announced.
 
 **Acceptance criteria:**
 
 - At normal desktop and mobile widths, an Owner/Admin can identify both controls as available and understand their purpose before opening them.
-- Empty text, selected values, focus, hover, disabled, validation, loading, and mutation-error states meet the established contrast and accessibility treatment.
-- Focused PWA coverage verifies keyboard selection and that enabled empty controls are not rendered with disabled semantics or appearance.
+- Empty text, selected values, focus, hover, read-only, validation, loading, and mutation-error
+  states meet the established contrast and accessibility treatment.
+- Focused PWA coverage verifies keyboard open/focus/Escape/restore behavior and that enabled empty
+  controls are not rendered with disabled semantics or appearance.
 
 ### GAP-047 — Internal-priority updates can fail silently on Request Detail
 
@@ -191,11 +241,20 @@ Reserve space for the provenance prefix and safely truncate copied source text s
 
 ### GAP-027 — Request-list alerts compete and lifecycle state is hard to scan
 
-**Status:** Needs decision
+**Status:** Open
 **Severity:** P1
 **Area:** Request-list row hierarchy and lifecycle presentation
 
-Lock a compact, truthful lifecycle cue and a deterministic single-exception priority. Suppress ordinary SLA/follow-up alarms for terminal work, retain the approved unresolved-feedback exception, and reconcile prominent row signals with queue counts.
+**Locked resolution:** Every Request row uses one compact grammar: one quiet lifecycle cue, at most
+one server-ranked exception/attention cue, and one factual next-action line. Selection state is
+independent of severity; do not make selected blue and alert red compete as equal row borders.
+Reserve red for genuine overdue/high-risk work, keep planned/future timing quiet, and suppress
+ordinary SLA/follow-up alarms for terminal work while retaining the approved unresolved-feedback
+exception. The queue count and visible row urgency remain server-authoritative.
+
+The Owner/Admin primary queue controls remain Attention, All work, and Mine; Office Review stays
+separate from customer-promise risk. Implement this after GAP-019/058/059, with no client-side
+re-ranking or broad queue redesign folded into the Request Detail slices.
 
 ### GAP-045 — Default Queue language does not explain work scope or prioritization
 

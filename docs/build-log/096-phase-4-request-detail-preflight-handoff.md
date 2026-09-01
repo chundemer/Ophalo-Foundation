@@ -1,6 +1,6 @@
 # Build Log 096 — Phase 4 Request Detail Preflight and Handoff
 
-**Status:** Decisions locked — 4.1 implementation pending
+**Status:** Superseded for current execution by [BL137](137-request-detail-and-queue-usability-handoff.md). Retained as the July 2026 preflight record.
 **Date:** 2026-07-27
 **Scope:** Phase 4 sequencing and Session 4.1 / GAP-019 only
 **Controlling work to preserve:** Build 086; GAP-019, GAP-032, ADR-443, ADR-451; current Request Detail layouts
@@ -37,12 +37,12 @@ Reserve one completed-session build log per slice:
 **Goal:** establish durable Request Detail presentation seams with **no intentional behavior
 change**. This is a first pass, not the final structural shape of `RequestDetail.tsx`.
 
-`web/ophalo-app/src/pages/RequestDetail.tsx` remains the page's sole controller. It continues to
-own request-detail querying and cache updates; all mutation/API calls; draft, filter, panel, modal,
-and success-feedback state; focus/scroll policy; request navigation; and error/conflict decisions.
-An extracted component receives explicit props and callbacks, renders the existing markup, and calls
-back to the controller. It does not fetch, mutate, navigate, own durable page state, or introduce
-policy.
+The July plan treated `web/ophalo-app/src/pages/RequestDetail.tsx` as the page's sole controller.
+Current Actual Work, timing, and lifecycle components now legitimately own bounded local form state,
+mutation/retry, and conflict handling. BL137 replaces this with one page-level coordinator for
+authoritative detail/cache/navigation/overlay policy plus shared feature controllers that return
+authoritative replacement detail. Desktop and mobile must still never implement business behavior
+separately.
 
 ### Current surface to preserve
 
