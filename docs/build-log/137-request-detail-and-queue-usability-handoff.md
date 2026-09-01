@@ -145,13 +145,23 @@ attention is active. The standalone Anchor `Contact customer` button is removed 
 Escape. `MarkWorkDoneSecondarySlot` moved out of the Anchor into a quiet "Request lifecycle" block
 in `RequestDetailWorkCanvas` after Actual Work and before the composer, gated on
 `availableActions.markWorkDoneSecondary` (desktop + mobile). The shared `MARK_WORK_DONE_CONFIRMATION`
-advisory now backs the confirm step for both the no-attention Anchor primary and the demoted
-control. `RequestDetailAnchor`'s inner card is wrapped in `mx-auto w-full max-w-4xl` (content width
-matches the Canvas frame; a residual ~7.5px centre offset remains only while the Canvas scrollbar is
-present). 4 production + 4 test files. Full frontend suite 952 passed; tsc / `check:tokens` /
-`vite build` / `git diff --check` clean. Evidence: desktop attention + no-attention states, narrow
-(760px) canvas order, keyboard activation of `Resolve another way…` + Escape focus restoration, and
-150% zoom. No server/policy change.
+advisory backs the confirm step for both the no-attention Anchor primary and the demoted control.
+`RequestDetailAnchor`'s inner card is wrapped in `mx-auto w-full max-w-4xl` (content width matches
+the Canvas frame; a residual ~7.5px centre offset remains only while the Canvas scrollbar is
+present). 4 production + 4 test files. Full frontend suite 952 passed. No server/policy change.
+
+**Correction (RD-058B-2 review):** The confirm step still rendered inline in the Anchor's Row 1
+flex row, so the long advisory expanded the row and displaced the request identity — the
+confirmation read like a page header. Replaced with `MutationConfirmDialog` (new; `KeepModal`-based,
+centered on desktop, bottom-sheet on narrow): title **"Mark request as Work completed?"**, advisory
+in a constrained body block, **Mark work done** primary + **Cancel** secondary, Cancel focused on
+open, Escape/Cancel restores focus to the trigger, and the page is not re-laid-out while open. One
+shared surface for both Mark work done controls; `close_request` uses it too ("Close this request?").
+`PrimaryMutationButton` lost its inline confirm row and the 8s auto-dismiss timer. 1 new production
+file (`MutationConfirmDialog.tsx`) + `PrimaryActionControl.tsx` + 2 test files. Full frontend suite
+953 passed; tsc / `check:tokens` / `vite build` / `git diff --check` clean. Evidence: desktop
+attention + no-attention confirm dialogs, narrow-layout dialog, Escape focus restoration. No
+server/policy change.
 
 **Goal:** Ensure an Owner/Admin cannot confuse internal review, request completion, attention
 resolution, contact intent, or customer notification.

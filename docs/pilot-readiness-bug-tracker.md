@@ -149,7 +149,7 @@ mutation-policy change, or changed lifecycle/attention semantics.
 
 ### GAP-058 — Actual Work review and request-completion actions compete on Request Detail
 
-**Status:** Resolved — RD-058A (`c5796e0`), RD-058B-1 (`2ae07d5`), RD-058B-2 (`8e3127d`)
+**Status:** Resolved — RD-058A (`c5796e0`), RD-058B-1 (`2ae07d5`), RD-058B-2 (`8e3127d`, confirm-dialog fix `<pending>`)
 **Severity:** P1
 **Area:** Request Detail Actual Work review and lifecycle action hierarchy
 
@@ -167,10 +167,13 @@ server-authored attention-resolution action is the only dominant action; the sta
 server-routed contact-sheet primary); the non-primary alternate reads **Resolve another way…** and
 opens the Why/Resolve-by guidance disclosure; **Mark work done** moved from the Anchor to a quiet
 "Request lifecycle" block in the Work Canvas after Actual Work and before the composer (desktop and
-mobile), still gated on the server-provided secondary authorization; the **Mark work done** confirm
-step — Anchor primary and demoted control alike — carries the full advisory ("Work completed · no
-customer notification · no internal-review completion · attention/open draft unresolved"); and the
-Anchor inner card is bounded to `max-w-4xl mx-auto` to share the Work Canvas reading frame.
+mobile), still gated on the server-provided secondary authorization; both **Mark work done**
+controls (and **Close request**) confirm through one focused `MutationConfirmDialog` — title
+"Mark request as Work completed?", the full advisory in a constrained body ("Work completed · no
+customer notification · no internal-review completion · attention/open draft unresolved"), Cancel
+focused on open, Escape restores focus to the trigger, page not re-laid-out — replacing the inline
+row that had expanded the Anchor and displaced the request identity; and the Anchor inner card is
+bounded to `max-w-4xl mx-auto` to share the Work Canvas reading frame.
 
 When a request is in **Actual Work Review**, the page simultaneously presents the request-level **Mark work done** action and the review-card **Mark visit reviewed** action. The request can still show an early lifecycle state such as **Received**, making it unclear whether the operator is reviewing recorded work, completing the customer request, or expected to do both. A mistaken completion can change the customer-facing lifecycle before the required financial review is complete.
 

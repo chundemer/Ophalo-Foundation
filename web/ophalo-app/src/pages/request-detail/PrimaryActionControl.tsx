@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { ConnectionFailureBanner } from "./ConnectionFailureBanner";
+import { MutationConfirmDialog } from "./MutationConfirmDialog";
 import { announcePolite } from "../../lib/liveAnnouncer";
 
 // Shared, exhaustive renderer over the closed server `target` vocabulary (Session 0A,
@@ -150,8 +151,6 @@ export function MarkWorkDoneSecondarySlot({
 // Shared confirm-then-submit control for the two mutation-target primary/secondary actions
 // ---------------------------------------------------------------------------
 
-const CONFIRM_TIMEOUT_MS = 8000;
-
 interface PrimaryMutationButtonProps {
   requestId: string;
   detail: KeepRequestDetailResult;
@@ -163,10 +162,11 @@ interface PrimaryMutationButtonProps {
   accessibleSuffix?: string;
 }
 
-// Always confirms locally before submitting (click -> inline Confirm/Cancel -> Confirm), for both
-// mark_work_done and close_request — this predates and is independent of the server's
-// PrimaryActionMetadata.RequiresConfirmation flag, which only governs whether server-authored
-// confirmationCopy is mandatory (close_request today). Do not gate the confirm step on that flag.
+// Always confirms before submitting, for both mark_work_done and close_request — this predates
+// and is independent of the server's PrimaryActionMetadata.RequiresConfirmation flag, which only
+// governs whether server-authored confirmationCopy is mandatory (close_request today). Do not
+// gate the confirm step on that flag. RD-058B-2 correction: the confirm step is a focused
+// `MutationConfirmDialog`, never an inline row that expands the Request Anchor.
 function PrimaryMutationButton({
   requestId,
   detail,
@@ -186,41 +186,6 @@ function PrimaryMutationButton({
     snapshot: { requestId: string; targetStatus: "resolved" | "closed"; version: string };
   } | null>(null);
 
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const confirmBtnRef = useRef<HTMLButtonElement>(null);
-  const triggerBtnRef = useRef<HTMLButtonElement>(null);
-
-  const clearTimer = useCallback(() => {
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
-
-  const exitConfirming = useCallback(
-    (returnFocus: boolean) => {
-      clearTimer();
-      setConfirming(false);
-      if (returnFocus) triggerBtnRef.current?.focus();
-    },
-    [clearTimer],
-  );
-
-  useEffect(() => {
-    if (!confirming) return;
-    confirmBtnRef.current?.focus();
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        exitConfirming(true);
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [confirming, exitConfirming]);
-
-  useEffect(() => () => clearTimer(), [clearTimer]);
-
   async function submit(retrySnapshot?: { requestId: string; targetStatus: "resolved" | "closed"; version: string }) {
     if (isSubmitting || conflictDisabled) return;
     // Snapshot at the original attempt (not read live from props at retry time) so a Retry
@@ -229,7 +194,6 @@ function PrimaryMutationButton({
     // ActualWorkComposer retries.
     const snapshot = retrySnapshot ?? { requestId, targetStatus, version: detail.version };
     const isRetry = retrySnapshot !== undefined;
-    clearTimer();
     setConfirming(false);
     setIsSubmitting(true);
     setError(null);
@@ -267,24 +231,17 @@ function PrimaryMutationButton({
 
   function handleClick() {
     if (isSubmitting || conflictDisabled) return;
-    // Every mutation-target action always confirms locally before submitting — this predates
-    // and is independent of the server's `requiresConfirmation` flag, which only controls
-    // whether server-authored confirmation copy is mandatory (close_request today). Removing
-    // this step for mark_work_done was a regression (2026-08-25) against the app's existing,
-    // out-of-scope-to-change confirm-before-mutate convention.
     setConfirming(true);
-    clearTimer();
-    timerRef.current = setTimeout(() => setConfirming(false), CONFIRM_TIMEOUT_MS);
   }
 
   // Visible text always carries the consequence — never hide it in an aria-label-only suffix.
   // The demoted secondary (Mark work done, attention remains) must read its own consequence
   // before the user acts, not just be discoverable to screen readers.
   const visibleLabel = accessibleSuffix ? `${label}, ${accessibleSuffix}` : label;
-  // Callers pass explicit copy for both mutations now — close_request's server-authored string and
-  // mark_work_done's shared `MARK_WORK_DONE_CONFIRMATION` advisory (RD-058B-2). The local fallback
-  // remains only as a last resort if a caller ever passes null.
-  const confirmPrompt = confirmationCopy ?? (targetStatus === "resolved" ? "Confirm work is done?" : null);
+  const dialogTitle = targetStatus === "resolved" ? "Mark request as Work completed?" : "Close this request?";
+  // The advisory sits in the dialog body; omit it when it would merely repeat the title
+  // (close_request's server copy is itself "Close this request?").
+  const dialogBody = confirmationCopy && confirmationCopy !== dialogTitle ? confirmationCopy : null;
 
   return (
     <div className="flex flex-col gap-1">
@@ -299,19 +256,8 @@ function PrimaryMutationButton({
           {error}
         </p>
       )}
-      {confirming ? (
-        <div className="flex items-center gap-2">
-          {confirmPrompt && <span className="text-xs text-[var(--ophalo-ink)]">{confirmPrompt}</span>}
-          <KeepButton ref={confirmBtnRef} type="button" variant="teal" disabled={isSubmitting} onClick={() => void submit()}>
-            {isSubmitting ? "Working…" : "Confirm"}
-          </KeepButton>
-          <KeepButton type="button" variant="secondary" onClick={() => exitConfirming(true)}>
-            Cancel
-          </KeepButton>
-        </div>
-      ) : variant === "primary" ? (
+      {variant === "primary" ? (
         <KeepButton
-          ref={triggerBtnRef}
           type="button"
           variant="teal"
           disabled={isSubmitting || conflictDisabled}
@@ -321,10 +267,9 @@ function PrimaryMutationButton({
         </KeepButton>
       ) : (
         // Demoted secondary (locked desktop-polish decision, 2026-08-24): a quiet text-style
-        // trigger, not an equal-weight outline button competing with Contact customer — and its
-        // full visible text always states the consequence plainly before the user acts.
+        // trigger, not an equal-weight outline button competing with the attention primary — and
+        // its full visible text always states the consequence plainly before the user acts.
         <button
-          ref={triggerBtnRef}
           type="button"
           disabled={isSubmitting || conflictDisabled}
           onClick={handleClick}
@@ -332,6 +277,15 @@ function PrimaryMutationButton({
         >
           {isSubmitting ? "Working…" : visibleLabel}
         </button>
+      )}
+      {confirming && (
+        <MutationConfirmDialog
+          title={dialogTitle}
+          body={dialogBody}
+          confirmLabel={label}
+          onConfirm={() => void submit()}
+          onCancel={() => setConfirming(false)}
+        />
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RequestDetailAnchor } from "../RequestDetailAnchor";
@@ -83,24 +83,25 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     expect(screen.getByRole("button", { name: "Mark work done" })).toBeInTheDocument();
   });
 
-  it("requires a local confirm step before submitting Mark work done, even though the server's requiresConfirmation is false (regression, 2026-08-25)", async () => {
+  it("requires a confirm step before submitting Mark work done, even though the server's requiresConfirmation is false (regression, 2026-08-25)", async () => {
     // Mark work done predates and is independent of PrimaryActionMetadata.RequiresConfirmation —
-    // it must always confirm locally (click -> inline Confirm/Cancel -> Confirm), matching the
-    // app's existing convention. Removing this step when introducing the server-authored
-    // contract was an unintended regression, not an approved behavior change.
+    // it must always confirm before submitting, matching the app's existing convention. RD-058B-2:
+    // the confirm step is a focused dialog, never an inline row that expands the Anchor.
     const detail: KeepRequestDetailResult = { ...baseDetail(), attentionLevel: "none" };
     renderAnchor(detail);
 
     await userEvent.setup().click(screen.getByRole("button", { name: "Mark work done" }));
-    // The confirm step carries the full factual advisory (RD-058B-2) — not only for the demoted
-    // active-attention control but for this no-attention Anchor primary too.
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Mark request as Work completed?" })).toBeInTheDocument();
+    // The confirm dialog carries the full factual advisory (RD-058B-2) — for this no-attention
+    // Anchor primary too, not only the demoted active-attention control.
     expect(
-      screen.getByText(
+      within(dialog).getByText(
         "This marks the request as Work completed. It does not notify the customer, does not complete internal financial review, and leaves any active attention or open Actual Work draft unresolved.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Mark work done" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
   it("carries no action at all while active attention exists — no primary slot, no Contact customer, no demoted Mark work done (RD-058B-2)", () => {
@@ -147,8 +148,10 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     renderAnchor(detail);
 
     await userEvent.setup().click(screen.getByRole("button", { name: "Close request" }));
-    expect(screen.getByText("Close this request?")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Close this request?" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Close request" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
   it("fails safely with factual unavailable feedback for an unrecognized target, never falling back to capability-flag inference", () => {

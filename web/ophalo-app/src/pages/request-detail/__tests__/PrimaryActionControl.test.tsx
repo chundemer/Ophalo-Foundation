@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PrimaryActionSlot, MarkWorkDoneSecondarySlot } from "../PrimaryActionControl";
 import { ApiError } from "../../../lib/apiClient";
@@ -55,7 +55,7 @@ function renderSlot(detail: KeepRequestDetailResult, onDetailUpdated = vi.fn()) 
 
 async function clickThenConfirm(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Mark work done" }));
-  await user.click(screen.getByRole("button", { name: "Confirm" }));
+  await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Mark work done" }));
 }
 
 beforeEach(() => {
@@ -90,11 +90,27 @@ describe("MarkWorkDoneSecondarySlot — quiet contextual lifecycle action (RD-05
     expect(trigger.className).not.toContain("border");
 
     await user.click(trigger);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Mark request as Work completed?" })).toBeInTheDocument();
     expect(
-      screen.getByText(
+      within(dialog).getByText(
         "This marks the request as Work completed. It does not notify the customer, does not complete internal financial review, and leaves any active attention or open Actual Work draft unresolved.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("confirms in a focused dialog; Cancel and Escape close it without patching", async () => {
+    const user = userEvent.setup();
+    render(<MarkWorkDoneSecondarySlot requestId="req-1" detail={detailWithSecondary()} onDetailUpdated={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "Mark work done, attention remains" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Mark work done, attention remains" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(mockPatchRequestStatus).not.toHaveBeenCalled();
   });
 
   it("patches the request to resolved on confirm", async () => {
@@ -105,7 +121,7 @@ describe("MarkWorkDoneSecondarySlot — quiet contextual lifecycle action (RD-05
     render(<MarkWorkDoneSecondarySlot requestId="req-1" detail={detail} onDetailUpdated={onDetailUpdated} />);
 
     await user.click(screen.getByRole("button", { name: "Mark work done, attention remains" }));
-    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Mark work done" }));
 
     await waitFor(() => expect(mockPatchRequestStatus).toHaveBeenCalledWith("req-1", { status: "resolved" }, "v1"));
     await waitFor(() => expect(onDetailUpdated).toHaveBeenCalled());

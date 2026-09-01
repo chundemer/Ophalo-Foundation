@@ -47,11 +47,12 @@ Run the Claude sessions in this exact order, one accepted commit at a time:
    unconditionally; non-primary alternate → **Resolve another way…** opening the Why/Resolve-by
    guidance disclosure; **Mark work done** relocated to a quiet "Request lifecycle" block in the
    Work Canvas after Actual Work, before the composer (desktop + mobile), still gated on
-   `markWorkDoneSecondary`; the **Mark work done** confirm (Anchor primary and demoted alike)
-   carries the full advisory copy; Anchor inner card bounded to `max-w-4xl mx-auto w-full`. 4
-   production + 4 test files; full frontend suite 952 passed; tsc/`check:tokens`/`vite build`/`git
-   diff --check` clean; desktop, narrow (760px), keyboard, and 150%-zoom evidence captured. No
-   server/policy change.
+   `markWorkDoneSecondary`; Anchor inner card bounded to `max-w-4xl mx-auto w-full`. Review fix:
+   both Mark work done controls (and Close request) confirm through one focused
+   `MutationConfirmDialog` (`KeepModal`-based, centered/bottom-sheet, Cancel-focused, Escape
+   restores trigger focus) instead of an inline row that had expanded the Anchor and displaced the
+   request identity. Full frontend suite 953 passed; tsc/`check:tokens`/`vite build`/`git diff
+   --check` clean; visual evidence captured. No server/policy change.
 5. **RD-059A** — readable, keyboard-safe Internal Planning controls. ← next.
 6. **Q-027A** — Owner/Admin queue row hierarchy, badges, and selection/severity treatment.
 
