@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-01 — Q-027A (queue row severity treatment) complete (`<pending>`); GAP-027 resolved. The BL137 Request Detail / queue usability sequence is done.
+**Last updated:** 2026-09-01 — Q-027A (queue row severity treatment) complete (`8ced025`); GAP-027 resolved. The BL137 Request Detail / queue usability sequence is done.
 Next tracker item is GAP-045 (Default Queue language). Handoff detail
 in [BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
 

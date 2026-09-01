@@ -319,7 +319,7 @@ provide unclassification/reopen from the client.
 
 ### GAP-027 — Request-list alerts compete and lifecycle state is hard to scan
 
-**Status:** Resolved (Q-027A, `<pending>`) — the locked row grammar (one quiet lifecycle cue, one
+**Status:** Resolved (Q-027A, `8ced025`) — the locked row grammar (one quiet lifecycle cue, one
 server-ranked exception cue, one next-action line) was already in place; the remaining defect was
 that non-overdue priority/urgent work rendered red. `RequestRow.severityToTone` now reserves the
 red tone for server severity `"danger"` (genuine overdue/high-risk) and renders `"priority"` amber.

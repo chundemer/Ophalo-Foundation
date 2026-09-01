@@ -238,7 +238,7 @@ waiting-on-customer, work-completed, closed, closed-with-unresolved-feedback, se
 overdue rows, and Office Review. Verify queue count/visible urgency agreement against the existing
 server contract.
 
-**Resolution (`<pending>`):** the locked row grammar was already implemented in `RequestRow.tsx`
+**Resolution (`8ced025`):** the locked row grammar was already implemented in `RequestRow.tsx`
 (one `StatusBadge`, one `resolveException` badge, one `Next:` line, terminal suppression, quiet
 `followUpMeta`/`actionSignalLine`); Office Review was already a separate surface. The one real
 defect: `severityToTone` collapsed the server's `"priority"` severity into the red (`danger`) tone,
