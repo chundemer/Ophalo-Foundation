@@ -341,14 +341,14 @@ export function OfferingAssemblyDetail({
 
   return (
     <div className="flex-1 min-w-0 flex flex-col">
-      <div className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
+      <div className="mx-auto w-full max-w-[1440px] px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
         <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--keep-accent)] hover:underline mb-3">
           <ArrowLeft className="h-4 w-4" />
           Back to Assemblies
         </button>
       </div>
 
-      <div className="flex-1 min-w-0 px-4 sm:px-6 pb-6">
+      <div className="mx-auto flex-1 min-w-0 w-full max-w-[1440px] px-4 sm:px-6 pb-8">
         {isLoading && (
           <div className="flex flex-1 items-center justify-center py-16">
             <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
@@ -371,7 +371,7 @@ export function OfferingAssemblyDetail({
         {/* Keep the assembly detail mounted behind its edit drawer. This matches the nudge
             editor and preserves context while the modal owns focus and interaction. */}
         {!isLoading && !isError && data && (
-          <div className="max-w-2xl space-y-6">
+          <div className="max-w-4xl space-y-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="keep-page-title tracking-tight">{data.name}</h1>
@@ -556,9 +556,12 @@ export function OfferingAssemblyDetail({
                   const hasPriceIssue = data.pricing.priceReasons.some((r) => r.catalogItemId === it.catalogItemId);
                   const hasMarginIssue = data.pricing.marginReasons.some((r) => r.catalogItemId === it.catalogItemId);
                   return (
-                  <div key={it.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[var(--ophalo-border)] p-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--ophalo-ink)] truncate">{it.catalogItemDisplayName}</p>
+                  <div
+                    key={it.id}
+                    className="flex flex-col gap-2 rounded-lg border border-[var(--ophalo-border)] p-2 sm:grid sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-start sm:gap-x-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[var(--ophalo-ink)] break-words">{it.catalogItemDisplayName}</p>
                       {(hasPriceIssue || hasMarginIssue) && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {hasPriceIssue && <KeepBadge variant="attention">Price needs review</KeepBadge>}
@@ -566,6 +569,7 @@ export function OfferingAssemblyDetail({
                         </div>
                       )}
                     </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:contents">
                     <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)]">
                       Qty
                       <input
@@ -605,6 +609,7 @@ export function OfferingAssemblyDetail({
                     >
                       Remove
                     </button>
+                    </div>
                   </div>
                   );
                 })}

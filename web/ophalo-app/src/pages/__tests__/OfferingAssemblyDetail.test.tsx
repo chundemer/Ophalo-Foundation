@@ -294,4 +294,30 @@ describe("OfferingAssemblyDetail", () => {
     await waitFor(() => expect(screen.getByText("Filter")).toBeInTheDocument());
     expect(screen.getByRole("checkbox", { name: "Optional — add only when needed" })).toBeInTheDocument();
   });
+
+  it("shows the full associated-item name without truncation or a tooltip fallback, even when it is long", async () => {
+    const longName =
+      "Premium two-stage variable-speed condensing gas furnace with ECM blower motor and 10-year parts warranty";
+    mockGetOfferingAssembly.mockResolvedValue({
+      ...baseAssembly,
+      items: [
+        { id: "line-1", catalogItemId: "item-b", catalogItemDisplayName: longName, defaultQuantity: 1, isOptional: false, displayOrder: 0 },
+      ],
+    });
+    renderDetail();
+
+    const nameEl = await screen.findByText(longName);
+    expect(nameEl).not.toHaveClass("truncate");
+    expect(nameEl).toHaveClass("break-words");
+    expect(nameEl).not.toHaveAttribute("title");
+  });
+
+  it("renders inside the shared Price Book workspace width, not a bespoke narrow strip", async () => {
+    mockGetOfferingAssembly.mockResolvedValue(baseAssembly);
+    const { container } = renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Furnace Tune-Up")).toBeInTheDocument());
+    expect(container.querySelector(".max-w-\\[1440px\\]")).not.toBeNull();
+    expect(container.querySelector(".max-w-2xl")).toBeNull();
+  });
 });
