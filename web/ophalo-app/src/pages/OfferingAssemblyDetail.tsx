@@ -472,6 +472,7 @@ export function OfferingAssemblyDetail({
                   </p>
                 )}
               </div>
+              <p className="w-full text-xs text-[var(--ophalo-muted)]">Base price excludes optional components.</p>
             </div>
 
             {data.eligibilityReasons.length > 0 && (
@@ -543,6 +544,11 @@ export function OfferingAssemblyDetail({
                 )}
               </div>
 
+              <p className="mb-2 text-xs text-[var(--ophalo-muted)]">
+                Required items are included in the base assembly and added to Actual Work by default. Optional items are
+                excluded from the base price and added only when needed.
+              </p>
+
               {itemActionError && <p className="text-sm text-[var(--ophalo-danger)] mb-2">{itemActionError}</p>}
 
               <div className="space-y-2">
@@ -550,7 +556,7 @@ export function OfferingAssemblyDetail({
                   const hasPriceIssue = data.pricing.priceReasons.some((r) => r.catalogItemId === it.catalogItemId);
                   const hasMarginIssue = data.pricing.marginReasons.some((r) => r.catalogItemId === it.catalogItemId);
                   return (
-                  <div key={it.id} className="flex items-center gap-3 rounded-lg border border-[var(--ophalo-border)] p-2">
+                  <div key={it.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[var(--ophalo-border)] p-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[var(--ophalo-ink)] truncate">{it.catalogItemDisplayName}</p>
                       {(hasPriceIssue || hasMarginIssue) && (
@@ -577,16 +583,19 @@ export function OfferingAssemblyDetail({
                         className={`${INPUT_CLS} w-20`}
                       />
                     </label>
-                    <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)]">
+                    <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)] whitespace-normal">
                       <input
                         type="checkbox"
                         checked={it.isOptional}
                         disabled={itemBusy}
+                        aria-label="Optional — add only when needed"
                         onChange={(e) =>
                           updateItemMutation.mutate({ itemId: it.id, defaultQuantity: it.defaultQuantity, isOptional: e.target.checked, displayOrder: it.displayOrder })
                         }
                       />
-                      Optional
+                      <span>
+                        Optional <span className="text-[var(--ophalo-muted)]">— add only when needed</span>
+                      </span>
                     </label>
                     <button
                       type="button"
@@ -614,14 +623,21 @@ export function OfferingAssemblyDetail({
                       setNewItemDisplayName(row.item.displayName);
                     }}
                   />
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)]">
                       Qty
                       <input type="number" min="0.01" step="any" value={newItemQuantity} onChange={(e) => setNewItemQuantity(e.target.value)} className={`${INPUT_CLS} w-20`} />
                     </label>
-                    <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)]">
-                      <input type="checkbox" checked={newItemOptional} onChange={(e) => setNewItemOptional(e.target.checked)} />
-                      Optional
+                    <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)] whitespace-normal">
+                      <input
+                        type="checkbox"
+                        checked={newItemOptional}
+                        onChange={(e) => setNewItemOptional(e.target.checked)}
+                        aria-label="Optional — add only when needed"
+                      />
+                      <span>
+                        Optional <span className="text-[var(--ophalo-muted)]">— add only when needed</span>
+                      </span>
                     </label>
                     <button
                       type="button"

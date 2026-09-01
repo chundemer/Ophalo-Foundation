@@ -248,6 +248,10 @@ export function OfferingAssemblyDrawer({ onClose, onCreated }: OfferingAssemblyD
                 + Add item
               </button>
             </div>
+            <p className="mb-2 text-xs text-[var(--ophalo-muted)]">
+              Required items are included in the base assembly and added to Actual Work by default. Optional items are
+              excluded from the base price and added only when needed.
+            </p>
             <div className="space-y-2">
               {items.map((it) => (
                 <div key={it.key} className="rounded-lg border border-[var(--ophalo-border)] p-2 space-y-2">
@@ -260,7 +264,7 @@ export function OfferingAssemblyDrawer({ onClose, onCreated }: OfferingAssemblyD
                       updateItemRow(it.key, { catalogItemId: row.item.id, displayName: row.item.displayName })
                     }
                   />
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)]">
                       Qty
                       <input
@@ -272,13 +276,16 @@ export function OfferingAssemblyDrawer({ onClose, onCreated }: OfferingAssemblyD
                         className={`${INPUT_CLS} w-20`}
                       />
                     </label>
-                    <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)]">
+                    <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)] whitespace-normal">
                       <input
                         type="checkbox"
                         checked={it.isOptional}
                         onChange={(e) => updateItemRow(it.key, { isOptional: e.target.checked })}
+                        aria-label="Optional — add only when needed"
                       />
-                      Optional
+                      <span>
+                        Optional <span className="text-[var(--ophalo-muted)]">— add only when needed</span>
+                      </span>
                     </label>
                     <button
                       type="button"

@@ -141,6 +141,20 @@ describe("OfferingAssemblyDrawer", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
+  it("explains Required vs Optional items and labels the Optional checkbox with its effect", async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+
+    expect(
+      screen.getByText(
+        "Required items are included in the base assembly and added to Actual Work by default. Optional items are excluded from the base price and added only when needed.",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "+ Add item" }));
+    expect(screen.getByRole("checkbox", { name: "Optional — add only when needed" })).toBeInTheDocument();
+  });
+
   it("requires a name and a primary catalog item before submitting", async () => {
     const user = userEvent.setup();
     renderDrawer();

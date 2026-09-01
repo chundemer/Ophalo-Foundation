@@ -273,4 +273,25 @@ describe("OfferingAssemblyDetail", () => {
     await waitFor(() => expect(mockRemoveOfferingAssemblyItem).toHaveBeenCalledWith("assembly-1", "line-1", "v1"));
     await waitFor(() => expect(invalidatedOfferingAssemblies(invalidateSpy)).toBe(true));
   });
+
+  it("explains Required vs Optional item behavior and that the base price excludes optional components", async () => {
+    mockGetOfferingAssembly.mockResolvedValue(baseAssembly);
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Filter")).toBeInTheDocument());
+    expect(
+      screen.getByText(
+        "Required items are included in the base assembly and added to Actual Work by default. Optional items are excluded from the base price and added only when needed.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Base price excludes optional components.")).toBeInTheDocument();
+  });
+
+  it("gives the Optional checkbox an accessible name that explains it is added only when needed", async () => {
+    mockGetOfferingAssembly.mockResolvedValue(baseAssembly);
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Filter")).toBeInTheDocument());
+    expect(screen.getByRole("checkbox", { name: "Optional — add only when needed" })).toBeInTheDocument();
+  });
 });
