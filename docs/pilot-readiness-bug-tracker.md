@@ -21,7 +21,6 @@ These are not an instruction to ship every remaining item before a supervised pi
 | --- | --- |
 | GAP-039 | Required before any customer-facing production pilot. |
 | GAP-033 | Required before enabling public customer intake. |
-| GAP-055 | Required before technicians capture Actual Work directly. |
 | GAP-048 | Required before using email to share private customer request pages. |
 | GAP-047 | Required if staff relies on Internal priority for operational triage. |
 | GAP-016 / GAP-021 | Required before native use or accepting common `+1` phone entry in Quick Capture. |
@@ -32,7 +31,7 @@ These are not an instruction to ship every remaining item before a supervised pi
 Complete each numbered slice with focused automated coverage and a production-candidate/manual check where applicable. Do not start a dependent slice before its prerequisite is accepted.
 
 1. **Release safety and truthful public entry:** GAP-039, GAP-033, then GAP-040. Establish safe production observability and configuration validation first; make the public request journey and published claims truthful second. (GAP-056 customer SMS/QR handoff sender/business context — resolved, commit `0fc7a2a`.)
-2. **Field-work correctness:** GAP-055. This is a P0 authorization/data-model correction and needs its own migration, API, UI, and concurrency test plan.
+2. **Field-work correctness:** No active item. (GAP-055 Actual Work recorder ownership — resolved across Batches A–D: migration/ownership `b3b3d41`, recorder authorization `d26b955` and `72ce6a5`, audited transfer `c7ce822`, and Owner/Admin recovery UI `de40491`.)
 3. **Phone and capture integrity:** GAP-016, GAP-021, GAP-051, then GAP-025. Consolidate the ADR-444 normalization path before extending fallback customer recognition.
 4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, and GAP-049. Decompose layout ownership before changing shared desktop/mobile behavior; then fix the review/completion hierarchy, schedule-control legibility, and bounded mutation, sharing, and follow-up defects.
 5. **Request-list product decision and core behavior:** GAP-027 (decision), then GAP-045, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. This locks row hierarchy before implementing queue context, loading, filtering, scale/history, and small action-order polish. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
@@ -46,7 +45,17 @@ Complete each numbered slice with focused automated coverage and a production-ca
 **Severity:** P0
 **Area:** Production reliability and internal product operations
 
-Configure redacted server/browser error capture with release identity, health checks, an actionable alert/runbook path, and production validation for required public configuration. Verify controlled failures, token/PII redaction, and that the founder can distinguish product faults from quiet accounts.
+**Locked decision:** Use **Sentry** for redacted server and browser error capture, with release/environment identity and **founder email** as the initial alert destination. Do not enable session replay, broad behavioral analytics, a data warehouse, or an owner-facing analytics dashboard in this pilot slice.
+
+**Implementation order:**
+
+1. Define and test the telemetry boundary: permit only release/environment, server-generated correlation ID, safe route/status/error metadata, and narrowly justified account-level identifiers. Scrub or reject capability URLs/tokens, request text, service addresses, phones, emails, authorization headers, cookies, sessions, and broad request bodies.
+2. Add the Sentry ASP.NET integration in production configuration. Attach the existing `ReleaseIdentity` and correlation ID; capture unhandled server failures without changing safe ProblemDetails responses. Retain `/health/live` and `/health/ready` as opaque availability/readiness signals.
+3. Add the Sentry React integration to the authenticated PWA with release/environment identity. Validate `VITE_PUBLIC_BASE_URL` at startup/build time and make missing or malformed configuration fail safely rather than allowing request-detail `.replace()` calls to throw. Do not add session replay.
+4. Configure Railway health checking against `/health/ready`, Sentry environment/DSN/release configuration, and the founder-email alert rule. Record a short runbook: inspect release/correlation ID, check health and Railway logs, decide mitigation versus rollback, and record the incident.
+5. Verify a production candidate with controlled server and browser failures, normal/unhealthy health responses, an invalid public-base URL, alert delivery, release identity, and automated redaction checks for representative PII and public-token paths.
+
+**Done when:** Controlled server and browser failures arrive in Sentry with useful release/correlation context and no protected data; founder email alerting works; readiness/availability monitoring is verified; invalid required public configuration fails safely; and the runbook is usable by the founder.
 
 ### GAP-033 — Public intake does not establish sufficient customer trust or return continuity
 
@@ -64,13 +73,25 @@ Before asking for customer address/contact data, show business identity and conf
 
 Audit public routes, copy, images, links, metadata, and deployment behavior against shipped V1. Remove unsupported automatic-email, SMS, verification, response-time, revenue, or security claims; use representative non-private visuals; and verify desktop/mobile, keyboard, and production-host behavior.
 
-### GAP-055 — Actual Work capture is incorrectly blocked by dispatch assignment
+### GAP-062 — Assembly editor drifts from the Price Book workspace and hides item identity
 
-**Status:** Open — decision locked; remediation planned
-**Severity:** P0
-**Area:** Actual Work authorization and Draft ownership
+**Status:** Resolved — commit `07b7ea8` (clarity copy `f34292c`)
+**Severity:** P1
+**Area:** Price Book Offering/Assembly detail and edit form
 
-Implement ADR-487 first-recorder ownership: qualified active members may create the one Draft; `RecorderAccountUserId` exclusively controls mutable Draft work; creation authorship remains immutable; and Owner/Admin transfer is explicit, reason-required, and audited. Preserve one-Draft and concurrency guarantees while auditing every current Responsible-based authorization path.
+The Offering/Assembly editor uses a narrow, one-off `max-w-2xl` layout while the wider Price Book workspace is available, making it feel unlike the rest of the product's operational forms. Its associated-item rows truncate catalog item names to protect quantity, optionality, and remove controls; an Owner/Admin cannot reliably see which item they are editing.
+
+**Locked resolution:** Recompose Assembly Detail as a Price Book workspace form using the established page shell and an intentional wide content region. At desktop widths, associated-item rows must use a stable grid/column layout that gives the item identity the dominant flexible column and keeps quantity, optionality, and destructive action legible. At narrow widths, controls may stack below the identity, but the complete catalog item display name must wrap and remain visible. Remove name truncation from editable associated-item rows; do not replace it with hover-only title text or an overflow/ellipsis workaround.
+
+**Acceptance criteria:**
+
+- The Assembly Detail page aligns visually with the application's established workspace/form hierarchy rather than occupying an arbitrary narrow strip of canvas.
+- Every associated catalog item name is fully readable at supported desktop, narrow PWA, and browser-zoom widths, including long names.
+- Quantity, the Optional control, and Remove remain visibly associated with the correct item, keyboard reachable, and do not cause horizontal overflow.
+- The optional-component explanatory copy and base-price note remain readable without becoming the dominant visual element.
+- Focused frontend coverage includes a long item name and layout/accessible-name regressions; TypeScript, build, and CSS-token checks remain clean.
+
+**Resolution:** `OfferingAssemblyDetail` now renders in the shared `mx-auto w-full max-w-[1440px] px-4 sm:px-6` workspace wrapper with a `max-w-4xl` content column. Associated-item rows use a `sm:grid` with a wrapping `minmax(0,1fr)` identity column and intrinsic-width Qty/Optional/Remove columns, stacking name-above-controls below `sm`; name truncation and title-tooltip fallback removed. Regression tests cover a long item name and the workspace width. TypeScript, build, and CSS-token checks clean.
 
 ### GAP-016 — New Request phone validation and correction path remains incomplete
 
