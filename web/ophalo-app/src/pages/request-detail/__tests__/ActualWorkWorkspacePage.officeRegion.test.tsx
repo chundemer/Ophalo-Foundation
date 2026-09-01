@@ -186,8 +186,8 @@ describe("ActualWorkWorkspacePage — 4f-ii office region", () => {
     meRole = "operator";
     renderPage();
     expect(await screen.findByText("Capacitor")).toBeInTheDocument();
-    expect(screen.queryByText(/Actual Work financial review/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Mark visit reviewed/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Internal financial review/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Complete internal financial review/i })).not.toBeInTheDocument();
   });
 
   it("shows the office region for an Owner: line-adjacent resolution + review controls", async () => {
@@ -208,9 +208,9 @@ describe("ActualWorkWorkspacePage — 4f-ii office region", () => {
       ],
     };
     renderPage();
-    expect(await screen.findByText("Actual Work financial review")).toBeInTheDocument();
+    expect(await screen.findByText("Internal financial review")).toBeInTheDocument();
     expect(screen.getByText(/Resolve missing price · Capacitor/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Mark visit reviewed/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Complete internal financial review/i })).toBeInTheDocument();
     expect(screen.getByText("Correct this visit")).toBeInTheDocument();
   });
 
@@ -220,16 +220,27 @@ describe("ActualWorkWorkspacePage — 4f-ii office region", () => {
       visits: [financialDetail({ reviewedAtUtc: "2026-08-21T09:00:00Z", reviewedByDisplayName: "Ada Owner" })],
     };
     renderPage();
-    expect(await screen.findByText("Actual Work financial review")).toBeInTheDocument();
-    expect(screen.getAllByText(/Reviewed/).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: /Mark visit reviewed/i })).not.toBeInTheDocument();
+    expect(await screen.findByText("Internal financial review")).toBeInTheDocument();
+    expect(screen.getAllByText(/Financial review completed/).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /Complete internal financial review/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/Resolve missing/i)).not.toBeInTheDocument();
+  });
+
+  it("confirms after a successful review that the customer request status is unchanged", async () => {
+    financialReview.review.mockResolvedValue({ kind: "success" });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Complete internal financial review/i }));
+    expect(
+      await screen.findByText(
+        "Internal financial review completed. The customer request status is unchanged.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("surfaces a concurrency-reconcile outcome from the review mutation", async () => {
     financialReview.review.mockResolvedValue({ kind: "reconciled", code: undefined });
     renderPage();
-    await userEvent.click(await screen.findByRole("button", { name: /Mark visit reviewed/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /Complete internal financial review/i }));
     await waitFor(() =>
       expect(screen.getByText(/already reviewed or changed/i)).toBeInTheDocument(),
     );

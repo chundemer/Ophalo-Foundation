@@ -1,7 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-01 — RD-058A (Actual Work Review queue exposes request lifecycle status)
-complete; next session is RD-058B. Handoff detail in [BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
+**Last updated:** 2026-09-01 — RD-058B-1 (Internal financial review terminology + status-unchanged
+success copy) complete; next session is RD-058B-2 (Request Detail action hierarchy). Handoff detail
+in [BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
@@ -37,9 +38,21 @@ Run the Claude sessions in this exact order, one accepted commit at a time:
    Integration `ActualWorkFinancialReadApiTests` 28 passed; new `ActualWorkReviewQueueList.test.tsx`;
    tsc/`check:tokens`/`vite build`/`git diff --check` clean. GAP-058 remains open for the RD-058B
    Request Detail action-hierarchy work.
-3. **RD-058B** — Request Detail action hierarchy and internal-review clarity. ← next.
-4. **RD-059A** — readable, keyboard-safe Internal Planning controls.
-5. **Q-027A** — Owner/Admin queue row hierarchy, badges, and selection/severity treatment.
+3. **RD-058B-1** — Internal financial review clarity. ✅ complete: review card reframed as
+   **Internal financial review** ("…does not change the customer request"), action → **Complete
+   internal financial review**, per-visit state → **Financial review pending/completed**, and both
+   success surfaces (Request Detail canvas banner + Actual Work workspace route) announce that the
+   customer request status is unchanged. 3 production + 4 test files; focused 30 passed, broader
+   request-detail + requests suites 478 passed; tsc/`check:tokens`/`vite build`/`git diff --check`
+   clean. No server/policy change.
+4. **RD-058B-2** — Request Detail action hierarchy. ← next: sole-primary attention treatment;
+   remove the duplicate Anchor **Contact customer** action; **Resolve another way…**; relocate
+   **Mark work done** to a quiet contextual Work Canvas position (after Actual Work, before the
+   composer) with its full confirmation copy, still gated on the server-provided secondary
+   authorization; align the Anchor inner content to `max-w-4xl mx-auto w-full`. Carry active-
+   attention, focus-order, and narrow/desktop verification.
+5. **RD-059A** — readable, keyboard-safe Internal Planning controls.
+6. **Q-027A** — Owner/Admin queue row hierarchy, badges, and selection/severity treatment.
 
 The full scope, exclusions, test proof, and source-of-truth decisions are in
 [BL137](build-log/137-request-detail-and-queue-usability-handoff.md). Do not pull GAP-047,

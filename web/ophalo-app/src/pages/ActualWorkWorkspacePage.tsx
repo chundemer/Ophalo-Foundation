@@ -54,6 +54,10 @@ export function ActualWorkWorkspacePage({
   const [isWide, setIsWide] = useState(
     () => typeof window?.matchMedia === "function" && window.matchMedia(WIDE_QUERY).matches,
   );
+  // Persistent confirmation that internal financial review does not touch the customer request
+  // lifecycle — mirrors the Request Detail canvas banner so the wide-viewport workspace route
+  // gives the same factual assurance (RD-058B-1).
+  const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
   useEffect(() => {
     if (typeof window?.matchMedia !== "function") return;
     const mq = window.matchMedia(WIDE_QUERY);
@@ -159,6 +163,15 @@ export function ActualWorkWorkspacePage({
       {contextBand}
       <div className="min-h-0 flex-1 overflow-y-auto">
        <div className="mx-auto w-full max-w-4xl space-y-3 px-4 py-6 md:px-6">
+        {reviewSuccessMsg && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-xl border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-4 py-3 text-sm font-medium text-[var(--ophalo-success)]"
+          >
+            {reviewSuccessMsg}
+          </div>
+        )}
         {history.state.status === "loading" && (
           <p className="text-sm text-[var(--ophalo-muted)]">Loading visit…</p>
         )}
@@ -193,7 +206,12 @@ export function ActualWorkWorkspacePage({
                     return outcome;
                   }}
                   isVisitMutating={financialReview.isVisitMutating}
-                  onReviewSuccess={() => void history.retry()}
+                  onReviewSuccess={() => {
+                    void history.retry();
+                    setReviewSuccessMsg(
+                      "Internal financial review completed. The customer request status is unchanged.",
+                    );
+                  }}
                 />
               ) : null
             }

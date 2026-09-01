@@ -82,12 +82,12 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
     if (outcome.kind === "hidden") return;
     setNotice(
       outcome.kind === "review-blocked-incomplete"
-        ? "Resolve the missing pricing or cost on every line before marking this visit reviewed."
+        ? "Resolve the missing pricing or cost on every line before completing internal financial review."
         : outcome.kind === "review-blocked-zero-line"
-          ? "Record this visit as no charge before marking it reviewed."
+          ? "Record this visit as no charge before completing internal financial review."
           : outcome.kind === "reconciled"
             ? "This visit was already reviewed or changed. The latest record is shown below."
-            : "Unable to mark this visit reviewed. Try again.",
+            : "Unable to complete internal financial review. Try again.",
     );
   }
 
@@ -99,7 +99,7 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
           <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Financial review · Visit #{index + 1}</p>
           <p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">Submitted {formatDate(visit.submittedAtUtc)}</p>
         </div>
-        {reviewed ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--ophalo-success)]"><Check className="h-3.5 w-3.5" /> Reviewed</span> : <span className="text-xs font-semibold text-[var(--ophalo-attention)]">Unreviewed</span>}
+        {reviewed ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--ophalo-success)]"><Check className="h-3.5 w-3.5" /> Financial review completed</span> : <span className="text-xs font-semibold text-[var(--ophalo-attention)]">Financial review pending</span>}
       </div>
       {reviewed && <p className="mt-1 text-xs text-[var(--ophalo-muted)]">Reviewed {formatDate(visit.reviewedAtUtc!)} by {visit.reviewedByDisplayName ?? "an authorized reviewer"}{visit.reviewNote ? ` · “${visit.reviewNote}”` : ""}</p>}
       </summary>
@@ -145,7 +145,7 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
         </div>
       )}
 
-      {!reviewed && <div className="mt-4"><label className="text-xs font-semibold text-[var(--ophalo-ink)]" htmlFor={`review-note-${visit.id}`}>Reviewer note <span className="font-normal text-[var(--ophalo-muted)]">(optional)</span></label><textarea id={`review-note-${visit.id}`} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add internal note for billing/payroll…" rows={2} className="mt-1 w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-sm text-[var(--ophalo-ink)]" /><div className="mt-3 flex justify-end"><KeepButton onClick={() => void markReviewed()} disabled={busy}>{busy ? "Working…" : "Mark visit reviewed"}</KeepButton></div></div>}
+      {!reviewed && <div className="mt-4"><label className="text-xs font-semibold text-[var(--ophalo-ink)]" htmlFor={`review-note-${visit.id}`}>Reviewer note <span className="font-normal text-[var(--ophalo-muted)]">(optional)</span></label><textarea id={`review-note-${visit.id}`} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add internal note for billing/payroll…" rows={2} className="mt-1 w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-sm text-[var(--ophalo-ink)]" /><div className="mt-3 flex justify-end"><KeepButton onClick={() => void markReviewed()} disabled={busy}>{busy ? "Working…" : "Complete internal financial review"}</KeepButton></div></div>}
 
       <ReplaceVisitForm busy={busy} onSubmit={(reason) => onReplace(visit, reason)} />
     </details>
@@ -158,5 +158,5 @@ export function ActualWorkReviewCard({ state, onRetry, onReview, onResolveLine, 
   }, [focusOnMount, state]);
   if (state.status === "loading" || state.status === "hidden" || (state.status === "loaded" && !state.visits.length)) return null;
   if (state.status === "error") return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-4"><p className="text-sm text-[var(--ophalo-muted)]">Unable to load financial review.</p><KeepButton variant="secondary" className="mt-3" onClick={onRetry}>Retry</KeepButton></div>;
-  return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]"><div className="px-4 py-3"><p className="text-sm font-semibold text-[var(--ophalo-ink)]">Actual Work financial review</p><p className="text-xs text-[var(--ophalo-muted)]">Owner/Admin review only</p></div>{state.visits.map((visit, index) => <Visit key={visit.id} visit={visit} index={index} onReview={onReview} onResolveLine={onResolveLine} onRecordNoChargeDisposition={onRecordNoChargeDisposition} onReplace={onReplace} busy={isVisitMutating(visit.id)} onReviewSuccess={onReviewSuccess} />)}</div>;
+  return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]"><div className="px-4 py-3"><p className="text-sm font-semibold text-[var(--ophalo-ink)]">Internal financial review</p><p className="text-xs text-[var(--ophalo-muted)]">Reviews the submitted visit's financial details. Does not change the customer request.</p></div>{state.visits.map((visit, index) => <Visit key={visit.id} visit={visit} index={index} onReview={onReview} onResolveLine={onResolveLine} onRecordNoChargeDisposition={onRecordNoChargeDisposition} onReplace={onReplace} busy={isVisitMutating(visit.id)} onReviewSuccess={onReviewSuccess} />)}</div>;
 }

@@ -27,7 +27,7 @@ function baseDetail(): KeepRequestDetailResult {
   return mockRequestDetails["mock-req-001"];
 }
 
-function renderCanvas(isWide: boolean) {
+function renderCanvas(isWide: boolean, reviewSuccessMsg: string | null = null) {
   return render(
     <RequestDetailWorkCanvas
       isWide={isWide}
@@ -48,7 +48,7 @@ function renderCanvas(isWide: boolean) {
       onCustomerUpdateDraftChange={vi.fn()}
       customerUpdateDraftStatus="idle"
       onCustomerUpdateDraftStatusChange={vi.fn()}
-      reviewSuccessMsg={null}
+      reviewSuccessMsg={reviewSuccessMsg}
       actualWorkSection={<div data-testid="region-actual-work" />}
       activityBlock={<div data-testid="region-activity" />}
       recordDetailsBlock={<div data-testid="region-record-details" />}
@@ -87,6 +87,16 @@ describe("RequestDetailWorkCanvas", () => {
       "region-activity",
     ]);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
+
+  it("announces the internal-financial-review success message as a status region when supplied", () => {
+    const { getByRole } = renderCanvas(
+      true,
+      "Internal financial review completed. The customer request status is unchanged.",
+    );
+    expect(getByRole("status")).toHaveTextContent(
+      "Internal financial review completed. The customer request status is unchanged.",
+    );
   });
 
   it("mobile: inserts the contact/location card after attention and swaps to Activity above Record details", () => {

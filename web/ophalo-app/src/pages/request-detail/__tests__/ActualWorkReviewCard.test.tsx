@@ -18,16 +18,26 @@ describe("ActualWorkReviewCard", () => {
     render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} onReview={onReview} onReviewSuccess={onReviewSuccess} />);
     expect(screen.getByText(/totals and margin are unavailable/)).toBeInTheDocument();
     await user.type(screen.getByLabelText(/Reviewer note/), "Passed margin check");
-    await user.click(screen.getByRole("button", { name: /Mark visit reviewed/ }));
+    await user.click(screen.getByRole("button", { name: /Complete internal financial review/ }));
     expect(onReview).toHaveBeenCalledWith({ ...visit, blockers: [] }, "Passed margin check");
     expect(onReviewSuccess).toHaveBeenCalled();
+  });
+
+  it("frames the card as internal financial review that does not change the customer request", () => {
+    const { rerender } = render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} />);
+    expect(screen.getByText("Internal financial review")).toBeInTheDocument();
+    expect(screen.getByText("Reviews the submitted visit's financial details. Does not change the customer request.")).toBeInTheDocument();
+    expect(screen.getByText("Financial review pending")).toBeInTheDocument();
+
+    rerender(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [], reviewedAtUtc: "2026-08-27T13:00:00Z", reviewedByDisplayName: "Christian Hundemer" }] }} />);
+    expect(screen.getByText("Financial review completed")).toBeInTheDocument();
   });
 
   it("shows the resolved reviewer name read-only, never the account-user id, and renders no resolution form", () => {
     render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, reviewedAtUtc: "2026-08-27T13:00:00Z", reviewedByAccountUserId: "acct-user-guid", reviewedByDisplayName: "Christian Hundemer", reviewNote: "Passed margin check" }] }} />);
     expect(screen.getByText(/Reviewed .* by Christian Hundemer/)).toBeInTheDocument();
     expect(screen.queryByText(/acct-user-guid/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Mark visit reviewed/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Complete internal financial review/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/Resolve missing/)).not.toBeInTheDocument();
   });
 
@@ -52,21 +62,21 @@ describe("ActualWorkReviewCard", () => {
   it("distinguishes the two review-blocked outcomes in the notice", async () => {
     const user = userEvent.setup();
     render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} onReview={() => Promise.resolve({ kind: "review-blocked-incomplete" as const })} />);
-    await user.click(screen.getByRole("button", { name: /Mark visit reviewed/ }));
+    await user.click(screen.getByRole("button", { name: /Complete internal financial review/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/missing pricing or cost on every line/);
   });
 
   it("shows the zero-line-disposition blocked notice", async () => {
     const user = userEvent.setup();
     render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} onReview={() => Promise.resolve({ kind: "review-blocked-zero-line" as const })} />);
-    await user.click(screen.getByRole("button", { name: /Mark visit reviewed/ }));
+    await user.click(screen.getByRole("button", { name: /Complete internal financial review/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/Record this visit as no charge/);
   });
 
   it("surfaces a conflict notice when review reconciliation reports a stale/already-reviewed visit", async () => {
     const user = userEvent.setup();
     render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} onReview={() => Promise.resolve({ kind: "reconciled" as const, code: "ActualWork.AlreadyReviewed" })} />);
-    await user.click(screen.getByRole("button", { name: /Mark visit reviewed/ }));
+    await user.click(screen.getByRole("button", { name: /Complete internal financial review/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/already reviewed or changed/);
   });
 

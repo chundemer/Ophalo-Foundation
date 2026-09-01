@@ -49,7 +49,7 @@ vi.mock("../useActualWorkFinancialReview", () => ({
 vi.mock("../ActualWorkReviewCard", () => ({
   ActualWorkReviewCard: ({ state, onReplace }: { state: { visits: { id: string }[] }; onReplace: (v: unknown, r: string) => void }) => (
     <div>
-      Actual Work financial review
+      Internal financial review
       <span>visits:{state.visits.map((v) => v.id).join(",")}</span>
       <button onClick={() => onReplace({ id: "aw-1" }, "wrong part")}>Correct aw-1</button>
     </div>
@@ -137,7 +137,7 @@ describe("RequestDetailContent — Actual Work submit refreshes history (Batch 5
   });
 });
 
-describe("RequestDetailContent — Actual Work financial review card gating (Slice 2)", () => {
+describe("RequestDetailContent — Internal financial review card gating (Slice 2)", () => {
   const commonProps = {
     detail: baseDetail(),
     requestId: "req-1",
@@ -167,12 +167,12 @@ describe("RequestDetailContent — Actual Work financial review card gating (Sli
 
   it("does not render the financial review card for a non-Owner/Admin caller", () => {
     render(<RequestDetailContent {...commonProps} />);
-    expect(screen.queryByText("Actual Work financial review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Internal financial review")).not.toBeInTheDocument();
   });
 
   it("renders the financial review card when canReviewActualWork is true (below 1001px)", () => {
     render(<RequestDetailContent {...commonProps} canReviewActualWork />);
-    expect(screen.getByText("Actual Work financial review")).toBeInTheDocument();
+    expect(screen.getByText("Internal financial review")).toBeInTheDocument();
   });
 
   it("BL136 4f-ii: moves the financial review card off Request Detail on a wide viewport (workspace route)", () => {
@@ -191,7 +191,7 @@ describe("RequestDetailContent — Actual Work financial review card gating (Sli
       render(
         <RequestDetailContent {...commonProps} canReviewActualWork onNavigateToActualWorkspace={vi.fn()} />,
       );
-      expect(screen.queryByText("Actual Work financial review")).not.toBeInTheDocument();
+      expect(screen.queryByText("Internal financial review")).not.toBeInTheDocument();
     } finally {
       window.matchMedia = originalMatchMedia;
     }

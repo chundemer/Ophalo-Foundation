@@ -155,11 +155,17 @@ mutation-policy change, or changed lifecycle/attention semantics.
 
 **Progress:** The read-only Actual Work Review queue projection now carries the factual request
 lifecycle status; a row states both **Request: {lifecycle state}** and **Submitted visit awaiting
-internal financial review** (RD-058A, commit `c5796e0`). The Request Detail action hierarchy —
-review-card rename to **Complete internal financial review** with persistent "does not change the
-customer request" copy, quiet contextual placement of **Mark work done**, sole-primary attention
-treatment, and the shared Anchor/Work Canvas content boundary — remains open and is tracked by
-RD-058B in [BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
+internal financial review** (RD-058A, commit `c5796e0`). RD-058B-1 then reframed the review card as
+**Internal financial review** with the persistent sub-line "Reviews the submitted visit's financial
+details. Does not change the customer request.", renamed the action to **Complete internal financial
+review**, relabelled per-visit state as **Financial review pending** / **Financial review
+completed**, and made both success surfaces (Request Detail canvas banner and the wide-viewport
+Actual Work workspace route) announce "Internal financial review completed. The customer request
+status is unchanged." The remaining action-hierarchy work — sole-primary attention treatment,
+removal of the duplicate Anchor **Contact customer** action, **Resolve another way…**, quiet
+contextual placement of **Mark work done** with its full confirmation copy, and the shared
+Anchor/Work Canvas content boundary — is RD-058B-2 in
+[BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
 
 When a request is in **Actual Work Review**, the page simultaneously presents the request-level **Mark work done** action and the review-card **Mark visit reviewed** action. The request can still show an early lifecycle state such as **Received**, making it unclear whether the operator is reviewing recorded work, completing the customer request, or expected to do both. A mistaken completion can change the customer-facing lifecycle before the required financial review is complete.
 

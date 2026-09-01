@@ -122,6 +122,27 @@ terminal/lifecycle display mapping, and no count/list drift.
 
 ### RD-058B — Request Detail action hierarchy and review clarity
 
+Split into two accepted commits: **RD-058B-1** (internal financial review clarity) and
+**RD-058B-2** (action hierarchy).
+
+**Done (RD-058B-1, 2026-09-01):** `ActualWorkReviewCard` reframed — header **Internal financial
+review**, persistent sub-line "Reviews the submitted visit's financial details. Does not change the
+customer request.", action **Complete internal financial review**, per-visit state **Financial
+review pending** / **Financial review completed**, and blocked-notice wording aligned. Both success
+surfaces — the Request Detail canvas `role="status"` banner (`RequestDetail.tsx`) and the
+wide-viewport Actual Work workspace route (`ActualWorkWorkspacePage.tsx`, newly added banner) —
+announce "Internal financial review completed. The customer request status is unchanged." 3
+production + 4 test files. Focused 30 passed; `request-detail` + `requests` suites 478 passed;
+tsc / `check:tokens` / `vite build` / `git diff --check` clean. No server/policy change.
+
+**Remaining (RD-058B-2):** sole-primary attention treatment; remove the duplicate large Anchor
+`Contact customer` action (unconditional); alternate path `Resolve another way…`; relocate
+active-attention `Mark work done` to a quiet Work Canvas position (after Actual Work, before the
+composer), still gated on `availableActions.markWorkDoneSecondary`, with confirmation copy stating
+Work completed / no customer notification / no internal-review completion / attention + open-draft
+left unresolved; align the Anchor inner content to `max-w-4xl mx-auto w-full`. Carry active-
+attention, focus-order, and narrow/desktop verification.
+
 **Goal:** Ensure an Owner/Admin cannot confuse internal review, request completion, attention
 resolution, contact intent, or customer notification.
 
