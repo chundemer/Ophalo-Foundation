@@ -45,9 +45,12 @@ the same fact.
   valid and expected combination.
 - The Request Anchor and Work Canvas share one horizontal content boundary.
 - The planning row remains in the Anchor. Its persistent labels are **Internal priority**,
-  **Planned work date**, and **Internal follow-up**. Enabled empty actions use **Set planned date**
-  and **Set follow-up date** in normal contrast, without ellipses. Read-only values visibly say
-  **Read only** and carry no interactive chevron/hover affordance.
+  **Planned work date**, and **Internal follow-up (optional)**. A checkmark is a restrained
+  configuration cue, not request completion: show it for the current Internal priority selection
+  (including Routine) and a persisted Planned work date, never for an empty date or optional
+  follow-up. Enabled empty actions use **Set planned date** and **Set follow-up date** in normal
+  contrast, without ellipses. Read-only values visibly say **Read only** and carry no interactive
+  chevron/hover affordance.
 - Request rows use one quiet lifecycle cue, at most one server-ranked exception/attention cue, and
   one factual next-action line. Selection is independent from severity; reserve red for genuine
   overdue/high-risk work. Office Review remains distinct from customer-promise risk.
@@ -195,6 +198,27 @@ allow unauthorized editing, or render a read-only value as an enabled action.
 **Proof:** focused tests for empty/set/read-only/loading/error/conflict controls, Enter/Space,
 focus transfer, Escape/restore, Tab sequence, selected-value readability, and desktop/narrow
 layouts.
+
+**Completed (RD-059A, commit pending review):** `TimingPanel` `strip`, full-card, and `bare`
+variants now focus the first editor field on open (`useEffect` on `expandedEditor`), close on
+Escape (`handleEditorKeyDown` → `preventDefault` + `stopPropagation` → `closeEditor`) and on
+Cancel, and restore focus to the disclosure trigger via `followUpTriggerRef` / `plannedTriggerRef`.
+Save and 409-conflict errors render with `role="alert"` in the relevant editor (both editor bodies
+and the planned/follow-up secondary-action rows); the conflict path leaves the editor open with its
+date field disabled. Locked copy: labels **Internal priority** / **Planned work date** / **Internal
+follow-up (optional)**; enabled empty controls read **Set planned date** / **Set follow-up date** in
+normal-contrast ink (`--ophalo-ink`) with a leading `CalendarDays` cue and no ellipsis. Restrained
+configuration checkmark: shown for the current Internal priority (including default Routine, via a
+persistent leading `Check` on the strip select) and a persisted Planned work date; never for an
+empty planned date or the optional follow-up. Read-only planning values (`!canSetPlannedFor` /
+`!canSetFollowUpOn` / `!canAddInternalNote`) drop chevron/hover/border/button semantics and show a
+muted **Read only** caption. `one-open-editor`, date/reason validation, and
+mutation/version/conflict policy unchanged; no server or policy change. Files: `TimingPanel.tsx`,
+`DetailPanels.tsx` (`TriagePanel` strip); tests `TimingPanel.strip.test.tsx` (new),
+`DetailPanels.priority.test.tsx` (extended), `RequestDetailAnchor.test.tsx` (locked-copy rename of
+the 2026-08-24 empty-state assertions). Full frontend suite 977 passed;
+tsc / `check:tokens` / `vite build` / `git diff --check` clean; desktop, narrow PWA, keyboard, and
+browser-zoom evidence captured.
 
 ### Q-027A — Owner/Admin queue-row hierarchy and badges
 

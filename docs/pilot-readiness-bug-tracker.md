@@ -35,7 +35,7 @@ Complete each numbered slice with focused automated coverage and a production-ca
 3. **Phone and capture integrity:** GAP-016, GAP-021, GAP-051, then GAP-025. Consolidate the ADR-444 normalization path before extending fallback customer recognition.
 4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, GAP-049, and GAP-063. First establish shared responsive seams without behavior change; then make Owner/Admin review, lifecycle, attention, and timing actions unmistakable. See [BL137](build-log/137-request-detail-and-queue-usability-handoff.md) for the bounded execution order.
 5. **Request-list core behavior:** GAP-027, then GAP-045, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. The row grammar is now locked: one lifecycle cue, one server-ranked exception cue, and one next-action line. Implement it after the Request Detail safety work; do not merge broad queue redesign into GAP-019/058/059. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
-6. **Pilot operating loop and final usability review:** GAP-037 (after GAP-039), GAP-038, and GAP-054. Deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
+6. **Pilot operating loop and final usability review:** GAP-064 (after GAP-039), GAP-037, GAP-038, and GAP-054. Establish a reliable new-customer-request alert path before relying on intake to create live work, then deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
 
 ## Active Work
 
@@ -213,9 +213,28 @@ or change server lifecycle authority as a presentation fix.
 
 ### GAP-059 — Planned-work and internal-follow-up controls look disabled or unreadable
 
-**Status:** Open
+**Status:** Open — RD-059A implementation complete, commit pending review
 **Severity:** P1
 **Area:** Request Detail schedule and follow-up controls
+
+**Progress:** RD-059A applied the locked resolution to `TimingPanel` (Anchor `strip` row plus the
+full-card and `bare` variants). Persistent labels are **Internal priority**, **Planned work date**,
+and **Internal follow-up (optional)**. Enabled empty controls now read **Set planned date** and
+**Set follow-up date** in normal-contrast ink with a leading calendar cue and no placeholder
+ellipsis (previously low-contrast `Set planned work date…` / `Set internal follow-up…`). The
+restrained configuration checkmark shows only for the current Internal priority selection
+(including default Routine) and a persisted Planned work date; it never appears for an empty planned
+date or the optional follow-up. Read-only values drop chevron/hover/button semantics and carry a
+visible muted **Read only** caption. Keyboard: Enter/Space opens an editor and focus moves to its
+first field; Escape (`preventDefault` + `stopPropagation`) and Cancel close it and restore focus to
+the trigger; one-open-editor behavior is preserved; save and 409-conflict errors stay in the
+relevant editor with `role="alert"` and the conflict path keeps the editor open with the field
+disabled. Existing date/reason validation and mutation/version/conflict policy are unchanged; no
+server or policy change. Coverage: new `TimingPanel.strip.test.tsx` (strip + full-card keyboard,
+error, conflict, loading, empty-copy/contrast, checkmark, read-only), extended
+`DetailPanels.priority.test.tsx` and `RequestDetailAnchor.test.tsx`. Full frontend suite 977
+passed; tsc / `check:tokens` / `vite build` / `git diff --check` clean; desktop, narrow PWA,
+keyboard, and browser-zoom evidence captured.
 
 The custom disclosure buttons that open the **Planned work date** and **Internal follow-up** date
 editors use placeholder-like low-contrast text and a weak affordance. In the observed Request
@@ -225,7 +244,10 @@ scheduling/follow-up path easy to miss.
 **Locked resolution:** Preserve the compact three-field planning row and existing mutation policy,
 but distinguish an enabled disclosure button from a read-only value without relying on color.
 
-- Persistent labels are **Internal priority**, **Planned work date**, and **Internal follow-up**.
+- Persistent labels are **Internal priority**, **Planned work date**, and **Internal follow-up
+  (optional)**. A checkmark is a restrained configuration cue, not a request-completion signal:
+  show it for the current Internal priority selection (including the default Routine) and for a
+  persisted Planned work date; do not show it for an empty planned date or optional follow-up.
 - Enabled empty controls read **Set planned date** and **Set follow-up date** in normal-contrast text,
   with calendar/disclosure cues and no placeholder ellipses.
 - Read-only values have no chevron/hover behavior and expose a visible **Read only** cue.
@@ -235,7 +257,9 @@ but distinguish an enabled disclosure button from a read-only value without rely
 
 **Acceptance criteria:**
 
-- At normal desktop and mobile widths, an Owner/Admin can identify both controls as available and understand their purpose before opening them.
+- At normal desktop and mobile widths, an Owner/Admin can identify both controls as available,
+  distinguish configured priority/planned work from an empty value, and understand that follow-up
+  is optional before opening an editor.
 - Empty text, selected values, focus, hover, read-only, validation, loading, and mutation-error
   states meet the established contrast and accessibility treatment.
 - Focused PWA coverage verifies keyboard open/focus/Escape/restore behavior and that enabled empty
@@ -391,6 +415,80 @@ passed; tsc / `check:tokens` / `vite build` / `git diff --check` clean.
 
 The broader GAP-065 queue **Internal review pending** cue, the persistent Office Review navigation
 affordance, and the server-authoritative projection remain **Needs decision** below.
+
+### GAP-064 — A new customer request can arrive without reliably alerting accountable staff
+
+**Status:** Needs decision
+**Severity:** P1
+**Area:** Public intake and staff notification reliability
+
+An authenticated business-created request is already known to the staff member who entered it, but a
+customer-originated public-intake request can be created without a reliable, timely alert to an
+accountable Owner/Admin. The current desktop QR and mobile `sms:` patterns are **manual customer
+contact handoffs**: they open the submitting operator's phone/Messages app and neither send nor
+prove delivery to a staff recipient. They cannot be the primary safeguard against an unseen job.
+
+**Decision required:** Define the smallest reliable staff-alert policy before implementation:
+
+- Which customer-originated events require an immediate alert (at minimum, a newly created public
+  request), which role or responsible person is the accountable recipient, and how Owner/Admin
+  fallback works when that person is unavailable.
+- Whether the pilot's primary channel is real device push, provider-delivered internal SMS, or a
+  deliberately configured combination; define delivery failure, retry, and escalation rather than
+  treating a launched native app as delivery.
+- If automated internal SMS is selected, establish verified staff phone enrollment, explicit opt-in
+  and opt-out handling, recipient de-duplication, after-hours/quiet-hours policy, message content
+  minimization, provider cost/credentials, durable delivery attempts, and a safe fallback channel.
+- Whether a desktop QR/mobile SMS-compose action is retained only as an optional **manual
+  escalation** after the request is saved. It must identify the actual sender and recipients, require
+  a deliberate send, and never claim that all Owners/Admins were notified.
+
+**Done when:** A public-intake submission has a durable, privacy-safe routed-alert record and a
+verified pilot path that reaches its accountable staff recipient or produces an actionable failure/
+escalation state. The request list/badge remains the authoritative backlog; a manual QR or native
+SMS launch is supplementary only. Coverage proves recipient selection, actor exclusion,
+mute/eligibility/off-season behavior where applicable, duplicate suppression, failure handling,
+and that no customer data beyond the minimum notification payload is exposed.
+
+### GAP-065 — Owner/Admin internal financial-review work is hard to discover from requests
+
+**Status:** Needs decision
+**Severity:** P1
+**Area:** Request List, Office Review navigation, and Actual Work review context
+
+A current **Actual Work draft** correctly is not itself review work. However, when a request also
+has a prior submitted, unreviewed visit, `RequestDetailActualWorkSection` suppresses the entire
+`ActualWorkHistoryCard` while the current draft is editable. The card contains the wide-viewport
+**Open in workspace** route to that submitted visit's Owner/Admin financial-review surface, so the
+request collapses to a count such as “1 prior visit locked” with no route to review it. Separately,
+a submitted, unreviewed visit has no factual cue in the normal request queue, and the
+Owner/Admin-only **Actual Work Review** destination is nested in the `Views` menu under Office
+Review. It appears as an actionable destination only when Office Review has work.
+
+**Decision required:** Define the smallest discovery treatment without merging Office Review into
+customer-promise risk:
+
+- Whether a request with at least one submitted, unreviewed visit receives a quiet, factual
+  **Internal review pending** cue in the normal Owner/Admin queue, and whether selecting that cue
+  opens Request Detail's Owner/Admin review workspace or the account-wide Actual Work Review queue.
+- Restore the submitted-visit history and its existing **Open in workspace** route when a current
+  Draft is also present; the Draft must not hide earlier locked records or prevent their review.
+- Whether Owner/Admin navigation needs a persistent, clearly named **Office Review** affordance
+  (including its empty state), rather than relying on a nested `Views` menu item that becomes
+  actionable only when its aggregate is non-zero.
+- The server-authoritative projection needed for any row cue. The client must not infer financial
+  review state from local request lifecycle, visit/draft presence, or queue membership.
+
+**Guardrails:** Do not show this cue for a Draft, a reviewed visit, an Operator/Viewer, or a
+terminal request with no unreviewed submitted visit. Do not change request ranking, queue counts,
+attention severity, lifecycle status, or financial-review authorization. Office Review remains
+separate from Needs Attention and customer communication.
+
+**Done when:** An Owner/Admin can discover pending internal financial review from both the normal
+request workflow and a clearly named Office Review destination. A Draft — not submitted is
+truthfully not presented as review work, but it does not hide an earlier submitted/unreviewed visit
+or its review route. Focused coverage proves the submitted/unreviewed, submitted/reviewed,
+draft-plus-prior-visit, role, empty-state, and navigation cases.
 
 ### GAP-037 — Pilot has no weekly, evidence-based value report
 

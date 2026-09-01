@@ -846,12 +846,15 @@ export function TriagePanel({ detail, onDetailUpdated, bare = false, strip = fal
         </label>
         {canEdit ? (
           <div className="relative">
+            {/* Restrained configuration checkmark: internal priority always has an effective
+                value (default Routine), so the mark is persistent. */}
+            <Check className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ophalo-muted)]" aria-hidden="true" />
             <select
               id="internal-priority-strip-select"
               value={displayPriority ?? ""}
               disabled={prioritySubmitting || priorityConflictDisabled}
               onChange={(e) => void handlePriorityChange(e.target.value || null)}
-              className={`w-full appearance-none rounded-lg border bg-[var(--ophalo-card)] pl-3 pr-7 py-2 text-base min-[1001px]:text-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)] focus:border-[var(--keep-accent)] ${
+              className={`w-full appearance-none rounded-lg border bg-[var(--ophalo-card)] pl-8 pr-7 py-2 text-base min-[1001px]:text-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)] focus:border-[var(--keep-accent)] ${
                 emphasize ? "border-[var(--ophalo-danger)] text-[var(--ophalo-danger)] font-semibold" : "border-[var(--ophalo-border)] text-[var(--ophalo-ink)]"
               }`}
             >
@@ -863,8 +866,12 @@ export function TriagePanel({ detail, onDetailUpdated, bare = false, strip = fal
             <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ophalo-muted)]" aria-hidden="true" />
           </div>
         ) : (
-          <div className={`rounded-lg border px-3 py-2 text-sm ${emphasize ? "border-[var(--ophalo-danger)] text-[var(--ophalo-danger)] font-semibold" : "border-[var(--ophalo-border)] text-[var(--ophalo-ink)]"}`}>
-            {priorityLabel}
+          <div className="flex flex-col gap-0.5">
+            <span className={`flex items-center gap-1.5 text-sm ${emphasize ? "text-[var(--ophalo-danger)] font-semibold" : "text-[var(--ophalo-ink)]"}`}>
+              <Check className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" aria-hidden="true" />
+              {priorityLabel}
+            </span>
+            <span className="text-xs text-[var(--ophalo-muted)]">Read only</span>
           </div>
         )}
         {priorityError && (

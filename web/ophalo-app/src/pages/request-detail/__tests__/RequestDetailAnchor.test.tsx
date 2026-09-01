@@ -188,7 +188,7 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     expect(grid).not.toBeNull();
     // Only the three top-level field labels — not the nested date-editor popover's own labels.
     const labels = Array.from(grid.querySelectorAll(":scope > div > label")).map((el) => el.textContent);
-    expect(labels).toEqual(["Internal priority", "Planned work date", "Set internal follow-up"]);
+    expect(labels).toEqual(["Internal priority", "Planned work date", "Internal follow-up (optional)"]);
 
     // Not a passive metadata strip — no card chrome, one compact three-column row on desktop.
     expect(grid.className).toContain("sm:grid-cols-3");
@@ -205,8 +205,8 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
 
     expect(screen.getByRole("combobox", { name: "Internal priority" })).toBeInTheDocument();
     expect((screen.getByRole("combobox", { name: "Internal priority" }) as HTMLSelectElement).value).toBe("");
-    expect(screen.getByText("Set planned work date…")).toBeInTheDocument();
-    expect(screen.getByText("Set internal follow-up…")).toBeInTheDocument();
+    expect(screen.getByText("Set planned date")).toBeInTheDocument();
+    expect(screen.getByText("Set follow-up date")).toBeInTheDocument();
     expect(screen.queryByText("Not planned")).not.toBeInTheDocument();
     expect(screen.queryByText("No follow-up")).not.toBeInTheDocument();
   });
@@ -226,9 +226,9 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     expect(prioritySelect.className).toContain("text-[var(--ophalo-danger)]");
 
     expect(screen.getByRole("button", { name: "Planned work date: Aug 29, 2026" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Set internal follow-up: Aug 26, 2026" })).toBeInTheDocument();
-    expect(screen.queryByText("Set planned work date…")).not.toBeInTheDocument();
-    expect(screen.queryByText("Set internal follow-up…")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Internal follow-up (optional): Aug 26, 2026" })).toBeInTheDocument();
+    expect(screen.queryByText("Set planned date")).not.toBeInTheDocument();
+    expect(screen.queryByText("Set follow-up date")).not.toBeInTheDocument();
 
     // Still a single outer Anchor card — Row 4 adds a top separator, not a nested bordered box.
     expect(container.querySelectorAll(".rounded-xl.border").length).toBe(1);
@@ -245,7 +245,7 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     renderAnchor(detail);
 
     expect(screen.getByText("Planned work date")).toBeInTheDocument();
-    expect(screen.getByText("Set internal follow-up")).toBeInTheDocument();
+    expect(screen.getByText("Internal follow-up (optional)")).toBeInTheDocument();
     expect(screen.getByText("Aug 29, 2026")).toBeInTheDocument();
     expect(screen.getByText("Aug 26, 2026")).toBeInTheDocument();
     // Read-only: not an interactive trigger.
@@ -263,7 +263,7 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     const { container } = renderAnchor(detail);
 
     expect(screen.queryByText("Planned work date")).not.toBeInTheDocument();
-    expect(screen.queryByText("Set internal follow-up")).not.toBeInTheDocument();
+    expect(screen.queryByText("Internal follow-up (optional)")).not.toBeInTheDocument();
     // Priority always renders (Routine is a real value, not an unset state).
     expect(screen.getByText("Internal priority")).toBeInTheDocument();
     const grid = container.querySelector(".mt-3.grid")!;

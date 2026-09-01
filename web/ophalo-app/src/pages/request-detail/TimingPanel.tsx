@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CalendarDays, Check, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
 import {
@@ -71,8 +71,31 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
     setExpandedEditor(which);
   }
 
+  // Refs for keyboard recovery (RD-059A): first editor field is focused on open; Escape and
+  // Cancel close the editor and return focus to the disclosure trigger.
+  const followUpTriggerRef = useRef<HTMLButtonElement>(null);
+  const plannedTriggerRef = useRef<HTMLButtonElement>(null);
+  const followUpDateRef = useRef<HTMLInputElement>(null);
+  const plannedDateRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (expandedEditor === "followUp") followUpDateRef.current?.focus();
+    else if (expandedEditor === "planned") plannedDateRef.current?.focus();
+  }, [expandedEditor]);
+
   function closeEditor() {
+    const which = expandedEditor;
     setExpandedEditor(null);
+    if (which === "followUp") followUpTriggerRef.current?.focus();
+    else if (which === "planned") plannedTriggerRef.current?.focus();
+  }
+
+  function handleEditorKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeEditor();
+    }
   }
 
   async function handleSetFollowUp(e: React.FormEvent) {
@@ -169,6 +192,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
       <div>
         <label htmlFor="follow-up-date" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Date</label>
         <input
+          ref={followUpDateRef}
           id="follow-up-date"
           type="date"
           value={editorFollowUpDate}
@@ -242,30 +266,33 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
             readers. The label stays a persistent visual heading; the button carries its own
             aria-label with the value. */}
         <label className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">
-          Set internal follow-up
+          Internal follow-up (optional)
         </label>
         {canSetFollowUpOn ? (
           <div className="relative">
             <button
+              ref={followUpTriggerRef}
               type="button"
               aria-expanded={expandedEditor === "followUp"}
               aria-controls="timing-followup-editor"
-              aria-label={`Set internal follow-up: ${hasFollowUp ? formatDateOnly(detail.followUpOnDate!) : "not set"}`}
+              aria-label={`Internal follow-up (optional): ${hasFollowUp ? formatDateOnly(detail.followUpOnDate!) : "not set"}`}
               onClick={() => expandedEditor === "followUp" ? closeEditor() : openEditor("followUp")}
-              className={`w-full flex items-center justify-between gap-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-left text-sm transition-colors hover:border-[var(--keep-accent)] ${FOCUS_RING} ${
-                hasFollowUp ? "text-[var(--ophalo-ink)]" : "text-[var(--ophalo-muted)]"
-              }`}
+              className={`w-full flex items-center justify-between gap-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-left text-sm text-[var(--ophalo-ink)] transition-colors hover:border-[var(--keep-accent)] ${FOCUS_RING}`}
             >
-              <span className="truncate" aria-hidden="true">{hasFollowUp ? formatDateOnly(detail.followUpOnDate!) : "Set internal follow-up…"}</span>
+              <span className="flex items-center gap-1.5 truncate" aria-hidden="true">
+                {!hasFollowUp && <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />}
+                <span className="truncate">{hasFollowUp ? formatDateOnly(detail.followUpOnDate!) : "Set follow-up date"}</span>
+              </span>
               {expandedEditor === "followUp" ? <ChevronUp className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />}
             </button>
             <div
               id="timing-followup-editor"
               hidden={expandedEditor !== "followUp"}
+              onKeyDown={handleEditorKeyDown}
               className="absolute z-20 mt-1 w-72 space-y-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 shadow-lg"
             >
               {followUpError && expandedEditor === "followUp" && (
-                <p className={`text-xs ${followUpConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
+                <p role="alert" className={`text-xs ${followUpConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
                   {followUpError}
                 </p>
               )}
@@ -276,8 +303,9 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
         ) : (
           // Read-only: unauthorized to edit, but an existing value is operational planning data
           // and must stay visible, not be hidden because it can't be mutated here.
-          <div className="rounded-lg border border-[var(--ophalo-border)] px-3 py-2 text-sm text-[var(--ophalo-ink)]">
-            {formatDateOnly(detail.followUpOnDate!)}
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm text-[var(--ophalo-ink)]">{formatDateOnly(detail.followUpOnDate!)}</span>
+            <span className="text-xs text-[var(--ophalo-muted)]">Read only</span>
           </div>
         )}
       </div>
@@ -285,6 +313,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
           <div className={bare ? "space-y-2" : "px-4 py-3 space-y-2"}>
             <p className="text-xs text-[var(--ophalo-muted)]">Your internal reminder to check back on this request.</p>
             <button
+              ref={followUpTriggerRef}
               type="button"
               aria-expanded={expandedEditor === "followUp"}
               aria-controls="timing-followup-editor"
@@ -307,7 +336,10 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
                     )}
                   </div>
                 ) : (
-                  <p className="text-sm text-[var(--ophalo-muted)]">Set follow-up</p>
+                  <p className="flex items-center gap-1.5 text-sm text-[var(--ophalo-ink)]">
+                    <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" aria-hidden="true" />
+                    Set follow-up date
+                  </p>
                 )}
               </div>
               <span className="shrink-0 text-[var(--ophalo-muted)]" aria-hidden="true">
@@ -321,9 +353,9 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
             </button>
 
             {/* Inline editor — always in DOM so aria-controls is valid */}
-            <div id="timing-followup-editor" hidden={expandedEditor !== "followUp"}>
+            <div id="timing-followup-editor" hidden={expandedEditor !== "followUp"} onKeyDown={handleEditorKeyDown}>
               {followUpError && expandedEditor === "followUp" && (
-                <p className={`mb-2 text-xs ${followUpConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
+                <p role="alert" className={`mb-2 text-xs ${followUpConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
                   {followUpError}
                 </p>
               )}
@@ -345,7 +377,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
                 )}
                 {followUpClearAction}
                 {followUpError && (
-                  <p className={`text-xs w-full ${followUpConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
+                  <p role="alert" className={`text-xs w-full ${followUpConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
                     {followUpError}
                   </p>
                 )}
@@ -362,6 +394,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
           {hasPlanned ? "Change date" : "Date"}
         </label>
         <input
+          ref={plannedDateRef}
           id="planned-date"
           type="date"
           value={editorPlannedDate}
@@ -410,25 +443,30 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
         {canSetPlannedFor ? (
           <div className="relative">
             <button
+              ref={plannedTriggerRef}
               type="button"
               aria-expanded={expandedEditor === "planned"}
               aria-controls="timing-planned-editor"
               aria-label={`Planned work date: ${hasPlanned ? formatDateOnly(detail.plannedForDate!) : "not set"}`}
               onClick={() => expandedEditor === "planned" ? closeEditor() : openEditor("planned")}
-              className={`w-full flex items-center justify-between gap-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-left text-sm transition-colors hover:border-[var(--keep-accent)] ${FOCUS_RING} ${
-                hasPlanned ? "text-[var(--ophalo-ink)]" : "text-[var(--ophalo-muted)]"
-              }`}
+              className={`w-full flex items-center justify-between gap-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-left text-sm text-[var(--ophalo-ink)] transition-colors hover:border-[var(--keep-accent)] ${FOCUS_RING}`}
             >
-              <span className="truncate" aria-hidden="true">{hasPlanned ? formatDateOnly(detail.plannedForDate!) : "Set planned work date…"}</span>
+              <span className="flex items-center gap-1.5 truncate" aria-hidden="true">
+                {hasPlanned
+                  ? <Check className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
+                  : <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />}
+                <span className="truncate">{hasPlanned ? formatDateOnly(detail.plannedForDate!) : "Set planned date"}</span>
+              </span>
               {expandedEditor === "planned" ? <ChevronUp className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />}
             </button>
             <div
               id="timing-planned-editor"
               hidden={expandedEditor !== "planned"}
+              onKeyDown={handleEditorKeyDown}
               className="absolute z-20 mt-1 w-64 space-y-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 shadow-lg"
             >
               {plannedError && expandedEditor === "planned" && (
-                <p className={`text-xs ${plannedConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
+                <p role="alert" className={`text-xs ${plannedConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
                   {plannedError}
                 </p>
               )}
@@ -437,8 +475,12 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border border-[var(--ophalo-border)] px-3 py-2 text-sm text-[var(--ophalo-ink)]">
-            {formatDateOnly(detail.plannedForDate!)}
+          <div className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-1.5 text-sm text-[var(--ophalo-ink)]">
+              {hasPlanned && <Check className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" aria-hidden="true" />}
+              {formatDateOnly(detail.plannedForDate!)}
+            </span>
+            <span className="text-xs text-[var(--ophalo-muted)]">Read only</span>
           </div>
         )}
       </div>
@@ -446,6 +488,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
           <div className={bare ? "space-y-2" : "px-4 py-3 space-y-2"}>
             <p className="text-xs text-[var(--ophalo-muted)]">When work is scheduled to be performed.</p>
             <button
+              ref={plannedTriggerRef}
               type="button"
               aria-expanded={expandedEditor === "planned"}
               aria-controls="timing-planned-editor"
@@ -458,7 +501,10 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
                     Planned: {formatDateOnly(detail.plannedForDate!)}
                   </p>
                 ) : (
-                  <p className="text-sm text-[var(--ophalo-muted)]">Set planned date</p>
+                  <p className="flex items-center gap-1.5 text-sm text-[var(--ophalo-ink)]">
+                    <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" aria-hidden="true" />
+                    Set planned date
+                  </p>
                 )}
               </div>
               <span className="shrink-0 text-[var(--ophalo-muted)]" aria-hidden="true">
@@ -472,9 +518,9 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
             </button>
 
             {/* Inline editor — always in DOM so aria-controls is valid */}
-            <div id="timing-planned-editor" hidden={expandedEditor !== "planned"}>
+            <div id="timing-planned-editor" hidden={expandedEditor !== "planned"} onKeyDown={handleEditorKeyDown}>
               {plannedError && expandedEditor === "planned" && (
-                <p className={`mb-2 text-xs ${plannedConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
+                <p role="alert" className={`mb-2 text-xs ${plannedConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
                   {plannedError}
                 </p>
               )}
@@ -486,7 +532,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
               <div className="flex flex-wrap items-center gap-3">
                 {plannedClearAction}
                 {plannedError && (
-                  <p className={`text-xs w-full ${plannedConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
+                  <p role="alert" className={`text-xs w-full ${plannedConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
                     {plannedError}
                   </p>
                 )}

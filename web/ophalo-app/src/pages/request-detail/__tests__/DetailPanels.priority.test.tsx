@@ -82,3 +82,31 @@ describe("TriagePanel — priority failure handling (GAP-047)", () => {
     expect(select).toHaveValue("");
   });
 });
+
+describe("TriagePanel strip — internal priority presentation (RD-059A)", () => {
+  function stripDetail(overrides: Partial<KeepRequestDetailResult> = {}): KeepRequestDetailResult {
+    return { ...mockRequestDetails["mock-req-001"], businessPriority: null, ...overrides };
+  }
+
+  it("shows a persistent configuration checkmark for the current value, including default Routine", () => {
+    render(<TriagePanel detail={stripDetail()} onDetailUpdated={vi.fn()} strip />);
+    const control = screen.getByRole("combobox").parentElement as HTMLElement;
+    expect(control.querySelector("svg.lucide-check")).not.toBeNull();
+    expect(screen.getByRole("combobox")).toHaveValue("");
+  });
+
+  it("renders a read-only priority as a muted 'Read only' caption with no editable control", () => {
+    const detail = stripDetail({
+      businessPriority: "urgent",
+      availableActions: {
+        ...mockRequestDetails["mock-req-001"].availableActions,
+        canAddInternalNote: false,
+      },
+    });
+    render(<TriagePanel detail={detail} onDetailUpdated={vi.fn()} strip />);
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.getByText("Read only")).toBeInTheDocument();
+    const value = screen.getByText("Urgent");
+    expect(value.querySelector("svg.lucide-check")).not.toBeNull();
+  });
+});
