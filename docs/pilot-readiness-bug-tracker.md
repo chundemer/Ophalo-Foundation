@@ -34,7 +34,7 @@ Complete each numbered slice with focused automated coverage and a production-ca
 2. **Field-work correctness:** No active item. (GAP-055 Actual Work recorder ownership — resolved across Batches A–D: migration/ownership `b3b3d41`, recorder authorization `d26b955` and `72ce6a5`, audited transfer `c7ce822`, and Owner/Admin recovery UI `de40491`.)
 3. **Phone and capture integrity:** GAP-016, GAP-021, GAP-051, then GAP-025. Consolidate the ADR-444 normalization path before extending fallback customer recognition.
 4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, GAP-049, and GAP-063. First establish shared responsive seams without behavior change; then make Owner/Admin review, lifecycle, attention, and timing actions unmistakable. See [BL137](build-log/137-request-detail-and-queue-usability-handoff.md) for the bounded execution order.
-5. **Request-list core behavior:** GAP-027, then GAP-045, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. The row grammar is now locked: one lifecycle cue, one server-ranked exception cue, and one next-action line. Implement it after the Request Detail safety work; do not merge broad queue redesign into GAP-019/058/059. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
+5. **Request-list core behavior:** GAP-027 and GAP-045 (both resolved), then GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. The row grammar is now locked: one lifecycle cue, one server-ranked exception cue, and one next-action line. Implement it after the Request Detail safety work; do not merge broad queue redesign into GAP-019/058/059. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
 6. **Pilot operating loop and final usability review:** GAP-064 (after GAP-039), GAP-037, GAP-038, and GAP-054. Establish a reliable new-customer-request alert path before relying on intake to create live work, then deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
 
 ## Active Work
@@ -342,11 +342,23 @@ re-ranking or broad queue redesign folded into the Request Detail slices.
 
 ### GAP-045 — Default Queue language does not explain work scope or prioritization
 
-**Status:** Open
+**Status:** Resolved (documentation-only) — the shipped UI already satisfies the substance. The
+Owner/Admin primary tab is titled **All Work** with the supporting subtitle "Open requests and
+feedback requiring review, ranked with customer promises needing attention first." Server
+queue/ranking authority is unchanged. This landed with the attention-first landing work (GAP-057);
+no further UI change is warranted.
 **Severity:** P1
 **Area:** Request-list orientation
 
-Replace implementation language with the locked Owner/Admin label **All work** and clear supporting copy explaining that open requests and review work are ranked with customer promises needing attention first. Keep server queue/ranking authority unchanged.
+Intent: replace implementation language with the locked Owner/Admin label **All Work** and clear
+supporting copy explaining that open requests and review work are ranked with customer promises
+needing attention first, with server queue/ranking authority unchanged.
+
+The controlling decision is **UI-004 (production, 2026-08-21)**: title-case **All Work** plus that
+exact subtitle. The earlier ADR-449 (2026-07-25) used lowercase "All work"; the tracker inherited
+the stale casing — it is not a product gap. Do not change labels, copy placement, server ranking,
+or navigation. UI-004's Office Review discoverability requirement is out of scope here and stays
+with GAP-065.
 
 ### GAP-042 — Authenticated request work lacks visible business identity
 

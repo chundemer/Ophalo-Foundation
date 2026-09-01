@@ -1,8 +1,11 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-01 — Q-027A (queue row severity treatment) complete (`8ced025`); GAP-027 resolved. The BL137 Request Detail / queue usability sequence is done.
-Next tracker item is GAP-045 (Default Queue language). Handoff detail
-in [BL137](build-log/137-request-detail-and-queue-usability-handoff.md).
+**Last updated:** 2026-09-01 — GAP-045 (Default Queue language) closed as a documentation-only
+resolution: the shipped UI already satisfies its substance (title-case **All Work** tab + the
+"ranked with customer promises needing attention first" subtitle, landed with GAP-057). UI-004
+(2026-08-21) is the controlling decision; the tracker's lowercase "All work" was stale ADR-449
+casing, not a product gap. No UI change. Next tracker item is GAP-042 (authenticated request work
+lacks visible business identity).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
@@ -33,12 +36,17 @@ Q-027A) is **complete**. Per-item detail lives in Git history and the
 [BL137](build-log/137-request-detail-and-queue-usability-handoff.md) resolution notes; GAP-019,
 GAP-058, GAP-059, and GAP-027 are resolved.
 
-**Next batch: GAP-045** — Default Queue language does not explain work scope or prioritization.
-Replace implementation language with the locked Owner/Admin label **All work** and supporting copy
-explaining that open requests and review work are ranked with customer promises needing attention
-first; keep server queue/ranking authority unchanged. After GAP-045 the tracker order continues:
-GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, GAP-053. Do not pull GAP-047, GAP-048,
-GAP-049, filters, history, pagination, or generic queue redesign into these sessions.
+**GAP-045 is resolved (documentation-only).** The shipped UI already meets its substance — the
+Owner/Admin **All Work** tab plus the subtitle "Open requests and feedback requiring review, ranked
+with customer promises needing attention first." UI-004 (2026-08-21) controls the title-case label;
+ADR-449's lowercase "All work" was stale. No labels, copy placement, server ranking, or navigation
+changed. UI-004's Office Review discoverability requirement stays with GAP-065, not GAP-045.
+
+**Next batch: GAP-042** — Authenticated request work lacks visible business identity. Add restrained,
+fresh business-name context to authenticated list/detail views without competing with the
+request/customer, duplicating stale labels, or exposing account identity publicly. After GAP-042 the
+tracker order continues: GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, GAP-053. Do not pull GAP-047,
+GAP-048, GAP-049, filters, history, pagination, or generic queue redesign into these sessions.
 
 ## Deferred next work
 
