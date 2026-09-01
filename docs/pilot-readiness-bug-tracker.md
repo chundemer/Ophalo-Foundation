@@ -149,7 +149,7 @@ mutation-policy change, or changed lifecycle/attention semantics.
 
 ### GAP-058 — Actual Work review and request-completion actions compete on Request Detail
 
-**Status:** Resolved — RD-058A (`c5796e0`), RD-058B-1 (`2ae07d5`), RD-058B-2 (`<pending>`)
+**Status:** Resolved — RD-058A (`c5796e0`), RD-058B-1 (`2ae07d5`), RD-058B-2 (`8e3127d`)
 **Severity:** P1
 **Area:** Request Detail Actual Work review and lifecycle action hierarchy
 
