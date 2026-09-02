@@ -528,6 +528,27 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
         return [.. requestIdsWithNotes];
     }
 
+    public async Task<Dictionary<Guid, int>> GetPendingFinancialReviewCountsAsync(
+        Guid accountId, IReadOnlyList<Guid> requestIds, CancellationToken ct)
+    {
+        // Mirrors EfActualWorkFinancialReviewPersistence.GetUnreviewedQueueAsync exactly: live
+        // submitted / unreviewed / non-superseded visits (soft-delete handled by the global query
+        // filter). Bounded to the caller's already-sliced page; requests with no pending visit are
+        // simply absent from the result.
+        var counts = await dbContext.Set<ActualWork>()
+            .AsNoTracking()
+            .Where(visit => visit.AccountId == accountId
+                && requestIds.Contains(visit.RequestId)
+                && visit.Status == ActualWorkStatus.Submitted
+                && visit.ReviewedAtUtc == null
+                && visit.SupersededAtUtc == null)
+            .GroupBy(visit => visit.RequestId)
+            .Select(g => new { RequestId = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        return counts.ToDictionary(x => x.RequestId, x => x.Count);
+    }
+
     // Only displayable event types are ever fetched — never a full per-row timeline.
     // Visibility.All on MessageAdded excludes internal notes; ExternalContactLogged has
     // no free-text Content field so its label is always derived, never event content.

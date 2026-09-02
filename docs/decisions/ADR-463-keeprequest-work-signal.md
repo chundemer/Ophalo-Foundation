@@ -53,8 +53,27 @@ invoice/payment state.
 
 ## Deferred
 
-Whether an active signal changes queue bucket/ranking or renders as a separate actionable cue is an
-explicit Session 3 UX decision, not embedded in this contract.
+Whether an active signal changes queue bucket/ranking remains out of scope for this contract.
+
+## Amendment — 2026-09-02 (GAP-065 Slice 3a)
+
+The Session 3 UX decision on rendering the `actual_work_needs_office_review` signal as a cue is
+resolved: the request list shows a **quiet, non-interactive Owner/Admin row metadata line**
+("{N} visit(s) need financial review"). The count is the **exact server-authoritative** number of
+live submitted / unreviewed / non-superseded Actual Work visits on the request (same predicate as
+`EfActualWorkFinancialReviewPersistence.GetUnreviewedQueueAsync`), computed as a bounded batched
+projection over the caller's already-sliced list page — never a client-derived value or a re-derived
+predicate. It is gated **identically to the Actual Work Review destination**
+(`ActualWorkFinancialReadApiService.AuthorizeAsync`): Owner/Admin role plus `RequestsOperate`,
+`AccountingManage`, the Price Book, Quotes & Materials entitlement, and account access evaluated
+with the office-financial Off Season context (`RequestImplementsAllowedInOffSeason: false`),
+rejecting a Blocked **or** read-only account. The ordinary request list stays available in Off
+Season, but the destination is read-only there — so an account that cannot open the destination
+(entitlement disabled with retained history, Off Season, past-due grace) shows neither the cue nor
+a dead link. The cue does **not** change queue bucket, ranking, Attention, view counts, or
+normal row-click routing (the row still opens Request Detail). Operators and Viewers never receive
+it. A cross-request, one-row-per-visit review queue remains later work with its own read model,
+authorization, and ranking decision.
 
 ## Rationale
 

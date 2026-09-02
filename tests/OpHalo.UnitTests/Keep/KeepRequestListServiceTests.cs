@@ -26,7 +26,10 @@ public class KeepRequestListServiceTests
         FakeCurrentUser? currentUser = null,
         bool userPermitted = true,
         AccountAccessPosture posture = AccountAccessPosture.FullAccess,
+        AccountAccessPosture? officeFinancialPosture = null,
         bool featureEnabled = true,
+        bool priceBookEntitled = true,
+        IReadOnlySet<string>? deniedPermissionKeys = null,
         IKeepRequestListCursorProtector? cursorProtector = null)
     {
         persistence ??= HappyPathPersistence();
@@ -34,9 +37,10 @@ public class KeepRequestListServiceTests
         return new GetKeepRequestListService(
             persistence,
             currentUser,
-            new FakeUserAccessPolicy(userPermitted),
-            new FakeAccountAccessPolicy(posture),
+            new FakeUserAccessPolicy(userPermitted, deniedPermissionKeys),
+            new FakeAccountAccessPolicy(posture, officeFinancialPosture),
             new FakeFeatureAccessPolicy(featureEnabled),
+            new FakeFeatureAccessResolver(priceBookEntitled),
             new FakeClock(Now),
             cursorProtector ?? new FakeCursorProtector());
     }
@@ -722,6 +726,103 @@ public class KeepRequestListServiceTests
         var call = Assert.Single(p.InternalNotePresenceLookupCalls);
         Assert.Equal(AccountId, call.AccountId);
         Assert.Equal(request.Id, Assert.Single(call.RequestIds));
+    }
+
+    // --- GAP-065 Slice 3a: quiet Owner/Admin financial-review row cue ----------------------------
+
+    private static KeepRequest FinancialReviewCueRequest() =>
+        KeepRequest.CreateFromCustomerIntake(
+            AccountId, Guid.NewGuid(), "Alice", "555-9999", null, "Fix sink", "REF00001", "tok1", Now, 60);
+
+    [Fact]
+    public async Task Execute_pending_financial_review_count_is_folded_for_fully_authorized_owner_admin()
+    {
+        var request = FinancialReviewCueRequest();
+        var p = HappyPathPersistence([request]);
+        p.PendingFinancialReviewCountMap = new() { [request.Id] = 2 };
+
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        var summary = Assert.Single(result.Value.Requests);
+        Assert.Equal(2, summary.PendingFinancialReviewCount);
+
+        var call = Assert.Single(p.PendingFinancialReviewLookupCalls);
+        Assert.Equal(AccountId, call.AccountId);
+        Assert.Equal(request.Id, Assert.Single(call.RequestIds));
+    }
+
+    [Fact]
+    public async Task Execute_pending_financial_review_count_is_zero_when_request_absent_from_map()
+    {
+        var request = FinancialReviewCueRequest();
+        var p = HappyPathPersistence([request]);
+        // Map left empty — no pending visit for this request.
+
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.Equal(0, Assert.Single(result.Value.Requests).PendingFinancialReviewCount);
+    }
+
+    [Fact]
+    public async Task Execute_financial_review_cue_lookup_skipped_without_accounting_manage()
+    {
+        var request = FinancialReviewCueRequest();
+        var p = HappyPathPersistence([request]);
+        p.PendingFinancialReviewCountMap = new() { [request.Id] = 3 };
+
+        var sut = BuildSut(p, deniedPermissionKeys: new HashSet<string> { PermissionKeys.Keep.AccountingManage });
+        var result = await sut.ExecuteAsync();
+
+        Assert.Equal(0, Assert.Single(result.Value.Requests).PendingFinancialReviewCount);
+        Assert.Empty(p.PendingFinancialReviewLookupCalls);
+    }
+
+    [Fact]
+    public async Task Execute_financial_review_cue_lookup_skipped_when_price_book_not_entitled()
+    {
+        var request = FinancialReviewCueRequest();
+        var p = HappyPathPersistence([request]);
+        p.PendingFinancialReviewCountMap = new() { [request.Id] = 3 };
+
+        var sut = BuildSut(p, priceBookEntitled: false);
+        var result = await sut.ExecuteAsync();
+
+        Assert.Equal(0, Assert.Single(result.Value.Requests).PendingFinancialReviewCount);
+        Assert.Empty(p.PendingFinancialReviewLookupCalls);
+    }
+
+    [Fact]
+    public async Task Execute_financial_review_cue_lookup_skipped_for_operator_view()
+    {
+        var request = FinancialReviewCueRequest();
+        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
+        p.PendingFinancialReviewCountMap = new() { [request.Id] = 3 };
+
+        var sut = BuildSut(p, currentUser: AuthenticatedUser());
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "assigned_to_me"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(p.PendingFinancialReviewLookupCalls);
+    }
+
+    [Fact]
+    public async Task Execute_financial_review_cue_lookup_skipped_when_office_financial_access_is_read_only()
+    {
+        var request = FinancialReviewCueRequest();
+        var p = HappyPathPersistence([request]);
+        p.PendingFinancialReviewCountMap = new() { [request.Id] = 3 };
+
+        // Ordinary list read stays fully available; the office-financial context (Off Season,
+        // past-due grace, etc.) evaluates read-only — the destination denies access there, so the
+        // cue must be suppressed and its count query never fired.
+        var sut = BuildSut(p, officeFinancialPosture: AccountAccessPosture.ReadOnly);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, Assert.Single(result.Value.Requests).PendingFinancialReviewCount);
+        Assert.Empty(p.PendingFinancialReviewLookupCalls);
     }
 
     [Theory]
@@ -2436,9 +2537,20 @@ public class KeepRequestListServiceTests
             InternalNotePresenceLookupCalls.Add((accountId, requestIds));
             return Task.FromResult(InternalNotePresenceSet);
         }
+
+        public Dictionary<Guid, int> PendingFinancialReviewCountMap { get; set; } = new();
+        public List<(Guid AccountId, IReadOnlyList<Guid> RequestIds)> PendingFinancialReviewLookupCalls { get; } = new();
+
+        public Task<Dictionary<Guid, int>> GetPendingFinancialReviewCountsAsync(
+            Guid accountId, IReadOnlyList<Guid> requestIds, CancellationToken ct)
+        {
+            PendingFinancialReviewLookupCalls.Add((accountId, requestIds));
+            return Task.FromResult(PendingFinancialReviewCountMap);
+        }
     }
 
-    private sealed class FakeUserAccessPolicy(bool permitted) : IUserAccessPolicy
+    private sealed class FakeUserAccessPolicy(bool permitted, IReadOnlySet<string>? deniedKeys = null)
+        : IUserAccessPolicy
     {
         public bool IsPermitted(
             AccountUserRole role,
@@ -2447,6 +2559,7 @@ public class KeepRequestListServiceTests
             string permissionKey)
         {
             if (!permitted) return false;
+            if (deniedKeys is not null && deniedKeys.Contains(permissionKey)) return false;
             if (role == AccountUserRole.Viewer &&
                 (permissionKey == PermissionKeys.Keep.RequestsOperate
                     || permissionKey == PermissionKeys.Keep.InternalNotesAdd))
@@ -2455,10 +2568,26 @@ public class KeepRequestListServiceTests
         }
     }
 
-    private sealed class FakeAccountAccessPolicy(AccountAccessPosture posture) : IAccountAccessPolicy
+    private sealed class FakeFeatureAccessResolver(bool enabled) : IAccountFeatureAccessResolver
     {
-        public AccountAccessDecision Evaluate(AccountAccessContext context) =>
-            new(posture, AccountAccessReason.None, null);
+        public Task<bool> IsEnabledAsync(
+            Guid accountId, AccountFeatureAccessContext? context, string featureKey, CancellationToken ct) =>
+            Task.FromResult(enabled);
+    }
+
+    private sealed class FakeAccountAccessPolicy(
+        AccountAccessPosture posture,
+        AccountAccessPosture? officeFinancialPosture = null) : IAccountAccessPolicy
+    {
+        public AccountAccessDecision Evaluate(AccountAccessContext context)
+        {
+            // The office-financial call site (GAP-065 Slice 3a cue gate, and Actual Work Review)
+            // passes RequestImplementsAllowedInOffSeason: false; the ordinary list read passes true.
+            var effective = !context.RequestImplementsAllowedInOffSeason && officeFinancialPosture is { } p
+                ? p
+                : posture;
+            return new(effective, AccountAccessReason.None, null);
+        }
     }
 
     private sealed class FakeFeatureAccessPolicy(bool enabled) : IFeatureAccessPolicy

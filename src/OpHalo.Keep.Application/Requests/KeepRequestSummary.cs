@@ -21,6 +21,7 @@ public sealed record KeepRequestSummary(
     KeepRequestOriginalSummaryInfo OriginalSummary,
     KeepRequestPreviewInfo? LatestActivity,
     bool HasInternalNote,
+    int PendingFinancialReviewCount,
     KeepRequestActionsInfo Actions,
     KeepRequestParticipationInfo Participation,
     KeepRequestNotificationInfo CurrentUserNotification,

@@ -1546,4 +1546,101 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
 
         Assert.DoesNotContain(requestId, presence);
     }
+
+    // --- GAP-065 Slice 3a: GetPendingFinancialReviewCountsAsync -----------------------------------
+
+    private static ActualWork SubmittedZeroLineVisit(Guid accountId, Guid requestId, Guid userId, DateTime at)
+    {
+        var visit = ActualWork.Create(accountId, requestId, userId).Value;
+        Assert.True(visit.Submit(at, ActualWorkOutcome.DiagnosticOnly, "Visited").IsSuccess);
+        return visit;
+    }
+
+    [Fact]
+    public async Task GetPendingFinancialReviewCountsAsync_counts_only_live_submitted_unreviewed_visits()
+    {
+        Guid requestWithPending, requestWithNone;
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "Review Cue Customer", "0499777020");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var req1 = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id, "Review Cue Customer", "0499777020", null,
+                "Two pending visits", "PREV0020", "prev-tok-020", Now, 60);
+            var req2 = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id, "Review Cue Customer", "0499777020", null,
+                "Nothing pending", "PREV0021", "prev-tok-021", Now, 60);
+            seedCtx.Set<KeepRequest>().AddRange(req1, req2);
+            await seedCtx.SaveChangesAsync();
+
+            // req1: 2 live submitted/unreviewed visits (count), plus one reviewed and one
+            // superseded (both excluded). The superseding successor is still a Draft, so it also
+            // proves a non-Submitted visit is excluded (only one open Draft per request is allowed).
+            var pendingA = SubmittedZeroLineVisit(AccountId, req1.Id, AccountOwnerAccountUserId, Now);
+            var pendingB = SubmittedZeroLineVisit(AccountId, req1.Id, AccountOwnerAccountUserId, Now.AddMinutes(1));
+
+            var reviewed = SubmittedZeroLineVisit(AccountId, req1.Id, AccountOwnerAccountUserId, Now.AddMinutes(2));
+            Assert.True(reviewed.MarkReviewed(
+                AccountOwnerAccountUserId, null, Now.AddMinutes(3),
+                financialDataComplete: true, zeroLineDispositionSatisfied: true).IsSuccess);
+
+            var superseded = SubmittedZeroLineVisit(AccountId, req1.Id, AccountOwnerAccountUserId, Now.AddMinutes(4));
+            var successor = ActualWork.Create(AccountId, req1.Id, AccountOwnerAccountUserId).Value;
+
+            seedCtx.Set<ActualWork>().AddRange(pendingA, pendingB, reviewed, superseded, successor);
+            await seedCtx.SaveChangesAsync();
+
+            Assert.True(superseded.Supersede(
+                successor.Id, AccountOwnerAccountUserId, "Recorded in error", Now.AddMinutes(5)).IsSuccess);
+            await seedCtx.SaveChangesAsync();
+
+            requestWithPending = req1.Id;
+            requestWithNone = req2.Id;
+        }
+
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        var counts = await sut.GetPendingFinancialReviewCountsAsync(
+            AccountId, [requestWithPending, requestWithNone], CancellationToken.None);
+
+        Assert.Equal(2, counts[requestWithPending]);
+        Assert.DoesNotContain(requestWithNone, counts);
+    }
+
+    [Fact]
+    public async Task GetPendingFinancialReviewCountsAsync_is_account_scoped()
+    {
+        Guid requestId;
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "Cross Account Cue Customer", "0499777022");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id, "Cross Account Cue Customer", "0499777022", null,
+                "Owned by AccountId", "PREV0022", "prev-tok-022", Now, 60);
+            seedCtx.Set<KeepRequest>().Add(request);
+            await seedCtx.SaveChangesAsync();
+
+            seedCtx.Set<ActualWork>().Add(
+                SubmittedZeroLineVisit(AccountId, request.Id, AccountOwnerAccountUserId, Now));
+            await seedCtx.SaveChangesAsync();
+
+            requestId = request.Id;
+        }
+
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        var counts = await sut.GetPendingFinancialReviewCountsAsync(
+            SecondAccountId, [requestId], CancellationToken.None);
+
+        Assert.DoesNotContain(requestId, counts);
+    }
 }

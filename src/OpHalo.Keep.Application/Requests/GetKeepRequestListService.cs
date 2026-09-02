@@ -2,6 +2,7 @@ using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
+using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities;
@@ -18,6 +19,7 @@ public sealed class GetKeepRequestListService(
     IUserAccessPolicy userAccessPolicy,
     IAccountAccessPolicy accountAccessPolicy,
     IFeatureAccessPolicy featurePolicy,
+    IAccountFeatureAccessResolver featureAccessResolver,
     IClock clock,
     IKeepRequestListCursorProtector cursorProtector)
 {
@@ -281,6 +283,40 @@ public sealed class GetKeepRequestListService(
             accountSnapshot.Purpose,
             PermissionKeys.Keep.InternalNotesAdd);
 
+        // GAP-065 Slice 3a / ADR-463 (amended): the quiet Owner/Admin "N visit(s) need financial
+        // review" row cue is gated identically to the Actual Work Review destination
+        // (ActualWorkFinancialReadApiService.AuthorizeAsync) — Owner/Admin role, RequestsOperate,
+        // AccountingManage, the Price Book, Quotes & Materials entitlement, and account access
+        // evaluated with the office-financial Off Season context (RequestImplementsAllowedInOffSeason:
+        // false) that rejects a Blocked *or* read-only account. Unlike the list read itself, which
+        // stays available in Off Season, the destination is read-only there — so the cue must not
+        // appear when the account cannot open it. A denied gate never triggers the count lookup.
+        var financialCueAccessDecision = accountAccessPolicy.Evaluate(new AccountAccessContext(
+            accountSnapshot.LifecycleState,
+            accountSnapshot.Purpose,
+            accountSnapshot.CommercialState,
+            accountSnapshot.TrialEndsAtUtc,
+            accountSnapshot.PastDueGraceEndsAtUtc,
+            accountSnapshot.OperatingMode,
+            RequestImplementsAllowedInOffSeason: false,
+            clock.UtcNow));
+
+        var canSeeFinancialReviewCue =
+            isOwnerOrAdmin
+            && canOperate
+            && !financialCueAccessDecision.IsBlocked
+            && !financialCueAccessDecision.IsReadOnly
+            && userAccessPolicy.IsPermitted(
+                userSnapshot.Role,
+                userSnapshot.MembershipStatus,
+                accountSnapshot.Purpose,
+                PermissionKeys.Keep.AccountingManage)
+            && await featureAccessResolver.IsEnabledAsync(
+                currentUser.AccountId,
+                new AccountFeatureAccessContext(accountSnapshot.Plan),
+                CapabilityPackageFeatureKeys.PriceBookQuotesMaterials,
+                ct);
+
         IReadOnlyList<KeepRequestSummary> page;
         bool hasMore;
         IReadOnlyList<KeepRequest> historyPageEntities = [];
@@ -324,7 +360,7 @@ public sealed class GetKeepRequestListService(
                     histParticipants.GetValueOrDefault(r.Id), normalizedView))
                 .ToList();
 
-            page = await ApplyPagePreviewsAsync(page, canViewInternalNotes, ct);
+            page = await ApplyPagePreviewsAsync(page, canViewInternalNotes, canSeeFinancialReviewCue, ct);
         }
         else
         {
@@ -395,7 +431,7 @@ public sealed class GetKeepRequestListService(
             hasMore = sliced.Count > limit;
             page = sliced.Take(limit).ToList();
 
-            page = await ApplyPagePreviewsAsync(page, canViewInternalNotes, ct);
+            page = await ApplyPagePreviewsAsync(page, canViewInternalNotes, canSeeFinancialReviewCue, ct);
         }
 
         // --- Next cursor ---
@@ -636,7 +672,10 @@ public sealed class GetKeepRequestListService(
     // Batch preview + internal-note-presence lookup for only the already-sliced page
     // (GAP-007b/ADR-450) — never per-row, never for the full candidate set used for ranking/sorting.
     private async Task<IReadOnlyList<KeepRequestSummary>> ApplyPagePreviewsAsync(
-        IReadOnlyList<KeepRequestSummary> page, bool canViewInternalNotes, CancellationToken ct)
+        IReadOnlyList<KeepRequestSummary> page,
+        bool canViewInternalNotes,
+        bool canSeeFinancialReviewCue,
+        CancellationToken ct)
     {
         if (page.Count == 0)
             return page;
@@ -650,14 +689,21 @@ public sealed class GetKeepRequestListService(
             ? await persistence.GetInternalNotePresenceAsync(currentUser.AccountId, requestIds, ct)
             : [];
 
-        if (previews.Count == 0 && notePresence.Count == 0)
+        // GAP-065 Slice 3a: same gating discipline — the count query fires only for a caller that
+        // has cleared the full Owner/Admin financial-review authorization gate.
+        var pendingFinancialReviewCounts = canSeeFinancialReviewCue
+            ? await persistence.GetPendingFinancialReviewCountsAsync(currentUser.AccountId, requestIds, ct)
+            : [];
+
+        if (previews.Count == 0 && notePresence.Count == 0 && pendingFinancialReviewCounts.Count == 0)
             return page;
 
         return page
             .Select(s => s with
             {
                 LatestActivity = previews.TryGetValue(s.Id, out var preview) ? preview : null,
-                HasInternalNote = notePresence.Contains(s.Id)
+                HasInternalNote = notePresence.Contains(s.Id),
+                PendingFinancialReviewCount = pendingFinancialReviewCounts.GetValueOrDefault(s.Id)
             })
             .ToList();
     }
@@ -799,6 +845,7 @@ public sealed class GetKeepRequestListService(
             OriginalSummary: new KeepRequestOriginalSummaryInfo(r.Description),
             LatestActivity: null,
             HasInternalNote: false,
+            PendingFinancialReviewCount: 0,
             Actions: actions,
             Participation: participationInfo,
             CurrentUserNotification: notificationInfo,

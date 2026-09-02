@@ -108,6 +108,19 @@ public interface IKeepRequestListPersistence
     /// </summary>
     Task<HashSet<Guid>> GetInternalNotePresenceAsync(
         Guid accountId, IReadOnlyList<Guid> requestIds, CancellationToken ct);
+
+    /// <summary>
+    /// Returns the count of live submitted / unreviewed / non-superseded Actual Work visits per
+    /// request id (GAP-065 Slice 3a), for the caller's already-sliced page only. Requests with no
+    /// pending visit are absent from the dictionary; the caller reads a missing key as 0. The
+    /// predicate mirrors <c>EfActualWorkFinancialReviewPersistence.GetUnreviewedQueueAsync</c>
+    /// exactly (<c>Status == Submitted &amp;&amp; ReviewedAtUtc == null &amp;&amp; SupersededAtUtc == null</c>,
+    /// with the global soft-delete filter); it is never re-derived elsewhere. accountId scopes the
+    /// query against cross-account data corruption. Only called when the caller has cleared the
+    /// full Owner/Admin financial-review authorization gate.
+    /// </summary>
+    Task<Dictionary<Guid, int>> GetPendingFinancialReviewCountsAsync(
+        Guid accountId, IReadOnlyList<Guid> requestIds, CancellationToken ct);
 }
 
 /// <summary>Selects the active (non-history) view for GetActiveViewRequestsAsync (ADR-239).</summary>

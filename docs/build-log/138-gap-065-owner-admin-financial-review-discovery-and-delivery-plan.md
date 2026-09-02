@@ -453,8 +453,68 @@ note-dirty + form-dirty guard, keep-editing, review-next target, no-wraparound),
 `ActualWorkWorkspacePage.officeRegion.test.tsx` (page-level switcher + post-mutation reload) and a
 one-line `onSwitchVisit` prop in `ActualWorkWorkspacePage.test.tsx`.
 
+## Slice 3 — preflight decisions (2026-09-02, accepted)
+
+Split into three micro-batches:
+
+- **3a (server):** the quiet Owner/Admin request-row count cue — server projection + API contract +
+  ADR-463 amendment. **Implemented, see below.**
+- **3b (client):** the frontend type + Owner/Admin-gated `RequestRow` metadata line + tests.
+- **3c (documentation-only):** the existing `actual_work_review` "Actual Work Review" tab in the
+  Office Review group already satisfies BL138's "clearly named, persistent destination with a
+  truthful empty state" requirement (server-authoritative count badge, Owner/Admin gating,
+  `ActualWorkReviewQueueList` empty state "Nothing to review / Submitted visits awaiting review
+  will appear here."). No label, copy, navigation, or authorization change — the locked UI-004
+  label "Actual Work Review" is kept. Closed as documentation-only.
+
+Cue shape: **exact server-authoritative count** (not the presence bit). Gating: **identical to the
+Actual Work Review destination** — Owner/Admin + `RequestsOperate` + `AccountingManage` + Price Book
+entitlement + account access under the office-financial Off Season context
+(`RequestImplementsAllowedInOffSeason: false`, neither Blocked nor read-only). An account that
+cannot open the destination — entitlement disabled with retained history, or Off Season — must show
+neither the cue nor a dead link. Quiet, non-interactive; no ranking/Attention/count/routing change;
+never for Operators/Viewers.
+
+## Slice 3a — implemented locally, pending commit (2026-09-02)
+
+Server only. **4 production + 3 test files; unit suite green, architecture 14/14, touched
+integration classes green.** No migration, no DI registration change (the interface is extended,
+not new). The commit hash is recorded here in the later hash-follow-up commit.
+
+- **Contract** — `KeepRequestSummary` gains `int PendingFinancialReviewCount` (serialises as
+  `pendingFinancialReviewCount`; 0 for every caller that has not cleared the full gate).
+  `IKeepRequestListPersistence.GetPendingFinancialReviewCountsAsync(accountId, requestIds, ct)`
+  returns a per-request-id count dictionary for the caller's already-sliced page only; a request
+  with no pending visit is absent (caller reads a missing key as 0).
+- **Gate** — `GetKeepRequestListService` computes `canSeeFinancialReviewCue` next to
+  `canViewInternalNotes`: `isOwnerOrAdmin && canOperate && !accessDecision.IsBlocked &&
+  !accessDecision.IsReadOnly && IsPermitted(AccountingManage) && await
+  featureAccessResolver.IsEnabledAsync(..., CapabilityPackageFeatureKeys.PriceBookQuotesMaterials)`.
+  `accessDecision` is a **second** `accountAccessPolicy.Evaluate` with
+  `RequestImplementsAllowedInOffSeason: false` — the list's own gate uses `true` and only rejects
+  Blocked, but the destination is read-only in Off Season, so the cue must match that. New ctor
+  dependency `IAccountFeatureAccessResolver` (already DI-registered). A denied gate never triggers
+  the count query.
+- **Fold** — `ApplyPagePreviewsAsync` gains a `canSeeFinancialReviewCue` parameter; when true it
+  calls the new read with the sliced page ids and folds `PendingFinancialReviewCount` via
+  `GetValueOrDefault`. The early-return guard now also checks the new map.
+- **Query** — `KeepRequestListPersistence.GetPendingFinancialReviewCountsAsync`: EF `GroupBy` over
+  `Set<ActualWork>()` with `AccountId == accountId && requestIds.Contains(RequestId) && Status ==
+  Submitted && ReviewedAtUtc == null && SupersededAtUtc == null` (soft-delete via the global query
+  filter) — mirrors `EfActualWorkFinancialReviewPersistence.GetUnreviewedQueueAsync` exactly, never
+  re-derives the predicate elsewhere.
+- **ADR-463 amended** (§"Amendment — 2026-09-02") + decision-index row updated.
+
+Files: `KeepRequestSummary.cs`, `IKeepRequestListPersistence.cs`, `GetKeepRequestListService.cs`,
+`KeepRequestListPersistence.cs`; tests `KeepRequestListServiceTests.cs` (fake extension + 5 gate
+cases), `KeepPersistenceProofTests.cs` (2 real-query proofs: state exclusion + account scope),
+`KeepRequestListQueryApiTests.cs` (1 end-to-end contract test: entitled Owner sees `2`,
+Operator/Viewer see `0`).
+
 ## Handoff instruction
 
-Slice 1B-server (`faf7b64`) and Slice 1B-client (`e27c48c`) are committed; Slice 2 is committed (`6ab880b`). The remaining slice is **Slice 3** (§"Slice 3 — queue discoverability"),
-a separate preflight: the quiet server-authoritative request-row count cue and a clearly named,
-persistent Office/Actual Work Review destination.
+Slice 1B-server (`faf7b64`), Slice 1B-client (`e27c48c`), and Slice 2 (`6ab880b`) are committed.
+**Slice 3a is implemented locally, pending commit** (its hash lands in the later hash-follow-up).
+Slice 3c is closed documentation-only. The remaining slice is **Slice 3b** — the client type plus
+the Owner/Admin-gated `RequestRow` "{N} visit(s) need financial review" metadata line (quiet,
+non-interactive) and focused frontend tests.

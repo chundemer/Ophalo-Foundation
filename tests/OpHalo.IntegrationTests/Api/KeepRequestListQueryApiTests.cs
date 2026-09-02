@@ -911,6 +911,63 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.Equal(JsonValueKind.Null, row.GetProperty("latestActivity").ValueKind);
     }
 
+    // --- GAP-065 Slice 3a: quiet Owner/Admin financial-review row cue ----------
+
+    [Fact]
+    public async Task List_Row_PendingFinancialReviewCount_IsServerAuthoritative_ForAuthorizedOwnerOnly()
+    {
+        var now = DateTime.UtcNow;
+        Guid requestId;
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var account = await db.Accounts.FirstAsync();
+            var owner = await db.AccountUsers.FirstAsync(u => u.AccountId == account.Id && u.Role == AccountUserRole.Owner);
+
+            // The row cue is gated identically to the Actual Work Review destination — it needs the
+            // Price Book, Quotes & Materials entitlement in addition to the Owner/Admin role.
+            var enrollment = AccountCapabilityPackageEnrollment.Enroll(
+                account.Id, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, owner.Id, now).Value;
+            db.AccountCapabilityPackageEnrollments.Add(enrollment);
+
+            var customer = KeepCustomer.Create(account.Id, "Slice3a Customer", "0499000651");
+            db.Set<KeepCustomer>().Add(customer);
+            await db.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                account.Id, customer.Id, "Slice3a Customer", "0499000651", null,
+                "Two pending financial reviews", "SLICE3A1", "slice3a_token", now, 60);
+            db.Set<KeepRequest>().Add(request);
+            await db.SaveChangesAsync();
+
+            foreach (var minute in new[] { 0, 1 })
+            {
+                var visit = ActualWork.Create(account.Id, request.Id, owner.Id).Value;
+                Assert.True(visit.Submit(now.AddMinutes(minute), ActualWorkOutcome.DiagnosticOnly, "Visited").IsSuccess);
+                db.Set<ActualWork>().Add(visit);
+            }
+            await db.SaveChangesAsync();
+
+            requestId = request.Id;
+        }
+
+        var ownerRow = (await (await GetAsync("/keep/requests")).Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("requests").EnumerateArray().First(r => r.GetProperty("id").GetGuid() == requestId);
+        Assert.Equal(2, ownerRow.GetProperty("pendingFinancialReviewCount").GetInt32());
+
+        var operatorBody = await (await GetAsAsync("/keep/requests", _operatorCookie)).Content.ReadFromJsonAsync<JsonElement>();
+        var operatorRow = operatorBody.GetProperty("requests").EnumerateArray()
+            .FirstOrDefault(r => r.GetProperty("id").GetGuid() == requestId);
+        // Operator may not see the row at all (MyWork scope); when present the cue must read 0.
+        if (operatorRow.ValueKind != JsonValueKind.Undefined)
+            Assert.Equal(0, operatorRow.GetProperty("pendingFinancialReviewCount").GetInt32());
+
+        var viewerRow = (await (await GetAsAsync("/keep/requests", _viewerCookie)).Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("requests").EnumerateArray().First(r => r.GetProperty("id").GetGuid() == requestId);
+        Assert.Equal(0, viewerRow.GetProperty("pendingFinancialReviewCount").GetInt32());
+    }
+
     // --- Response DTOs ----------------------------------------------------------
 
     private sealed record ListResponseBody(

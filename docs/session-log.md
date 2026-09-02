@@ -1,8 +1,11 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-02 — **GAP-065 Slice 1B-server (`faf7b64`) and Slice 1B-client
-(`e27c48c`) are committed; Slice 2 (wide workspace pending-visit switcher + continuation) is
-committed (`6ab880b`, 2026-09-02).** Submitted visits remain separate immutable field records;
+**Last updated:** 2026-09-02 — **GAP-067 revised Request reference page is locked for the later
+presentation pass;
+GAP-065 Slice 1B-server (`faf7b64`), Slice 1B-client
+(`e27c48c`), and Slice 2 (`6ab880b`) are committed; Slice 3a (server-authoritative Owner/Admin
+request-row financial-review count cue + ADR-463 amendment) is implemented locally, pending commit.**
+Submitted visits remain separate immutable field records;
 the office experience, not the factual model, will become request-scoped. Delivery is deliberately
 multi-session: (1) Owner/Admin Request Detail **Pending financial reviews (N)** task card with a
 direct route per submitted/unreviewed visit; (2) wide workspace pending-visit switcher and
@@ -18,6 +21,15 @@ recompose identity, economics/profitability, aliases, and action hierarchy on th
 financial canvas without changing behavior. Associated Assemblies and Nudges are deliberately a
 later Owner/Admin-only server-authoritative impact-read slice; do not mock, client-infer, or
 decorate unsupported relationships. See [GAP-066](pilot-readiness-bug-tracker.md#gap-066--catalog-item-detail-is-not-yet-a-usable-financial-and-operational-impact-workspace).
+
+**GAP-067 Request workspace visual reference is locked.** Christian will retain the revised Request
+page mockup as the desktop implementation reference. It confirms a Slate-50 operational canvas;
+white, Slate-200 bordered cards; a compact request anchor with neutral Customer Need and a retained
+planning row; amber only for active customer attention; teal customer-response primary actions;
+dark-slate contextual financial-review emphasis; quiet outlined continuation actions; and a
+consistent 20–24 px major-card rhythm. It preserves the locked GAP-027 row grammar and all
+behavior, authority, ranking, lifecycle, and financial-review semantics. See
+[GAP-067](pilot-readiness-bug-tracker.md#gap-067--request-workspace-presentation-lacks-a-coherent-operational-visual-system).
 
 BL136 4f-ii **presentation upgrade** landed locally: the wide
 Owner/Admin Actual Work financial-review view is now a dedicated two-column workspace
@@ -103,12 +115,24 @@ No API / permission / migration change. 6 production + 3 test files; `tsc` clean
 (Unrelated uncommitted worktree change present: `CatalogItemDetail.test.tsx` — GAP-066 catalog
 work, keep out of the Slice 2 commit.)
 
-**Next batch: GAP-065 Slice 3** — quiet server-authoritative Owner/Admin request-row count cue and
-a clearly named, persistent Office/Actual Work Review destination (separate preflight; see
-[BL138 §"Slice 3"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md)).
+**GAP-065 Slice 3a is implemented locally (pending commit).** Server only: `KeepRequestSummary`
+gains `pendingFinancialReviewCount`; `GetKeepRequestListService` folds an exact server-authoritative
+per-request count from a bounded batched `IKeepRequestListPersistence.GetPendingFinancialReviewCountsAsync`
+projection, gated identically to the Actual Work Review destination (Owner/Admin + `RequestsOperate`
++ `AccountingManage` + Price Book entitlement + office-financial Off Season account access that is
+neither Blocked nor read-only). No migration, no DI registration change. ADR-463 amended;
+decision-index updated. 4 production + 3 test files; unit + architecture suites green, touched
+integration classes green. Detail in
+[BL138 §"Slice 3a — implemented locally, pending commit"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
+
+**Next batch: GAP-065 Slice 3b** — the client `KeepRequestSummary` type field plus the Owner/Admin-gated
+`RequestRow` quiet, non-interactive "{N} visit(s) need financial review" metadata line and focused
+frontend tests. **Slice 3c is closed documentation-only** — the existing "Actual Work Review" Office
+Review tab already satisfies BL138's persistent-destination requirement (see BL138 §"Slice 3 —
+preflight decisions").
 
 **Tracker order after the GAP-065 slices:** GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026,
-GAP-053. Do not pull GAP-047, GAP-048, GAP-049, filters, history, pagination, or generic queue
+GAP-053, then GAP-067. Do not pull GAP-047, GAP-048, GAP-049, filters, history, pagination, or generic queue
 redesign into these sessions.
 
 ## Deferred next work
