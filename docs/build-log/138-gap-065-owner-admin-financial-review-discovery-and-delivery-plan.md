@@ -511,7 +511,7 @@ cases), `KeepPersistenceProofTests.cs` (2 real-query proofs: state exclusion + a
 `KeepRequestListQueryApiTests.cs` (1 end-to-end contract test: entitled Owner sees `2`,
 Operator/Viewer see `0`).
 
-## Slice 3b — implemented (`f231126`, 2026-09-02)
+## Slice 3b — implemented (`f231126` + `606203d` pane-mode amendment, 2026-09-02)
 
 Frontend only. **2 production + 3 test/mock files; frontend suite 1017/1017, `tsc` clean.** No API,
 permission, routing, ranking/attention, or migration change.

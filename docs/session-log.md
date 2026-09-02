@@ -125,7 +125,7 @@ decision-index updated. 4 production + 3 test files; unit + architecture suites 
 integration classes green. Detail in
 [BL138 §"Slice 3a — implemented"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 
-**GAP-065 Slice 3b is committed (`f231126`, amended by the pane-mode follow-up, 2026-09-02).**
+**GAP-065 Slice 3b is committed (`f231126` + `606203d` pane-mode amendment, 2026-09-02).**
 Frontend only: client `KeepRequestSummary` gains `pendingFinancialReviewCount: number`;
 `RequestRow` renders a quiet, non-interactive cue when the server-authoritative count is > 0 — a
 tiny amber dot + muted `text-slate-600` "1 visit needs financial review" / "N visits need financial
