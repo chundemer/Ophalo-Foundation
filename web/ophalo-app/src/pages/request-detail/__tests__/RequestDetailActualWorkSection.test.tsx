@@ -17,6 +17,11 @@ vi.mock("../ActualWorkCard", () => ({
 vi.mock("../ActualWorkReviewCard", () => ({
   ActualWorkReviewCard: () => <div>inline-review-card</div>,
 }));
+vi.mock("../ActualWorkPendingReviewsCard", () => ({
+  ActualWorkPendingReviewsCard: ({ state }: { state: { status: string; count?: number } }) => (
+    <div>pending-reviews-card:{state.status}:{state.count ?? ""}</div>
+  ),
+}));
 
 const draftCapture: ActualWorkCaptureState = {
   status: "draft",
@@ -71,6 +76,12 @@ function renderSection(overrides: Partial<React.ComponentProps<typeof RequestDet
       onReviewSuccess={vi.fn()}
       replacementRecoverySuccessorId={null}
       onOpenReplacementDraft={vi.fn()}
+      pendingReviewsState={{ status: "loaded", count: 0, items: [] }}
+      onRetryPendingReviews={vi.fn()}
+      onReviewPendingVisit={vi.fn()}
+      onFinancialReviewChanged={vi.fn()}
+      focusReviewVisitId={null}
+      onFocusReviewVisitHandled={vi.fn()}
       {...overrides}
     />,
   );
@@ -117,5 +128,18 @@ describe("RequestDetailActualWorkSection — Draft plus prior submitted visit (G
   it("does not broaden review authorization: no inline review card without canReviewActualWork", () => {
     renderSection({ useWorkspaceRoute: false, onOpenVisit: undefined, canReviewActualWork: false });
     expect(screen.queryByText("inline-review-card")).not.toBeInTheDocument();
+  });
+
+  it("BL138 1B-client: renders the pending-reviews card for a reviewer, above the Draft/history module", () => {
+    renderSection({ canReviewActualWork: true, pendingReviewsState: { status: "loaded", count: 2, items: [] } });
+    const pending = screen.getByText("pending-reviews-card:loaded:2");
+    const capture = screen.getByText("capture-card:draft");
+    expect(pending).toBeInTheDocument();
+    expect(pending.compareDocumentPosition(capture) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("BL138 1B-client: no pending-reviews card without canReviewActualWork", () => {
+    renderSection({ canReviewActualWork: false, pendingReviewsState: { status: "loaded", count: 2, items: [] } });
+    expect(screen.queryByText(/pending-reviews-card/)).not.toBeInTheDocument();
   });
 });

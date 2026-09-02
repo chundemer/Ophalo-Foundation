@@ -1374,6 +1374,29 @@ export interface ActualWorkReviewQueueCountResult {
   count: number;
 }
 
+// BL138 Slice 1B: Owner/Admin request-scoped "Pending financial reviews (N)" card — the submitted /
+// unreviewed / non-superseded visits on ONE request with server-derived review readiness. The
+// server folds effective resolutions + the zero-line no-charge disposition fact; the client never
+// re-derives the predicate or the status. Carries no price/cost/margin — only what the card renders
+// and the deep-link target (`actualWorkId`). Never "ReviewComplete": a reviewed visit is excluded.
+export type ActualWorkPendingReviewStatus =
+  | "ReadyToReview"
+  | "NeedsCostPriceResolution"
+  | "NeedsNoChargeDisposition";
+
+export interface ActualWorkRequestPendingReviewEntry {
+  actualWorkId: string;
+  submittedAtUtc: string;
+  lineCount: number;
+  recorderDisplayName: string | null;
+  reviewStatus: ActualWorkPendingReviewStatus;
+}
+
+export interface ActualWorkRequestPendingReviewsResult {
+  count: number;
+  items: ActualWorkRequestPendingReviewEntry[];
+}
+
 export interface ActualWorkFinancialLineEntry {
   id: string;
   displayNameSnapshot: string;

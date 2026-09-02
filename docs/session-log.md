@@ -1,8 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-02 — **GAP-065 Slice 1B-server is implemented and committed (`faf7b64`);
-Slice 1B-client preflight is done and its refresh ownership is decided.** Submitted visits remain
-separate immutable field records;
+**Last updated:** 2026-09-02 — **GAP-065 Slice 1B-server (`faf7b64`) and Slice 1B-client are
+implemented and committed.** Submitted visits remain separate immutable field records;
 the office experience, not the factual model, will become request-scoped. Delivery is deliberately
 multi-session: (1) Owner/Admin Request Detail **Pending financial reviews (N)** task card with a
 direct route per submitted/unreviewed visit; (2) wide workspace pending-visit switcher and
@@ -77,15 +76,23 @@ from effective resolutions + the disposition fact. No migration, no DI change, n
 architecture 14/14. (Unrelated worktree hunk: the `requestStatus.ts` frontend crash guard + its
 test remain uncommitted for a separate standalone UI bugfix commit.)
 
-**Next batch: GAP-065 Slice 1B-client.** Preflight complete (2026-09-02); cross-hook refresh
-ownership is decided and recorded in
-[BL138 §"Slice 1B-client refresh ownership — DECIDED"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md)
-(Option 1 — new `useActualWorkPendingReviews` hook with its own `reload()`, coordinated by
-`RequestDetailContent`; new `onFinancialReviewChanged` threaded through
-`RequestDetailActualWorkSection` -> `ActualWorkReviewCard` and fired at every listed outcome).
-Awaiting explicit go. Scope: the hook, the `Pending financial reviews (N)` card above
-`ActualWorkHistoryCard`, wide-route navigation, narrow per-visit scroll-and-focus, the refresh
-wiring, and UI tests. Stop for the reviewed-diff gate.
+**GAP-065 Slice 1B-client is implemented and committed (2026-09-02).**
+New `useActualWorkPendingReviews(requestId, enabled)` hook with its own `reload()`;
+`ActualWorkPendingReviewsCard` (`Pending financial reviews (N)`) rendered by
+`RequestDetailActualWorkSection` above the Actual Work module, gated on `canReviewActualWork`, both
+viewports, renders with an open Draft (GAP-065A). Wide row → `onNavigateToActualWorkspace`
+deep link; narrow row → `RequestDetailContent` holds a `pendingFocusVisitId`, `ActualWorkReviewCard`
+scrolls-and-focuses that visit's inline card once loaded (race-free, per-visit anchor id). Single
+`handleFinancialReviewChanged` → `pendingReviews.reload()`, fired at every readiness-changing
+outcome: review/resolution/no-charge **success and `reconciled`**, review-blocked branches, manual
+retry, and the replacement success branch. Locked zero-line copy: "Record no-charge disposition".
+7 production + 5 test files; frontend suite 1004/1004, typecheck clean. Four review corrections
+applied (reconcile-outcome refresh, retry refresh, narrow-focus race, copy). No API / permission /
+migration change. BL138 §"Slice 1B-client — implemented" carries the detail.
+
+**Next batch: GAP-065 Slice 2** — wide workspace pending-visit switcher and
+post-success **Review next pending visit** continuation with dirty-switch protection (separate
+session; see [BL138 §"Slice 2"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md)).
 
 **Tracker order after the GAP-065 slices:** GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026,
 GAP-053. Do not pull GAP-047, GAP-048, GAP-049, filters, history, pagination, or generic queue

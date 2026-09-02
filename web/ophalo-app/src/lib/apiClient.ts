@@ -247,6 +247,9 @@ import type {
   ActualWorkNudgeFieldResultResponse,
   ActualWorkReviewQueueEntry,
   ActualWorkReviewQueueCountResult,
+  ActualWorkRequestPendingReviewsResult,
+  ActualWorkRequestPendingReviewEntry,
+  ActualWorkPendingReviewStatus,
   ActualWorkFinancialDetailResult,
   ActualWorkFinancialBlockerEntry,
   ActualWorkFinancialResolutionBody,
@@ -399,6 +402,9 @@ export type {
   ActualWorkNudgeFieldResultResponse,
   ActualWorkReviewQueueEntry,
   ActualWorkReviewQueueCountResult,
+  ActualWorkRequestPendingReviewsResult,
+  ActualWorkRequestPendingReviewEntry,
+  ActualWorkPendingReviewStatus,
   ActualWorkFinancialDetailResult,
   ActualWorkFinancialBlockerEntry,
   ActualWorkFinancialResolutionBody,
@@ -945,6 +951,12 @@ export const api = {
   // Direct Actual Work (ADR-487, build-log/129, Batch 5b) — price-blind field capture composer.
   getActualWorkHistoryForRequest: (requestId: string) =>
     apiFetch<ActualWorkHistoryResult>(`/keep/pricebook/actual-work/request/${requestId}/history`),
+  // BL138 Slice 1B: Owner/Admin request-scoped pending-financial-review card. 403 degrades to a
+  // hidden card, preserving the price-blind field surface.
+  getActualWorkPendingReviewsForRequest: (requestId: string) =>
+    apiFetch<ActualWorkRequestPendingReviewsResult>(
+      `/keep/pricebook/actual-work/request/${requestId}/pending-financial-reviews`,
+    ),
   // Build Log 129, 5d-ii-d: Actual Work Paired Nudges field read for exactly one trigger.
   getActualWorkNudgeFieldSuggestions: (
     actualWorkId: string,

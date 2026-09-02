@@ -55,6 +55,14 @@ vi.mock("../ActualWorkReviewCard", () => ({
     </div>
   ),
 }));
+const mockPendingReviewsReload = vi.fn();
+vi.mock("../useActualWorkPendingReviews", () => ({
+  useActualWorkPendingReviews: () => ({
+    state: { status: "loaded", count: 0, items: [] },
+    reload: mockPendingReviewsReload,
+  }),
+}));
+vi.mock("../ActualWorkPendingReviewsCard", () => ({ ActualWorkPendingReviewsCard: () => null }));
 vi.mock("../useActualWorkHistory", () => ({
   useActualWorkHistory: () => ({
     state: {
@@ -241,6 +249,8 @@ describe("RequestDetailContent — replacement-copy correction (BL136 4e-iii)", 
 
     expect(mockHistoryRetry).toHaveBeenCalled();
     expect(mockOpenReplacementDraft).toHaveBeenCalledTimes(1);
+    // BL138 1B-client: the replacement success branch also refreshes the pending-review projection.
+    expect(mockPendingReviewsReload).toHaveBeenCalled();
     expect(screen.queryByText(/The correction draft was created/)).not.toBeInTheDocument();
   });
 

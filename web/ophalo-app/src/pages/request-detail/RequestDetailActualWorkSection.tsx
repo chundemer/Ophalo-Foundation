@@ -2,13 +2,16 @@ import { KeepButton } from "../../components/keep/KeepButton";
 import { ActualWorkCard } from "./ActualWorkCard";
 import { ActualWorkHistoryCard } from "./ActualWorkHistoryCard";
 import { ActualWorkReviewCard } from "./ActualWorkReviewCard";
+import { ActualWorkPendingReviewsCard } from "./ActualWorkPendingReviewsCard";
 import type { useActualWorkCapture, ActualWorkEntryIntent } from "./useActualWorkCapture";
 import type { useActualWorkHistory } from "./useActualWorkHistory";
 import type { useActualWorkFinancialReview } from "./useActualWorkFinancialReview";
+import type { useActualWorkPendingReviews } from "./useActualWorkPendingReviews";
 
 type ActualWorkCaptureState = ReturnType<typeof useActualWorkCapture>["state"];
 type ActualWorkHistoryState = ReturnType<typeof useActualWorkHistory>["state"];
 type ActualWorkFinancialReview = ReturnType<typeof useActualWorkFinancialReview>;
+type ActualWorkPendingReviewsState = ReturnType<typeof useActualWorkPendingReviews>["state"];
 
 // RD-019A: the coherent "Actual Work" shared region — capture card, submitted-visit history,
 // Owner/Admin financial review card, and the replacement-recovery affordance. This section is a
@@ -38,6 +41,19 @@ interface RequestDetailActualWorkSectionProps {
   onReviewSuccess: () => void;
   replacementRecoverySuccessorId: string | null;
   onOpenReplacementDraft: (successorId: string) => void;
+  // BL138 Slice 1B-client: the Owner/Admin request-scoped "Pending financial reviews (N)" task
+  // card, rendered above the Actual Work module and gated on `canReviewActualWork`. `onReviewVisit`
+  // is resolved by `RequestDetailContent` — wide viewport routes to the workspace deep link, narrow
+  // viewport scrolls to and focuses that visit's inline review card. `onFinancialReviewChanged`
+  // refreshes the pending projection after any readiness-changing mutation outcome.
+  pendingReviewsState: ActualWorkPendingReviewsState;
+  onRetryPendingReviews: () => void;
+  onReviewPendingVisit: (actualWorkId: string) => void;
+  onFinancialReviewChanged: () => void;
+  // Narrow-viewport direct entry: the visit id whose inline review card should be focused, and the
+  // clear callback fired once the inline card has resolved the request.
+  focusReviewVisitId: string | null;
+  onFocusReviewVisitHandled: () => void;
 }
 
 export function RequestDetailActualWorkSection({
@@ -62,6 +78,12 @@ export function RequestDetailActualWorkSection({
   onReviewSuccess,
   replacementRecoverySuccessorId,
   onOpenReplacementDraft,
+  pendingReviewsState,
+  onRetryPendingReviews,
+  onReviewPendingVisit,
+  onFinancialReviewChanged,
+  focusReviewVisitId,
+  onFocusReviewVisitHandled,
 }: RequestDetailActualWorkSectionProps) {
   // Editable capture states — the recorder's own resume/start affordance.
   const actualWorkCaptureEditable =
@@ -78,6 +100,18 @@ export function RequestDetailActualWorkSection({
 
   return (
     <>
+      {/* BL138 Slice 1B-client: Owner/Admin request-scoped pending-financial-review task card,
+          above the Actual Work module. Self-hides when nothing is pending or on a 403; renders even
+          while an editable Draft is open (GAP-065A). No authorization broadening — the card and its
+          data are gated on `canReviewActualWork` and the same server-side reviewer gate. */}
+      {canReviewActualWork && (
+        <ActualWorkPendingReviewsCard
+          state={pendingReviewsState}
+          onRetry={onRetryPendingReviews}
+          onReviewVisit={onReviewPendingVisit}
+        />
+      )}
+
       {/* 4. Work execution — Actual Work, one compact module (locked exception, 2026-08-22:
           capture and visit history share one enclosing card; visit history renders only when
           visits actually exist, no "no visits submitted" filler). Whole module self-hides when
@@ -123,6 +157,9 @@ export function RequestDetailActualWorkSection({
           isVisitMutating={isVisitMutating}
           focusOnMount={focusReviewOnMount}
           onReviewSuccess={onReviewSuccess}
+          onFinancialReviewChanged={onFinancialReviewChanged}
+          focusVisitId={focusReviewVisitId}
+          onFocusVisitHandled={onFocusReviewVisitHandled}
         />
       )}
 

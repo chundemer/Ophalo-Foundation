@@ -11,6 +11,7 @@ import { useActualWorkHistory } from "./useActualWorkHistory";
 import { ActualWorkComposer } from "./ActualWorkComposer";
 import { ActualWorkRecoveryDrawer } from "./ActualWorkRecoveryDrawer";
 import { useActualWorkFinancialReview } from "./useActualWorkFinancialReview";
+import { useActualWorkPendingReviews } from "./useActualWorkPendingReviews";
 import { useRequestDetailLayout } from "./useRequestDetailLayout";
 import { RequestDetailWorkCanvas } from "./RequestDetailWorkCanvas";
 import { RequestDetailActualWorkSection } from "./RequestDetailActualWorkSection";
@@ -72,6 +73,16 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       ? actualWorkHistory.state.submittedVisits.filter((visit) => !visit.superseded)
       : [],
   );
+  // BL138 Slice 1B-client: the Owner/Admin request-scoped "Pending financial reviews (N)" card
+  // read. Independent of `useActualWorkFinancialReview` (which is fed nothing on the wide route) —
+  // this card is the single wide-viewport discovery surface for unreviewed visits on the request.
+  // It owns its own `reload()`; there is no shared React Query key to invalidate.
+  const pendingReviews = useActualWorkPendingReviews(requestId, props.canReviewActualWork === true);
+  // BL138 Slice 1B-client narrow-viewport direct entry: the pending visit id awaiting scroll+focus
+  // in the inline review card. Set on click, cleared by the inline card once it has resolved the
+  // request — so the action works even if the pending card mounts before the inline card loads.
+  const [pendingFocusVisitId, setPendingFocusVisitId] = useState<string | null>(null);
+
   const [recorderDrawerOpen, setRecorderDrawerOpen] = useState(false);
 
   // BL136 4e-iii: holds the successor Draft id when a replacement-copy correction succeeded but the
@@ -85,6 +96,9 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       const outcome = await actualWorkFinancialReview.replace(visit, reason);
       if (outcome.kind === "replaced") {
         await actualWorkHistory.retry();
+        // BL138 Slice 1B-client: the source row leaves the pending card and its successor may
+        // appear — refresh the request-scoped projection here, not in the card.
+        void pendingReviews.reload();
         if (useWorkspaceRoute) {
           // The workspace route mounts its own capture hook, which re-probes and lands on the
           // successor Draft (already created + source superseded by the service).
@@ -96,7 +110,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       }
       return outcome;
     },
-    [actualWorkFinancialReview, actualWorkHistory, actualWorkCapture, useWorkspaceRoute, props, requestId],
+    [actualWorkFinancialReview, actualWorkHistory, actualWorkCapture, pendingReviews, useWorkspaceRoute, props, requestId],
   );
 
   const openReplacementDraft = useCallback(
@@ -126,6 +140,30 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
     void actualWorkHistory.retry();
     void props.onActualWorkReviewSuccess?.();
   }, [actualWorkHistory, props]);
+
+  // BL138 Slice 1B-client: single cross-hook refresh point for the pending-review card. Fired at
+  // every mutation outcome that can change a row's membership or readiness (resolution / no-charge
+  // success, review completion, reconcile / review-blocked branches from the inline card, and the
+  // replacement success branch above). `useActualWorkFinancialReview` already self-reloads its own
+  // detail state and history refresh stays on `handleReviewSuccess`, so this only reloads here.
+  const handleFinancialReviewChanged = useCallback(() => {
+    void pendingReviews.reload();
+  }, [pendingReviews]);
+
+  // Wide viewport routes to the visit's workspace deep link; narrow viewport hands the visit id to
+  // the inline review card, which scrolls to and focuses it once loaded (BL138 locked — no narrow
+  // workspace, and the entry point must not depend on the inline card already being mounted).
+  const handleReviewPendingVisit = useCallback(
+    (actualWorkId: string) => {
+      if (useWorkspaceRoute) {
+        props.onNavigateToActualWorkspace!(requestId, actualWorkId);
+        return;
+      }
+      setPendingFocusVisitId(actualWorkId);
+    },
+    [useWorkspaceRoute, props, requestId],
+  );
+  const handleFocusReviewVisitHandled = useCallback(() => setPendingFocusVisitId(null), []);
 
   const activityBlock = (
     <RequestDetailActivity timelineFilter={props.timelineFilter} onTimelineFilterChange={props.onTimelineFilterChange} displayedEvents={props.displayedEvents} />
@@ -159,7 +197,12 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           ? (visitId) => props.onNavigateToActualWorkspace!(requestId, visitId)
           : undefined
       }
-      onRetryReview={() => void actualWorkFinancialReview.retry()}
+      onRetryReview={() => {
+        void actualWorkFinancialReview.retry();
+        // BL138 Slice 1B-client: a manual retry re-reads the authoritative visit detail, so the
+        // request-scoped pending projection must refresh alongside it.
+        handleFinancialReviewChanged();
+      }}
       onReview={actualWorkFinancialReview.review}
       onResolveLine={actualWorkFinancialReview.resolveLine}
       onRecordNoChargeDisposition={actualWorkFinancialReview.recordNoChargeDisposition}
@@ -168,6 +211,12 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       onReviewSuccess={handleReviewSuccess}
       replacementRecoverySuccessorId={replacementRecoverySuccessorId}
       onOpenReplacementDraft={openReplacementDraft}
+      pendingReviewsState={pendingReviews.state}
+      onRetryPendingReviews={() => void pendingReviews.reload()}
+      onReviewPendingVisit={handleReviewPendingVisit}
+      onFinancialReviewChanged={handleFinancialReviewChanged}
+      focusReviewVisitId={pendingFocusVisitId}
+      onFocusReviewVisitHandled={handleFocusReviewVisitHandled}
     />
   );
 

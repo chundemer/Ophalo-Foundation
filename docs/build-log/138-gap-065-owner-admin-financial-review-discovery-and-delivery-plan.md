@@ -3,9 +3,10 @@
 **Status:** Slice 1A discovery complete and accepted (2026-09-02). **Slice 1B-server implemented and
 committed (`faf7b64`, 2026-09-02)** — the privileged request-scoped projection, the request-scoped
 pending read, the bounded batched resolution/disposition reads, the endpoint, and auth / query /
-status-derivation / batched-read tests. Slice 1B-client preflight done (2026-09-02): cross-hook
-refresh ownership decided (Option 1 — own `reload()` coordinated by `RequestDetailContent`); client
-edits not started.
+status-derivation / batched-read tests. **Slice 1B-client implemented and committed (2026-09-02) —
+the hook, the `Pending financial reviews (N)` card, wide/narrow entry, and the cross-hook refresh
+wiring (Option 1) with four review corrections; frontend suite 1004/1004.** See §"Slice 1B-client —
+implemented" below.
 **Date:** 2026-09-02
 **Related:** [GAP-065](../pilot-readiness-bug-tracker.md#gap-065--owneradmin-internal-financial-review-work-is-hard-to-discover-from-requests), [BL136](136-actual-work-paper-compatible-pilot-upgrade.md), [ADR-494](../decisions/ADR-494-actual-work-paper-compatible-pilot-upgrade.md), [ADR-493](../decisions/ADR-493-actual-work-office-financial-resolution-and-billing-revisions.md)
 
@@ -382,13 +383,40 @@ Slice 1B as one change is over the batch gate. Split:
   scrolls to and focuses the matching inline review card; card refreshes after resolution, review,
   and replacement outcomes; card still renders with an open editable Draft.
 
+## Slice 1B-client — implemented (2026-09-02, committed)
+
+Built per §"Slice 1B-client refresh ownership — DECIDED" and the frontend gate section, plus four
+review corrections. **7 production + 5 test files; frontend suite 1004/1004, `tsc` clean.**
+
+- **`useActualWorkPendingReviews(requestId, enabled)`** — local `useState` + `useEffect(reload)`,
+  mirrors `useActualWorkHistory`; `enabled = canReviewActualWork === true`; 403 → `hidden` backstop.
+  Returns `{ state, reload }`. No client re-derivation of the predicate or the three-value status.
+- **`ActualWorkPendingReviewsCard`** — `Pending financial reviews (N)` header + one row per pending
+  visit (submitted time, line count, recorder, status), `Review financials` action. Rendered by
+  `RequestDetailActualWorkSection` above the Actual Work module, gated on `canReviewActualWork`,
+  both viewports, renders with an open Draft (GAP-065A). Self-hides on loading / hidden / empty;
+  retry on error. Locked zero-line copy: **"Record no-charge disposition"** (correction 4).
+- **Wide entry** → `onNavigateToActualWorkspace(requestId, actualWorkId)`. **Narrow entry** →
+  `RequestDetailContent` holds `pendingFocusVisitId` (set on click, no click-time DOM lookup);
+  `ActualWorkReviewCard` carries a per-visit anchor `id="actual-work-review-visit-${visit.id}"`
+  (`tabIndex=-1`, `scroll-mt-4`, focus ring) and an effect scrolls + `focus()`s it once its visits
+  are loaded, then calls `onFocusVisitHandled` to clear the request — race-free regardless of mount
+  order, self-clearing if the target visit is no longer pending (correction 3).
+- **Refresh** — single `handleFinancialReviewChanged` → `pendingReviews.reload()` in
+  `RequestDetailContent`, threaded as `onFinancialReviewChanged` through the section to
+  `ActualWorkReviewCard`, fired on: review success; resolution / no-charge **success and
+  `reconciled`** (correction 1); `review-blocked-incomplete` / `review-blocked-zero-line`;
+  `onRetryReview` manual retry (correction 2); and the `handleReplaceVisit` `replaced` branch (wired
+  in `RequestDetailContent`, not the card).
+- **Contract types** added to hand-maintained `apiClient.types.ts`
+  (`ActualWorkPendingReviewStatus`, `ActualWorkRequestPendingReviewEntry`,
+  `ActualWorkRequestPendingReviewsResult`) + `api.getActualWorkPendingReviewsForRequest`.
+- Test infra: `Element.prototype.scrollIntoView` stub is local to `ActualWorkReviewCard.test.tsx`
+  (a global stub in `src/test/setup.ts` broke an `ActualWorkComposer` assertion — reverted).
+
 ## Handoff instruction
 
-Slice 1B-server is implemented, reviewed, and committed (`faf7b64`, 2026-09-02). The 1B-client
-preflight is done and its cross-hook refresh ownership is decided and recorded above
-(§"Slice 1B-client refresh ownership — DECIDED"). Once Christian gives the explicit go, the next
-Claude session implements **Slice 1B-client only** per that section: the new
-`useActualWorkPendingReviews` hook, the `Pending financial reviews (N)` card above
-`ActualWorkHistoryCard`, wide-route navigation, narrow per-visit scroll-and-focus, the
-`onFinancialReviewChanged` wiring at every listed outcome, and UI tests. Stop for the reviewed-diff
-gate.
+Slice 1B-server (`faf7b64`) and Slice 1B-client are committed. The next slice is **Slice 2**
+(§"Slice 2 — request-scoped workspace continuation"), a separate session: the wide workspace
+pending-visit switcher and post-success **Review next pending visit** continuation with
+dirty-switch protection.

@@ -30,6 +30,18 @@ interface ActualWorkReviewCardProps {
   onReplace: (visit: ActualWorkFinancialDetailResult, reason: string) => Promise<FinancialReviewOutcome>;
   isVisitMutating: (visitId: string) => boolean;
   onReviewSuccess: () => void;
+  // BL138 Slice 1B-client: fired on every mutation outcome that can change the Request Detail
+  // "Pending financial reviews" card's row membership or a row's readiness — resolution/no-charge
+  // success, review completion, and the reconcile / review-blocked branches. Optional: the Actual
+  // Work workspace reuses this card and owns its own refresh.
+  onFinancialReviewChanged?: () => void;
+  // BL138 Slice 1B-client narrow-viewport direct entry: the Request Detail pending-review card sets
+  // this to the visit id whose inline review card should be scrolled to and focused. Handled by an
+  // effect here (not a click-time DOM lookup) so it works even when the pending card mounts before
+  // this card has loaded — once the matching visit is loaded the effect focuses it and calls
+  // `onFocusVisitHandled` to clear the request.
+  focusVisitId?: string | null;
+  onFocusVisitHandled?: () => void;
   focusOnMount?: boolean;
 }
 
@@ -52,7 +64,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return <div><p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--ophalo-muted)]">{label}</p><p className="mt-1 text-sm font-semibold text-[var(--ophalo-ink)]">{value}</p></div>;
 }
 
-function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposition, onReplace, busy, onReviewSuccess }: {
+function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposition, onReplace, busy, onReviewSuccess, onFinancialReviewChanged }: {
   visit: ActualWorkFinancialDetailResult;
   index: number;
   onReview: ActualWorkReviewCardProps["onReview"];
@@ -61,6 +73,7 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
   onReplace: ActualWorkReviewCardProps["onReplace"];
   busy: boolean;
   onReviewSuccess: () => void;
+  onFinancialReviewChanged: () => void;
 }) {
   const [note, setNote] = useState(visit.reviewNote ?? "");
   const [notice, setNotice] = useState<string | null>(null);
@@ -71,15 +84,39 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
   // a reviewed visit shows read-only state only.
   const showNoChargeForm = !reviewed && zeroLine && !visit.hasNoChargeDisposition;
 
+  // Both the success path and the `reconciled` path (a 409/404 that re-read the authoritative visit
+  // detail via mapMutationError) can move the request-scoped pending projection, so both refresh it.
+  async function handleResolveLine(lineId: string, body: ActualWorkFinancialResolutionBody) {
+    const outcome = await onResolveLine(visit, lineId, body);
+    if (outcome.kind === "success" || outcome.kind === "reconciled") onFinancialReviewChanged();
+    return outcome;
+  }
+
+  async function handleRecordNoCharge(reason: string) {
+    const outcome = await onRecordNoChargeDisposition(visit, reason);
+    if (outcome.kind === "success" || outcome.kind === "reconciled") onFinancialReviewChanged();
+    return outcome;
+  }
+
   async function markReviewed() {
     if (busy) return;
     setNotice(null);
     const outcome = await onReview(visit, note.trim() || null);
     if (outcome.kind === "success") {
       onReviewSuccess();
+      onFinancialReviewChanged();
       return;
     }
     if (outcome.kind === "hidden") return;
+    // The reconcile / review-blocked branches re-read the authoritative visit detail, so the
+    // request-scoped pending projection may have moved under the card too (BL138 Slice 1B-client).
+    if (
+      outcome.kind === "reconciled" ||
+      outcome.kind === "review-blocked-incomplete" ||
+      outcome.kind === "review-blocked-zero-line"
+    ) {
+      onFinancialReviewChanged();
+    }
     setNotice(
       outcome.kind === "review-blocked-incomplete"
         ? "Resolve the missing pricing or cost on every line before completing internal financial review."
@@ -92,7 +129,7 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
   }
 
   return (
-    <details open={!reviewed} className="group px-4 py-4" aria-label={`Financial review visit ${index + 1}`}>
+    <details id={`actual-work-review-visit-${visit.id}`} tabIndex={-1} open={!reviewed} className="group px-4 py-4 scroll-mt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]" aria-label={`Financial review visit ${index + 1}`}>
       <summary className="cursor-pointer list-none">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
@@ -126,7 +163,7 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
         <div className="mt-4 border-t border-[var(--ophalo-border)] pt-3">
           <p className="text-xs text-[var(--ophalo-muted)]">No work lines were recorded for this visit.</p>
           {visit.hasNoChargeDisposition && <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-[var(--ophalo-success)]"><Check className="h-3.5 w-3.5" /> Recorded as no charge</p>}
-          {showNoChargeForm && <NoChargeDispositionForm busy={busy} onSubmit={(reason) => onRecordNoChargeDisposition(visit, reason)} />}
+          {showNoChargeForm && <NoChargeDispositionForm busy={busy} onSubmit={(reason) => handleRecordNoCharge(reason)} />}
         </div>
       ) : (
         <div className="mt-4 border-t border-[var(--ophalo-border)] pt-3">
@@ -139,7 +176,7 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
               key={blocker.lineId}
               blocker={blocker}
               busy={busy}
-              onSubmit={(lineId, body) => onResolveLine(visit, lineId, body)}
+              onSubmit={(lineId, body) => handleResolveLine(lineId, body)}
             />
           ))}
         </div>
@@ -152,11 +189,26 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
   );
 }
 
-export function ActualWorkReviewCard({ state, onRetry, onReview, onResolveLine, onRecordNoChargeDisposition, onReplace, isVisitMutating, onReviewSuccess, focusOnMount = false }: ActualWorkReviewCardProps) {
+export function ActualWorkReviewCard({ state, onRetry, onReview, onResolveLine, onRecordNoChargeDisposition, onReplace, isVisitMutating, onReviewSuccess, onFinancialReviewChanged, focusVisitId, onFocusVisitHandled, focusOnMount = false }: ActualWorkReviewCardProps) {
+  const notifyChanged = onFinancialReviewChanged ?? (() => {});
   useEffect(() => {
     if (focusOnMount && state.status === "loaded" && state.visits.length) document.getElementById("focus-panel-actual-work-review")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [focusOnMount, state]);
+  // Narrow-viewport direct entry from the pending-review card. Wait until the visits are loaded so
+  // the per-visit anchor is in the DOM; then scroll + focus it. Clear the request once resolved —
+  // including when the target visit is no longer pending (reviewed/superseded) so it never sticks.
+  useEffect(() => {
+    if (!focusVisitId || state.status !== "loaded") return;
+    if (state.visits.some((v) => v.id === focusVisitId)) {
+      const el = document.getElementById(`actual-work-review-visit-${focusVisitId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        (el as HTMLElement).focus({ preventScroll: true });
+      }
+    }
+    onFocusVisitHandled?.();
+  }, [focusVisitId, state, onFocusVisitHandled]);
   if (state.status === "loading" || state.status === "hidden" || (state.status === "loaded" && !state.visits.length)) return null;
   if (state.status === "error") return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-4"><p className="text-sm text-[var(--ophalo-muted)]">Unable to load financial review.</p><KeepButton variant="secondary" className="mt-3" onClick={onRetry}>Retry</KeepButton></div>;
-  return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]"><div className="px-4 py-3"><p className="text-sm font-semibold text-[var(--ophalo-ink)]">Internal financial review</p><p className="text-xs text-[var(--ophalo-muted)]">Reviews the submitted visit's financial details. Does not change the customer request.</p></div>{state.visits.map((visit, index) => <Visit key={visit.id} visit={visit} index={index} onReview={onReview} onResolveLine={onResolveLine} onRecordNoChargeDisposition={onRecordNoChargeDisposition} onReplace={onReplace} busy={isVisitMutating(visit.id)} onReviewSuccess={onReviewSuccess} />)}</div>;
+  return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]"><div className="px-4 py-3"><p className="text-sm font-semibold text-[var(--ophalo-ink)]">Internal financial review</p><p className="text-xs text-[var(--ophalo-muted)]">Reviews the submitted visit's financial details. Does not change the customer request.</p></div>{state.visits.map((visit, index) => <Visit key={visit.id} visit={visit} index={index} onReview={onReview} onResolveLine={onResolveLine} onRecordNoChargeDisposition={onRecordNoChargeDisposition} onReplace={onReplace} busy={isVisitMutating(visit.id)} onReviewSuccess={onReviewSuccess} onFinancialReviewChanged={notifyChanged} />)}</div>;
 }

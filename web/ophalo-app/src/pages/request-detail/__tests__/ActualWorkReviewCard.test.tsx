@@ -3,6 +3,9 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ActualWorkReviewCard } from "../ActualWorkReviewCard";
 
+// jsdom has no layout engine: the narrow direct-entry scroll-and-focus effect calls scrollIntoView.
+if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+
 const line = { id: "line-1", displayNameSnapshot: "Replacement capacitor", unitOfMeasureSnapshot: null, actualQuantity: 2, note: null, performedByAccountUserId: "tech", performerDisplayName: "Dana Tech", isFinancialDataComplete: false, sellPriceSnapshot: 150, standardExpectedDirectCostSnapshot: null, lineSalesTotal: 300, lineStandardExpectedDirectCostTotal: null, lineMargin: null, sellPriceResolved: false, resolvedSellPrice: null, resolvedSellPriceBasis: null, directCostResolved: false, resolvedStandardExpectedDirectCost: null, resolvedStandardExpectedDirectCostBasis: null };
 const blocker = { lineId: "line-1", displayNameSnapshot: "Replacement capacitor", sellPriceMissing: false, standardExpectedDirectCostMissing: true };
 const visit = { id: "visit-1", requestId: "r1", status: "Submitted", outcome: null, completionNote: null, recorderAccountUserId: "tech", submittedAtUtc: "2026-08-27T12:00:00Z", reviewedAtUtc: null, reviewedByAccountUserId: null, reviewedByDisplayName: null, reviewNote: null, hasIncompleteFinancialData: true, totalSalesPrice: 450, totalStandardExpectedDirectCost: null, totalMargin: null, concurrencyVersion: "v1", hasNoChargeDisposition: false, blockers: [blocker], lines: [line] };
@@ -21,6 +24,70 @@ describe("ActualWorkReviewCard", () => {
     await user.click(screen.getByRole("button", { name: /Complete internal financial review/ }));
     expect(onReview).toHaveBeenCalledWith({ ...visit, blockers: [] }, "Passed margin check");
     expect(onReviewSuccess).toHaveBeenCalled();
+  });
+
+  it("BL138 1B-client: fires onFinancialReviewChanged on review success and on a reconcile/blocked outcome, not on a plain failure", async () => {
+    const user = userEvent.setup();
+    const onFinancialReviewChanged = vi.fn();
+    const v = { ...visit, blockers: [] };
+
+    const { rerender } = render(
+      <ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [v] }} onReview={() => Promise.resolve({ kind: "success" as const })} onFinancialReviewChanged={onFinancialReviewChanged} />,
+    );
+    await user.click(screen.getByRole("button", { name: /Complete internal financial review/ }));
+    expect(onFinancialReviewChanged).toHaveBeenCalledTimes(1);
+
+    onFinancialReviewChanged.mockClear();
+    rerender(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [v] }} onReview={() => Promise.resolve({ kind: "review-blocked-incomplete" as const })} onFinancialReviewChanged={onFinancialReviewChanged} />);
+    await user.click(screen.getByRole("button", { name: /Complete internal financial review/ }));
+    expect(onFinancialReviewChanged).toHaveBeenCalledTimes(1);
+
+    onFinancialReviewChanged.mockClear();
+    rerender(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [v] }} onReview={() => Promise.resolve({ kind: "validation-failure" as const, code: "x" })} onFinancialReviewChanged={onFinancialReviewChanged} />);
+    await user.click(screen.getByRole("button", { name: /Complete internal financial review/ }));
+    expect(onFinancialReviewChanged).not.toHaveBeenCalled();
+  });
+
+  it("BL138 1B-client: tags each visit with a per-visit anchor id for narrow scroll-and-focus", () => {
+    render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} />);
+    expect(document.getElementById("actual-work-review-visit-visit-1")).toBeInTheDocument();
+  });
+
+  it("BL138 1B-client: refreshes the pending card on a resolution/no-charge reconcile outcome, not only on success", async () => {
+    const user = userEvent.setup();
+    const onFinancialReviewChanged = vi.fn();
+    const zero = { ...visit, hasIncompleteFinancialData: false, blockers: [], lines: [], totalSalesPrice: 0, totalStandardExpectedDirectCost: 0, totalMargin: 0 };
+    render(
+      <ActualWorkReviewCard
+        {...baseProps}
+        state={{ status: "loaded", visits: [zero] }}
+        onRecordNoChargeDisposition={() => Promise.resolve({ kind: "reconciled" as const, code: "ActualWork.NotFound" })}
+        onFinancialReviewChanged={onFinancialReviewChanged}
+      />,
+    );
+    await user.type(screen.getByPlaceholderText(/nothing is billable/), "Warranty visit");
+    await user.click(screen.getByRole("button", { name: "Record no charge" }));
+    expect(onFinancialReviewChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("BL138 1B-client: narrow direct entry waits for the inline card to load, then focuses the visit and clears the request", () => {
+    const onFocusVisitHandled = vi.fn();
+    const scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {});
+    const v = { ...visit, blockers: [] };
+
+    // Request arrives while the inline card is still loading — nothing happens yet.
+    const { rerender } = render(
+      <ActualWorkReviewCard {...baseProps} state={{ status: "loading" }} focusVisitId="visit-1" onFocusVisitHandled={onFocusVisitHandled} />,
+    );
+    expect(onFocusVisitHandled).not.toHaveBeenCalled();
+    expect(scrollSpy).not.toHaveBeenCalled();
+
+    // Once the matching visit loads, it is scrolled to, focused, and the request is cleared.
+    rerender(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [v] }} focusVisitId="visit-1" onFocusVisitHandled={onFocusVisitHandled} />);
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(document.getElementById("actual-work-review-visit-visit-1"));
+    expect(onFocusVisitHandled).toHaveBeenCalledTimes(1);
+    scrollSpy.mockRestore();
   });
 
   it("frames the card as internal financial review that does not change the customer request", () => {
