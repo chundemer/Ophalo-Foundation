@@ -723,7 +723,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   }
 
   return (
-    <div className="flex flex-col h-full min-w-0 bg-[var(--ophalo-canvas)]">
+    <div className="flex flex-col h-full min-w-0 bg-[var(--keep-request-canvas)]">
       {/* Controller-owned overlays */}
       {contactModal && detail && (
         <LogContactModal

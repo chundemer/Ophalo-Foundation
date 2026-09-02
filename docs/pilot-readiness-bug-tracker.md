@@ -34,7 +34,7 @@ Complete each numbered slice with focused automated coverage and a production-ca
 2. **Field-work correctness:** No active item. (GAP-055 Actual Work recorder ownership — resolved across Batches A–D: migration/ownership `b3b3d41`, recorder authorization `d26b955` and `72ce6a5`, audited transfer `c7ce822`, and Owner/Admin recovery UI `de40491`.)
 3. **Phone and capture integrity:** GAP-016, GAP-021, GAP-051, then GAP-025. Consolidate the ADR-444 normalization path before extending fallback customer recognition.
 4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, GAP-049, and GAP-063. First establish shared responsive seams without behavior change; then make Owner/Admin review, lifecycle, attention, and timing actions unmistakable. See [BL137](build-log/137-request-detail-and-queue-usability-handoff.md) for the bounded execution order.
-5. **Request-list core behavior:** GAP-027 and GAP-045 (both resolved), then GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. The row grammar is now locked: one lifecycle cue, one server-ranked exception cue, and one next-action line. Implement it after the Request Detail safety work; do not merge broad queue redesign into GAP-019/058/059. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
+5. **Request workspace next:** GAP-027 and GAP-045 are resolved. Implement GAP-067 first as the presentation-only Request List/Detail foundation, after a brief read-only GAP-042 business-identity placement preflight; then implement GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. The row grammar remains locked: one lifecycle cue, one server-ranked exception cue, and one next-action line. GAP-067 must preserve that grammar, server ranking, and existing behavior; do not merge a broad queue redesign into it. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
 6. **Pilot operating loop and final usability review:** GAP-064 (after GAP-039), GAP-037, GAP-038, and GAP-054. Establish a reliable new-customer-request alert path before relying on intake to create live work, then deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
 
 ## Active Work
@@ -571,6 +571,65 @@ inactivation dependency check.
 field-search aliases, and—once the second slice is delivered—understand every live operational
 relationship before changing an item. Desktop, narrow layout, missing-price/cost, zero-cost,
 thin/negative-margin, conflict, and alias-management coverage remain correct.
+
+### GAP-067 — Request workspace presentation lacks a coherent operational visual system
+
+**Status:** Open
+**Severity:** P2
+**Area:** Request List and Request Detail presentation
+
+The Request workspace carries inconsistent canvas warmth, card edges and spacing, metadata density,
+queue alert treatment, and button hierarchy. In particular, repeated red row accents and badges
+make routine work look urgent, while the selected row and actual SLA breach do not have sufficiently
+distinct meanings. The detached Customer Need module also makes it possible to encounter an
+attention action before the user has scanned what the customer needs.
+
+**Locked direction:** Treat this as a presentation-only Request workspace coherence pass, using the
+revised Request reference page retained by Christian for the implementation session. It is the
+desktop visual source of truth for this gap; narrow behavior still requires responsive verification.
+The exact implementation values are locked in the [Request Workspace Visual Token
+Specification](ux-design/v2/request-workspace-visual-spec.md); do not substitute discretionary
+palette, spacing, or hierarchy choices during implementation.
+Use a clean, operational Slate-50 canvas (`#f8fafc` or the equivalent established token), distinct
+from but not semantically dependent on the cool financial Price Book canvas. The app shell and
+cards remain white with Slate-200 borders, rounded-xl geometry, and only a restrained shadow where
+elevation is meaningful. Do not reintroduce the prior cream/amber page canvas.
+
+- **Queue state grammar:** preserve GAP-027's one lifecycle cue, one server-ranked exception cue,
+  and one next-action line. Teal identifies selection; red is reserved for genuine active,
+  unacknowledged overdue/high-risk work; amber covers customer replies and routine follow-ups;
+  completed work stays quiet. Do not add client-side ranking, duplicate alert badges, or colored
+  rails to every row. The one sanctioned exception to the amber reservation is the BL138 Slice 3b
+  Owner/Admin financial-review metadata dot — a tiny, non-alert amber dot preceding muted
+  `text-slate-600` "{N} visit(s) need financial review" text, rendered in both the default row and
+  the compact pane row (beneath the `Next:` / action-signal line). It is server-authoritative and
+  must remain metadata: never a badge, rail, ranked exception cue, attention treatment, or
+  interactive control.
+- **Request anchor:** use compact micro-labels and a responsive identity/contact/location/owner
+  grid, followed by a distinct planning row for Internal priority, Planned work date, and Internal
+  follow-up. Customer Need follows inside the anchor as a clearly bounded *neutral* Slate-50/
+  Slate-200 summary—not an attention banner. Keep all existing detail fields, controls,
+  permissions, and semantics available.
+- **Action hierarchy:** each context has one primary operational action (for example, respond to a
+  customer message) in teal-600/700 with white text. A consequential internal action, such as
+  Review Visit Financials, may use restrained dark-slate emphasis in its own card; continuation,
+  edit, and navigation actions are white outlined controls. Destructive actions remain visually
+  distinct and require their existing protections. Do not let a financial-review action visually
+  outrank the active customer-promise response merely through styling.
+- **Attention and spacing:** the single active customer-message attention card uses a warm amber
+  surface/border; Customer Need and ordinary content stay neutral. Keep 20–24 px separation
+  between major cards, 16–20 px card padding, 12 px internal control gaps, and one consistent
+  divider/border tone. Avoid a stack of heavy shadows or multiple competing colored panels.
+
+**Guardrails:** This gap does not authorize changed request lifecycle, attention/ranking logic,
+financial-review behavior, API contracts, permissions, data model, or a generic queue redesign.
+Preserve responsive and keyboard behavior. Do not flatten the queue so far that a dispatcher loses
+the factual next-action context required for fast triage.
+
+**Done when:** Request List and Request Detail use a calm, consistent operational visual system;
+selection, customer attention, genuine breach, completion, and primary action are distinguishable
+at a glance; Customer Need is present in the request anchor; and browser verification confirms the
+desktop and narrow layouts retain their locked behavior.
 
 ### GAP-037 — Pilot has no weekly, evidence-based value report
 

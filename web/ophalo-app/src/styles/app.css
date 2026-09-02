@@ -48,6 +48,20 @@
   /* Cool, pale blue-gray outer canvas shared by financial workspaces: the Actual Work financial
      review and Price Book. Request communication/data remains on the warm --ophalo-canvas. */
   --keep-workspace-canvas: #eef2f7;
+
+  /* GAP-067 — Request workspace presentation aliases (Request List + Request Detail only).
+     Do not reuse for other surfaces; do not alter --ophalo-* or Price Book tokens. */
+  --keep-request-canvas: #f8fafc;
+  --keep-request-surface-muted: #f8fafc;
+  --keep-request-eyebrow: #64748b;
+  --keep-request-primary: #0f766e;
+  --keep-request-primary-hover: #115e59;
+  --keep-request-financial: #0f172a;
+  --keep-request-financial-hover: #020617;
+  --keep-request-attention-bg: #fffbeb;
+  --keep-request-attention-border: #fbbf24;
+  --keep-request-attention-text: #92400e;
+  --keep-request-financial-dot: #f59e0b;
 }
 
 @tailwind base;

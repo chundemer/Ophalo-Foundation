@@ -598,7 +598,7 @@ export function Requests({
   }
 
   return (
-    <div className="flex flex-col h-full bg-[var(--ophalo-canvas)]">
+    <div className="flex flex-col h-full bg-[var(--keep-request-canvas)]">
 
       {/* Page anchor — Level 1 surface: elevated white card */}
       <div className="shrink-0 bg-[var(--ophalo-card)] shadow-sm">
