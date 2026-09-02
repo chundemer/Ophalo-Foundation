@@ -511,7 +511,7 @@ cases), `KeepPersistenceProofTests.cs` (2 real-query proofs: state exclusion + a
 `KeepRequestListQueryApiTests.cs` (1 end-to-end contract test: entitled Owner sees `2`,
 Operator/Viewer see `0`).
 
-## Slice 3b — implemented (2026-09-02)
+## Slice 3b — implemented (`f231126`, 2026-09-02)
 
 Frontend only. **2 production + 3 test/mock files; frontend suite 1017/1017, `tsc` clean.** No API,
 permission, routing, ranking/attention, or migration change.
@@ -537,8 +537,7 @@ Files: `apiClient.types.ts`, `RequestRow.tsx`; `fixtures.ts`, `mockApiClient.ts`
 
 ## Handoff instruction
 
-Slice 1B-server (`faf7b64`), Slice 1B-client (`e27c48c`), Slice 2 (`6ab880b`), and Slice 3a
-(`baaeff1`) are committed. Slice 3b (frontend cue) is implemented locally, pending commit. Slice
-3c is closed documentation-only. Once 3b commits, GAP-065 delivery is complete; a cross-request
-one-row-per-visit review queue stays out of scope and needs its own read model, authorization,
-ranking, and empty-state decision.
+Slice 1B-server (`faf7b64`), Slice 1B-client (`e27c48c`), Slice 2 (`6ab880b`), Slice 3a
+(`baaeff1`), and Slice 3b (`f231126`) are committed. Slice 3c is closed documentation-only.
+GAP-065 delivery is complete; a cross-request one-row-per-visit review queue stays out of scope
+and needs its own read model, authorization, ranking, and empty-state decision.
