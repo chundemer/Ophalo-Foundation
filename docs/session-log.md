@@ -75,7 +75,7 @@ Slices (start a fresh session per slice after each approved commit):
   `<label>` `htmlFor` association preserved. `check:tokens` + typecheck clean; new
   `OriginalRequestCard.surface.test.tsx` guards the neutral surface; request-detail + requests
   suites 581/581.
-- **Slice 4 — Detail work canvas: attention + action hierarchy — DONE (`<slice-4-hash>`).**
+- **Slice 4 — Detail work canvas: attention + action hierarchy — DONE (`4877c4c`).**
   Two additive, Request-Detail-scoped shared button variants (existing `teal`/`primary`/`secondary`
   preserved): `KeepButton` + `KeepSplitButton` gain `request-primary` (`--keep-request-primary`
   teal fill) and `KeepButton` gains `request-financial` (`--keep-request-financial` dark slate).
