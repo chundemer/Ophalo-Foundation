@@ -1,7 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-02 — **GAP-065 multi-visit financial-review workflow direction is
-locked; no implementation has started.** Submitted visits remain separate immutable field records;
+**Last updated:** 2026-09-02 — **GAP-065 Slice 1B-server is implemented and committed (`faf7b64`);
+Slice 1B-client preflight is done and its refresh ownership is decided.** Submitted visits remain
+separate immutable field records;
 the office experience, not the factual model, will become request-scoped. Delivery is deliberately
 multi-session: (1) Owner/Admin Request Detail **Pending financial reviews (N)** task card with a
 direct route per submitted/unreviewed visit; (2) wide workspace pending-visit switcher and
@@ -61,16 +62,24 @@ with customer promises needing attention first." UI-004 (2026-08-21) controls th
 ADR-449's lowercase "All work" was stale. No labels, copy placement, server ranking, or navigation
 changed. UI-004's Office Review discoverability requirement stays with GAP-065, not GAP-045.
 
-**Next batch: GAP-065 Slice 1B-server.** Slice 1A discovery is complete and accepted (2026-09-02);
-findings and the corrected file-level gate are in [BL138 §Slice 1A findings](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
-1B-server only, awaiting explicit go: new Owner/Admin-only
+**GAP-065 Slice 1B-server is complete and committed (`faf7b64`, 2026-09-02).** New Owner/Admin-only
 `GET /keep/pricebook/actual-work/request/{requestId}/pending-financial-reviews` on
-`ActualWorkFinancialReadApiService`, request-scoped variant of the unreviewed-queue query, plus a
-bounded batched resolution/disposition-by-visit-ids read; no-price/cost DTO with a three-value
-`reviewStatus` (`ReadyToReview` / `NeedsCostPriceResolution` / `NeedsNoChargeDisposition`) folded
-from effective resolutions + the disposition fact; no migration; auth + query + status-derivation
-tests. Stop for the reviewed-diff gate. 1B-client (task card, narrow scroll-and-focus, cross-hook
-refresh wiring) is a separate session.
+`ActualWorkFinancialReadApiService`, request-scoped unreviewed-queue predicate, bounded batched
+resolution/disposition-by-visit-ids reads, no-price/cost DTO with three-value `reviewStatus` folded
+from effective resolutions + the disposition fact. No migration, no DI change, no client files.
+16 new tests; `ActualWorkFinancialRead` + `FinancialResolutionPersistence` classes 59/59,
+architecture 14/14. (Unrelated worktree hunk: the `requestStatus.ts` frontend crash guard + its
+test remain uncommitted for a separate standalone UI bugfix commit.)
+
+**Next batch: GAP-065 Slice 1B-client.** Preflight complete (2026-09-02); cross-hook refresh
+ownership is decided and recorded in
+[BL138 §"Slice 1B-client refresh ownership — DECIDED"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md)
+(Option 1 — new `useActualWorkPendingReviews` hook with its own `reload()`, coordinated by
+`RequestDetailContent`; new `onFinancialReviewChanged` threaded through
+`RequestDetailActualWorkSection` -> `ActualWorkReviewCard` and fired at every listed outcome).
+Awaiting explicit go. Scope: the hook, the `Pending financial reviews (N)` card above
+`ActualWorkHistoryCard`, wide-route navigation, narrow per-visit scroll-and-focus, the refresh
+wiring, and UI tests. Stop for the reviewed-diff gate.
 
 **Tracker order after the GAP-065 slices:** GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026,
 GAP-053. Do not pull GAP-047, GAP-048, GAP-049, filters, history, pagination, or generic queue

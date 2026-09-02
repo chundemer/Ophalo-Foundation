@@ -1,8 +1,11 @@
 # Build Log 138 — GAP-065 Owner/Admin Financial Review Discovery And Delivery Plan
 
-**Status:** Slice 1A discovery complete and accepted (2026-09-02) with two readiness corrections
-folded in (effective-resolution readiness; three-value `reviewStatus`); Slice 1B split into
-1B-server then 1B-client, neither started, 1B-server awaiting explicit go
+**Status:** Slice 1A discovery complete and accepted (2026-09-02). **Slice 1B-server implemented and
+committed (`faf7b64`, 2026-09-02)** — the privileged request-scoped projection, the request-scoped
+pending read, the bounded batched resolution/disposition reads, the endpoint, and auth / query /
+status-derivation / batched-read tests. Slice 1B-client preflight done (2026-09-02): cross-hook
+refresh ownership decided (Option 1 — own `reload()` coordinated by `RequestDetailContent`); client
+edits not started.
 **Date:** 2026-09-02
 **Related:** [GAP-065](../pilot-readiness-bug-tracker.md#gap-065--owneradmin-internal-financial-review-work-is-hard-to-discover-from-requests), [BL136](136-actual-work-paper-compatible-pilot-upgrade.md), [ADR-494](../decisions/ADR-494-actual-work-paper-compatible-pilot-upgrade.md), [ADR-493](../decisions/ADR-493-actual-work-office-financial-resolution-and-billing-revisions.md)
 
@@ -300,6 +303,54 @@ via an explicit `onFinancialReviewChanged`-style callback threaded
 
 Adding the key to `handleActualWorkReviewSuccess` alone is explicitly **not** sufficient.
 
+### Slice 1B-client refresh ownership — DECIDED (2026-09-02, 1B-client preflight)
+
+**Chosen: Option 1 — the pending-review hook exposes its own `reload()`; `RequestDetailContent`
+fires it.** Option 2 (React Query key + `queryClient.invalidateQueries`) is rejected: none of the
+three Actual Work hooks `RequestDetailContent` already composes (`useActualWorkCapture`,
+`useActualWorkHistory` with `retry`, `useActualWorkFinancialReview` with `reload`/`retry`) is a
+React Query consumer, `RequestDetailContent` holds no `queryClient`, and BL138 already establishes
+that `RequestDetail.tsx#handleActualWorkReviewSuccess` is the wrong hang point. A fourth hook that
+matched the sibling pattern keeps the coordinator uniform.
+
+Concrete wiring the 1B-client batch must implement:
+
+1. **New hook `useActualWorkPendingReviews(requestId, enabled)`** — local `useState` +
+   `useEffect(reload)`, mirroring `useActualWorkHistory`. `enabled` is
+   `props.canReviewActualWork === true` (a 403 still degrades to a `hidden` state as a backstop).
+   It calls the new `GET .../request/{requestId}/pending-financial-reviews`. Returns
+   `{ state, reload }`. It must **not** re-derive the submitted/unreviewed/non-superseded predicate
+   or the three-value status — both are server-authoritative.
+2. **`RequestDetailContent` composes it** alongside the other three and owns a single
+   `handleFinancialReviewChanged` callback that calls `pendingReviews.reload()` (and nothing else —
+   `useActualWorkFinancialReview` already self-reloads its own detail state, and history refresh
+   stays on the existing `handleReviewSuccess`).
+3. **New callback `onFinancialReviewChanged` threaded
+   `RequestDetailContent -> RequestDetailActualWorkSection -> ActualWorkReviewCard` (the per-visit
+   `Visit`).** Today `ActualWorkReviewCard`'s `Visit` fires `onReviewSuccess()` only on
+   `onReview` -> `outcome.kind === "success"`. The new callback fires on **every** outcome that can
+   change the pending card's row membership or a row's `reviewStatus`:
+   - `onReview` -> `{ kind: "success" }` — the row disappears;
+   - `onResolveLine` -> `{ kind: "success" }` — `NeedsCostPriceResolution` may become
+     `ReadyToReview`;
+   - `onRecordNoChargeDisposition` -> `{ kind: "success" }` — `NeedsNoChargeDisposition` becomes
+     `ReadyToReview`;
+   - any `{ kind: "reconciled" }`, `{ kind: "review-blocked-incomplete" }`,
+     `{ kind: "review-blocked-zero-line" }` from `mapMutationError` — the authoritative detail read
+     changed under the card, so the pending projection may have too;
+   - `handleReplaceVisit` success branch (`outcome.kind === "replaced"`) — the source row
+     disappears and a successor row appears; wire it in `RequestDetailContent` next to the existing
+     `actualWorkHistory.retry()` call, not in the card.
+   `onRetryReview` (manual retry) should also call it.
+4. **Narrow-viewport `Review financials` (BL138 locked):** below 1001px the row action scrolls to
+   and focuses that exact visit's inline review card. `ActualWorkReviewCard` currently exposes only
+   the region-level `id="focus-panel-actual-work-review"`; 1B-client must add a **per-visit anchor
+   id** on the `Visit` element (e.g. `id={`actual-work-review-visit-${visit.id}`}`) and the pending
+   card's narrow handler does `scrollIntoView` + `focus()` on it. Wide viewport keeps
+   `onNavigateToActualWorkspace(requestId, visitId)`.
+5. **Card placement:** rendered by `RequestDetailActualWorkSection` above `ActualWorkHistoryCard`,
+   gated on `canReviewActualWork`; renders even while an editable Draft is open (GAP-065A).
+
 ### Batch split (accepted)
 
 Slice 1B as one change is over the batch gate. Split:
@@ -333,7 +384,11 @@ Slice 1B as one change is over the batch gate. Split:
 
 ## Handoff instruction
 
-Slice 1A is complete and accepted, including Corrections 1 and 2. Once Christian gives the explicit
-go, the next Claude session starts **Slice 1B-server only** and stops for the reviewed-diff gate
-before Slice 1B-client. 1B-client must not begin until the cross-hook refresh ownership point
-(above) is chosen and written into its preflight.
+Slice 1B-server is implemented, reviewed, and committed (`faf7b64`, 2026-09-02). The 1B-client
+preflight is done and its cross-hook refresh ownership is decided and recorded above
+(§"Slice 1B-client refresh ownership — DECIDED"). Once Christian gives the explicit go, the next
+Claude session implements **Slice 1B-client only** per that section: the new
+`useActualWorkPendingReviews` hook, the `Pending financial reviews (N)` card above
+`ActualWorkHistoryCard`, wide-route navigation, narrow per-visit scroll-and-focus, the
+`onFinancialReviewChanged` wiring at every listed outcome, and UI tests. Stop for the reviewed-diff
+gate.
