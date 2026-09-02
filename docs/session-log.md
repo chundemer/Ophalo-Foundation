@@ -49,7 +49,7 @@ Slices (start a fresh session per slice after each approved commit):
   `--keep-request-canvas`. 4 files. `check:tokens` + typecheck clean; requests/request-detail
   suites 655/655; wide-pane browser check confirmed the Slate-50 canvas. Inner queue/inset/input
   cream surfaces deliberately left for later slices.
-- **Slice 2 — Request List rows + header — DONE (`__PENDING__`).** Group/pane/popover eyebrows →
+- **Slice 2 — Request List rows + header — DONE (`022bc89`).** Group/pane/popover eyebrows →
   `text-[10px] font-bold tracking-[0.08em] --keep-request-eyebrow`; queue-row rhythm `space-y-3`
   (12 px) with a 24 px break between Needs attention / Open work (row padding kept at 16 px per
   the scan-density decision); active queue tab `bg-slate-100`, inactive hover `bg-slate-50`;
