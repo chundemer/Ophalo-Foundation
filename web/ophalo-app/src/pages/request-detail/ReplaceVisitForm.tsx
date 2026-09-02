@@ -8,14 +8,23 @@ const REASON_MAX = 2000;
 interface ReplaceVisitFormProps {
   busy: boolean;
   onSubmit: (reason: string) => Promise<FinancialReviewOutcome>;
+  /** `"inline"` (default): the compact disclosure used inside the stacked Request Detail review
+   *  card. `"button"`: an outlined secondary-action trigger for the wide financial-review
+   *  workspace, so it reads as an operable corrective path beside the primary teal action. */
+  presentation?: "inline" | "button";
 }
+
+const TRIGGER_INLINE =
+  "cursor-pointer list-none text-xs font-semibold text-[var(--ophalo-ink)]";
+const TRIGGER_BUTTON =
+  "cursor-pointer list-none inline-flex items-center rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-xs font-semibold text-[var(--ophalo-ink)] transition-colors hover:border-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger-bg)] hover:text-[var(--ophalo-danger)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2";
 
 /** ADR-494 D6 (BL136 4e-iii): Owner/Admin reason-required "Correct this visit" action for a live,
  * non-superseded, pre-export submitted visit (reviewed or not). On a `replaced` outcome the parent
  * supersedes this card's data and routes to the successor Draft, so this form only has to surface
  * the failure outcomes. The erroneous source and its financial evidence are retained — this starts
  * a linked correction, it does not delete anything. */
-export function ReplaceVisitForm({ busy, onSubmit }: ReplaceVisitFormProps) {
+export function ReplaceVisitForm({ busy, onSubmit, presentation = "inline" }: ReplaceVisitFormProps) {
   const [reason, setReason] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [errored, setErrored] = useState(false);
@@ -60,12 +69,24 @@ export function ReplaceVisitForm({ busy, onSubmit }: ReplaceVisitFormProps) {
     setNotice("Unable to start a correction. Try again.");
   }
 
+  const asButton = presentation === "button";
   return (
-    <details className="mt-3 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2">
-      <summary className="cursor-pointer list-none text-xs font-semibold text-[var(--ophalo-ink)]">
-        Correct this visit
-      </summary>
+    <details
+      className={
+        asButton
+          ? ""
+          : "mt-3 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2"
+      }
+    >
+      <summary className={asButton ? TRIGGER_BUTTON : TRIGGER_INLINE}>Correct this visit</summary>
 
+      <div
+        className={
+          asButton
+            ? "mt-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-surface-muted)] px-3 py-2.5"
+            : ""
+        }
+      >
       <p className="mt-2 text-xs text-[var(--ophalo-muted)]">
         Starts a linked replacement draft with this visit&rsquo;s captured work copied in. The
         original submitted visit and its financial record are kept as history.
@@ -91,6 +112,7 @@ export function ReplaceVisitForm({ busy, onSubmit }: ReplaceVisitFormProps) {
         <KeepButton onClick={() => void submit()} disabled={busy}>
           {busy ? "Starting…" : "Start correction"}
         </KeepButton>
+      </div>
       </div>
     </details>
   );

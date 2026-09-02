@@ -96,7 +96,7 @@ const workspace = {
     handOffToOffice: vi.fn(),
   },
   history: { state: { status: "loaded", submittedVisits: [READ_ONLY_VISIT] }, retry: vi.fn() },
-  requestQuery: { data: { customerName: "Jane Doe", referenceCode: "R-100", status: "InProgress" } },
+  requestQuery: { data: { customerName: "Jane Doe", referenceCode: "R-100", status: "InProgress" } as Record<string, unknown> },
   submittedVisit: vi.fn().mockReturnValue(READ_ONLY_VISIT),
   financialReview,
 };
@@ -107,6 +107,17 @@ vi.mock("../ActualWorkComposer", () => ({
     <div>SUCCESSOR COMPOSER {draft.id}</div>
   ),
 }));
+// The shared Contact customer drawer is exercised by its own suite; here we only assert the
+// workspace opens the real component with the right initial channel.
+vi.mock("../../RequestDetail", () => ({
+  LogContactModal: ({ initialChannel, initialDirection }: Record<string, string>) => (
+    <div>
+      CONTACT DRAWER {initialDirection}/{initialChannel}
+    </div>
+  ),
+}));
+
+const DEFAULT_REQUEST = { customerName: "Jane Doe", referenceCode: "R-100", status: "InProgress" };
 
 let meRole = "owner";
 vi.mock("../../../lib/apiClient", async () => {
@@ -172,6 +183,7 @@ describe("ActualWorkWorkspacePage — 4f-ii office region", () => {
     financialReview.state = { status: "loaded", visits: [financialDetail()] };
     financialReview.review.mockResolvedValue({ kind: "success" });
     financialReview.replace.mockResolvedValue(ok);
+    workspace.requestQuery.data = { ...DEFAULT_REQUEST };
     workspace.submittedVisit.mockReturnValue(READ_ONLY_VISIT);
     workspace.capture.state = { status: "no-draft" };
     workspace.capture.refetchDraft.mockClear();
@@ -259,5 +271,134 @@ describe("ActualWorkWorkspacePage — 4f-ii office region", () => {
 
     await waitFor(() => expect(workspace.capture.refetchDraft).toHaveBeenCalled());
     expect(await screen.findByText("SUCCESSOR COMPOSER aw-99")).toBeInTheDocument();
+  });
+
+  it("renders the financial-review workspace header: title, pending status, submitted metadata", async () => {
+    renderPage();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Actual Work Financial Review — Visit #1" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Pending review")).toBeInTheDocument();
+    expect(screen.getByText(/Submitted/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Back to Request/i })).toBeInTheDocument();
+    // Context rail carries the job + customer identity without competing with the totals.
+    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+    expect(screen.getAllByText(/R-100/).length).toBeGreaterThan(0);
+  });
+
+  it("colors margin totals semantically: healthy at/above 15%, thin below, negative under zero", async () => {
+    const toneClass = (nodes: HTMLElement[]) => nodes.map((n) => n.className).join(" ");
+    // Default detail: sales 100 / margin 60 → 60% → healthy.
+    const { unmount } = renderPage();
+    expect(toneClass(await screen.findAllByText("60.0%"))).toContain("ophalo-success");
+    unmount();
+
+    financialReview.state = {
+      status: "loaded",
+      visits: [financialDetail({ totalSalesPrice: 100, totalMargin: 5 })],
+    };
+    const thin = renderPage();
+    expect(toneClass(await screen.findAllByText("5.0%"))).toContain("ophalo-attention");
+    thin.unmount();
+
+    financialReview.state = {
+      status: "loaded",
+      visits: [financialDetail({ totalSalesPrice: 100, totalMargin: -10 })],
+    };
+    renderPage();
+    expect(toneClass(await screen.findAllByText("-10.0%"))).toContain("ophalo-danger");
+  });
+
+  it("renders the line-item breakdown as a table with a totals row", async () => {
+    renderPage();
+    expect(await screen.findByRole("columnheader", { name: /Item description/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Margin \(%\)/i })).toBeInTheDocument();
+    expect(screen.getAllByText("Totals").length).toBeGreaterThan(0);
+  });
+
+  it("shows the missing-cost warning and no totals row when financial data is incomplete", async () => {
+    financialReview.state = {
+      status: "loaded",
+      visits: [
+        financialDetail({
+          hasIncompleteFinancialData: true,
+          totalSalesPrice: null,
+          totalMargin: null,
+          lines: [
+            {
+              id: "l1",
+              actualQuantity: 1,
+              displayNameSnapshot: "Capacitor",
+              isFinancialDataComplete: false,
+              sellPriceResolved: false,
+              directCostResolved: false,
+              lineSalesTotal: null,
+              lineStandardExpectedDirectCostTotal: null,
+              lineMargin: null,
+            },
+          ],
+          blockers: [
+            { lineId: "l1", displayNameSnapshot: "Capacitor", sellPriceMissing: true, standardExpectedDirectCostMissing: false },
+          ],
+        }),
+      ],
+    };
+    renderPage();
+    expect(await screen.findByText(/Missing cost data/i)).toBeInTheDocument();
+    expect(screen.queryByRole("cell", { name: "Totals" })).not.toBeInTheDocument();
+    // Per-line badge in the margin cell + fail-closed disable of the primary action.
+    expect(screen.getAllByText("Resolve cost").length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: /Complete internal financial review/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(/Resolve every line’s missing price or cost/i),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the primary action enabled once every line has complete financial data", async () => {
+    renderPage();
+    expect(
+      await screen.findByRole("button", { name: /Complete internal financial review/i }),
+    ).toBeEnabled();
+  });
+
+  it("routes Call / Text / Email in the context card into the shared Contact customer drawer", async () => {
+    workspace.requestQuery.data = {
+      ...DEFAULT_REQUEST,
+      customerPhone: "5125550177",
+      customerEmail: "c@example.com",
+    };
+    renderPage();
+    await screen.findByText("Internal financial review");
+
+    await userEvent.click(screen.getByRole("button", { name: "Call" }));
+    expect(await screen.findByText("CONTACT DRAWER outbound/phone")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Text" }));
+    expect(await screen.findByText("CONTACT DRAWER outbound/sms")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Email" }));
+    expect(await screen.findByText("CONTACT DRAWER outbound/email")).toBeInTheDocument();
+  });
+
+  it("hides Call / Text when no phone and Email when no email address is on file", async () => {
+    workspace.requestQuery.data = { ...DEFAULT_REQUEST, customerEmail: "c@example.com" };
+    renderPage();
+    await screen.findByText("Internal financial review");
+    expect(screen.queryByRole("button", { name: "Call" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Text" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Email" })).toBeInTheDocument();
+  });
+
+  it("tints the margin KPI cards by tone and leaves sales / cost cards neutral", async () => {
+    renderPage();
+    const marginPctValue = (await screen.findAllByText("60.0%")).find((n) =>
+      n.className.includes("text-lg"),
+    );
+    expect(marginPctValue?.closest("div")?.className).toContain("ophalo-success-bg");
+    expect(screen.getByText("Total sales price").closest("div")?.className).toContain(
+      "bg-[var(--ophalo-card)]",
+    );
   });
 });

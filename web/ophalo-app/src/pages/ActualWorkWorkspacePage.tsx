@@ -7,15 +7,19 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { api, type KeepRequestDetailResult } from "../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../lib/requestStatus";
 import { KeepBadge } from "../components/keep/KeepBadge";
 import { KeepButton } from "../components/keep/KeepButton";
 import { ActualWorkComposer } from "./request-detail/ActualWorkComposer";
+import { ActualWorkFinancialReviewWorkspace } from "./request-detail/ActualWorkFinancialReviewWorkspace";
 import { ActualWorkReviewCard } from "./request-detail/ActualWorkReviewCard";
 import { useActualWorkWorkspace } from "./request-detail/useActualWorkWorkspace";
+// The one Contact customer drawer (QR handoff, direction/channel/outcome, "Log contact") — the
+// same overlay Request Detail owns; the workspace route reuses it, never a workspace-specific UI.
+import { LogContactModal } from "./RequestDetail";
 
 // Same 1001px protected-workspace minimum RequestWorkbenchShell measures (build-log 133 §13).
 const WIDE_QUERY = "(min-width: 1001px)";
@@ -58,6 +62,12 @@ export function ActualWorkWorkspacePage({
   // lifecycle — mirrors the Request Detail canvas banner so the wide-viewport workspace route
   // gives the same factual assurance (RD-058B-1).
   const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
+  // Contact customer drawer controller — mirrors RequestDetail's own `contactModal` state so the
+  // workspace route can open the shared `LogContactModal` for a Call / Text / Email shortcut.
+  const [contactModal, setContactModal] = useState<{ direction: string; channel: string } | null>(
+    null,
+  );
+  const queryClient = useQueryClient();
   useEffect(() => {
     if (typeof window?.matchMedia !== "function") return;
     const mq = window.matchMedia(WIDE_QUERY);
@@ -105,10 +115,95 @@ export function ActualWorkWorkspacePage({
     if (readOnlyVisit) headingRef.current?.focus();
   }, [readOnlyVisit]);
 
+  // ADR-494 D6 shared replacement handler: on a `replaced` outcome the source is superseded and a
+  // successor Draft exists, so refresh history, re-probe the retained capture hook onto the
+  // successor, then hand back to the caller to swap the route to `/draft`. Used by both the wide
+  // financial-review workspace and the legacy inline `ActualWorkReviewCard` path.
+  const handleReplace = async (v: Parameters<typeof financialReview.replace>[0], reason: string) => {
+    const outcome = await financialReview.replace(v, reason);
+    if (outcome.kind === "replaced") {
+      await history.retry();
+      await capture.refetchDraft();
+      onResolvedToDraft();
+    }
+    return outcome;
+  };
+  const handleReviewSuccess = () => {
+    void history.retry();
+    setReviewSuccessMsg(
+      "Internal financial review completed. The customer request status is unchanged.",
+    );
+  };
+
   if (!isWide) return null;
 
   const request = requestQuery.data;
   const contextBand = <TicketContextBand request={request} onExit={onExit} headingRef={headingRef} />;
+
+  // BL136 4f-ii successor layout: on a wide viewport an Owner/Admin reviewing a live (non-superseded)
+  // submitted visit whose financial detail has loaded gets the dedicated two-column financial-review
+  // workspace. Non-reviewers, superseded sources, and the financial-detail loading/error/403 states
+  // fall through to the price-blind `ReadOnlyVisit` render below.
+  const financialReviewVisit =
+    canReviewActualWork && readOnlyVisit && !readOnlyVisit.superseded && financialReview.state.status === "loaded"
+      ? financialReview.state.visits.find((v) => v.id === readOnlyVisit.id) ?? null
+      : null;
+  const visitNumber =
+    readOnlyVisit && history.state.status === "loaded"
+      ? Math.max(
+          1,
+          history.state.submittedVisits
+            .filter((v) => !v.superseded)
+            .findIndex((v) => v.id === readOnlyVisit.id) + 1,
+        )
+      : 1;
+
+  if (financialReviewVisit && request) {
+    return (
+      // Cool, pale blue-gray Keep workspace canvas — overrides the App shell's warm --ophalo-canvas
+      // for this page only; Price Book keeps the cream canvas. Header band + cards stay white.
+      <div className="flex min-h-0 flex-1 flex-col bg-[var(--keep-workspace-canvas)]">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {reviewSuccessMsg && (
+            <div className="mx-auto mt-4 w-full max-w-6xl px-4 md:px-6">
+              <div
+                role="status"
+                aria-live="polite"
+                className="rounded-xl border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-4 py-3 text-sm font-medium text-[var(--ophalo-success)]"
+              >
+                {reviewSuccessMsg}
+              </div>
+            </div>
+          )}
+          <ActualWorkFinancialReviewWorkspace
+            request={request}
+            visit={financialReviewVisit}
+            visitNumber={visitNumber}
+            onExit={onExit}
+            onContactLaunch={(direction, channel) => setContactModal({ direction, channel })}
+            onReview={financialReview.review}
+            onResolveLine={financialReview.resolveLine}
+            onRecordNoChargeDisposition={financialReview.recordNoChargeDisposition}
+            onReplace={handleReplace}
+            isVisitMutating={financialReview.isVisitMutating}
+            onReviewSuccess={handleReviewSuccess}
+          />
+        </div>
+        {contactModal && (
+          <LogContactModal
+            requestId={requestId}
+            detail={request}
+            initialDirection={contactModal.direction}
+            initialChannel={contactModal.channel}
+            onDetailUpdated={(updated) =>
+              queryClient.setQueryData(["request-detail", requestId], updated)
+            }
+            onClose={() => setContactModal(null)}
+          />
+        )}
+      </div>
+    );
+  }
 
   // Editable Draft path — host the composer inline below the persistent Keep top nav and the
   // ticket-context band, so the operator always sees which request they are recording against.
@@ -192,26 +287,9 @@ export function ActualWorkWorkspacePage({
                   onReview={financialReview.review}
                   onResolveLine={financialReview.resolveLine}
                   onRecordNoChargeDisposition={financialReview.recordNoChargeDisposition}
-                  onReplace={async (v, reason) => {
-                    const outcome = await financialReview.replace(v, reason);
-                    if (outcome.kind === "replaced") {
-                      await history.retry();
-                      // This page instance is retained across the `:visitId` → `draft` route
-                      // change, so the capture hook still holds its pre-replacement (typically
-                      // `no-draft`) state. Re-probe it onto the successor Draft the service just
-                      // created *before* switching the route, or `/draft` renders "no open draft".
-                      await capture.refetchDraft();
-                      onResolvedToDraft();
-                    }
-                    return outcome;
-                  }}
+                  onReplace={handleReplace}
                   isVisitMutating={financialReview.isVisitMutating}
-                  onReviewSuccess={() => {
-                    void history.retry();
-                    setReviewSuccessMsg(
-                      "Internal financial review completed. The customer request status is unchanged.",
-                    );
-                  }}
+                  onReviewSuccess={handleReviewSuccess}
                 />
               ) : null
             }

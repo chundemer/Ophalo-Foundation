@@ -1,11 +1,17 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-01 — GAP-045 (Default Queue language) closed as a documentation-only
-resolution: the shipped UI already satisfies its substance (title-case **All Work** tab + the
-"ranked with customer promises needing attention first" subtitle, landed with GAP-057). UI-004
-(2026-08-21) is the controlling decision; the tracker's lowercase "All work" was stale ADR-449
-casing, not a product gap. No UI change. Next tracker item is GAP-042 (authenticated request work
-lacks visible business identity).
+**Last updated:** 2026-09-01 — BL136 4f-ii **presentation upgrade** landed locally: the wide
+Owner/Admin Actual Work financial-review view is now a dedicated two-column workspace
+(`ActualWorkFinancialReviewWorkspace.tsx`) — context rail + KPI cards with semantic margin tone +
+line-item breakdown table + review card, on a cool `--keep-workspace-canvas` shell, reusing the
+shared `LogContactModal` for Call/Text/Email. No API/permission/copy-semantics change; narrow path
+and non-reviewer view unchanged. 6 files, frontend suite 988/988. **Open:** `KeepRequestDetailResult`
+has no request-title field distinct from `customerName` — needs Christian's direction. Detail in
+[BL136 §4f-ii](build-log/136-actual-work-paper-compatible-pilot-upgrade.md).
+
+GAP-045 (Default Queue language) is closed documentation-only (title-case **All Work** tab + subtitle
+already satisfy it; UI-004 controls, ADR-449 lowercase was stale). Next tracker item is GAP-042
+(authenticated request work lacks visible business identity).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
@@ -23,7 +29,8 @@ relevant build log.
 - `main` includes RD-019A and RD-058A and is ahead of `origin/main`. Every Claude session must confirm current
   worktree/branch state before editing.
 - The 4e–4f Actual Work pilot work is complete locally through item-picker drawer polish and
-  keyboard navigation (`1fe8580`). It remains code-only after the 4e-i migration; durable detail is
+  keyboard navigation (`1fe8580`), plus the 4f-ii financial-review workspace presentation upgrade
+  (2026-09-01). It remains code-only after the 4e-i migration; durable detail is
   in [BL136](build-log/136-actual-work-paper-compatible-pilot-upgrade.md).
 - The controlled pilot keeps the contractor's existing system authoritative for estimates,
   invoices, payments, and accounting. Keep is the factual field record; the existing-ticket
