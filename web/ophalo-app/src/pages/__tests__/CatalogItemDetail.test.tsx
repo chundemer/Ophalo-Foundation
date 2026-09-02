@@ -217,7 +217,7 @@ describe("CatalogItemDetail", () => {
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit item details" }));
 
     const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
     expect(nameInput.value).toBe("Condensate Pump");
@@ -232,16 +232,29 @@ describe("CatalogItemDetail", () => {
     ));
   });
 
+  it("keeps the item detail visible behind the identity edit drawer", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Edit item details" }));
+
+    expect(screen.getByRole("dialog", { name: "Edit item" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Economics & profitability" })).toBeInTheDocument();
+    expect(screen.getByText("Search aliases")).toBeInTheDocument();
+  });
+
   it("returns focus to the Edit trigger after the drawer is dismissed", async () => {
     const user = userEvent.setup();
     mockGetCatalogItem.mockResolvedValue(baseItem);
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit item details" }));
     await user.keyboard("{Escape}");
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit item details" })).toHaveFocus());
   });
 
   it("moves focus to the conflict banner when a version conflict sends the user back to review", async () => {
@@ -257,7 +270,7 @@ describe("CatalogItemDetail", () => {
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit item details" }));
     await user.type(screen.getByLabelText("Name"), "!");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -273,7 +286,7 @@ describe("CatalogItemDetail", () => {
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit item details" }));
 
     const categoryField = screen.getByLabelText("Category");
     expect(categoryField).toHaveValue("Refrigerant");
@@ -297,7 +310,7 @@ describe("CatalogItemDetail", () => {
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit item details" }));
 
     await user.clear(screen.getByLabelText("Category"));
     await user.type(screen.getByLabelText("Category"), "Ductwork");
@@ -344,7 +357,7 @@ describe("CatalogItemDetail", () => {
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit item details" }));
 
     // Preserve the rest of the edited draft while the category race resolves in the background.
     const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
@@ -379,7 +392,7 @@ describe("CatalogItemDetail", () => {
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit item details" }));
 
     const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
     await user.clear(nameInput);
@@ -395,7 +408,7 @@ describe("CatalogItemDetail", () => {
     expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
 
     // Re-entering Edit restores the unsaved draft rather than re-seeding from the refreshed item.
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit item details" }));
     const restoredNameInput = screen.getByLabelText("Name") as HTMLInputElement;
     expect(restoredNameInput.value).toBe("Condensate Pump Mk2");
 
@@ -425,7 +438,7 @@ describe("CatalogItemDetail", () => {
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit item details" }));
 
     const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
     await user.clear(nameInput);
@@ -441,10 +454,10 @@ describe("CatalogItemDetail", () => {
 
     resolveRefetch!(updatedByOtherEditor);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit item details" })).toBeEnabled());
     expect(screen.getByText("Condensate Pump (renamed by teammate)")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit item details" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(mockUpdateCatalogItemHeader).toHaveBeenLastCalledWith(
@@ -473,7 +486,7 @@ describe("CatalogItemDetail", () => {
 
     await waitFor(() => expect(mockReactivateCatalogItem).toHaveBeenCalledWith("item-1", "v1"));
     await waitFor(() => expect(screen.queryByRole("button", { name: "Reactivate" })).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Edit item details" })).toBeEnabled();
   });
 
   it("shows an already-active conflict and refreshes without crashing", async () => {
@@ -626,7 +639,7 @@ describe("CatalogItemDetail", () => {
 
     resolveRefetch!(refreshed);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit item details" })).toBeEnabled());
     expect(screen.getByRole("button", { name: "Inactivate" })).toBeEnabled();
   });
 
@@ -768,7 +781,7 @@ describe("CatalogItemDetail", () => {
 
     resolveRefetch!(refreshed);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit item details" })).toBeEnabled());
   });
 
   it("updates a price with a guided reason, no version header, refreshing item and list caches", async () => {

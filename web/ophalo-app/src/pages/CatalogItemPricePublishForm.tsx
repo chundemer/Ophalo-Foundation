@@ -218,15 +218,20 @@ export function CatalogItemPricePublishForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border border-[var(--ophalo-border)] p-4 space-y-4">
-      <h2 className="text-sm font-semibold text-[var(--ophalo-ink)]">Update pricing &amp; cost</h2>
+    <form onSubmit={handleSubmit} className="overflow-hidden rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm">
+      <div className="border-b border-[var(--ophalo-border)] px-4 py-3">
+        <h2 className="text-sm font-semibold text-[var(--ophalo-ink)]">Update pricing &amp; cost</h2>
+        <p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">Set the rates used for future actual-work capture.</p>
+      </div>
 
-      {form.pricingMode === "StandalonePrice" && (
-        <div>
-          <label htmlFor="publish-sell-price" className="text-sm font-medium text-[var(--ophalo-ink)]">
-            Sell price
-          </label>
-          <div className="relative mt-1">
+      <div className="space-y-4 p-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {form.pricingMode === "StandalonePrice" && (
+            <div>
+              <label htmlFor="publish-sell-price" className="text-sm font-medium text-[var(--ophalo-ink)]">
+                Sell price
+              </label>
+              <div className="relative mt-1">
             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--ophalo-muted)]">
               {symbol}
             </span>
@@ -244,18 +249,18 @@ export function CatalogItemPricePublishForm({
               disabled={publishPriceMutation.isPending}
               className={`pl-6 text-lg ${INPUT_CLS} ${fieldErrors.sellPrice ? ERROR_INPUT_CLS : ""}`}
             />
-          </div>
-          {fieldErrors.sellPrice && (
-            <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.sellPrice}</p>
+              </div>
+              {fieldErrors.sellPrice && (
+                <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.sellPrice}</p>
+              )}
+            </div>
           )}
-        </div>
-      )}
 
-      <div>
-        <label htmlFor="publish-cost" className="text-xs font-medium text-[var(--ophalo-muted)]">
-          Internal cost (optional)
-        </label>
-        <div className="relative mt-1">
+          <div>
+            <label htmlFor="publish-cost" className="text-sm font-medium text-[var(--ophalo-ink)]">
+              Internal cost <span className="font-normal text-[var(--ophalo-muted)]">(optional)</span>
+            </label>
+            <div className="relative mt-1">
           <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--ophalo-muted)]">
             {symbol}
           </span>
@@ -273,14 +278,15 @@ export function CatalogItemPricePublishForm({
             disabled={publishPriceMutation.isPending}
             className={`pl-6 ${INPUT_CLS} ${fieldErrors.cost ? ERROR_INPUT_CLS : ""}`}
           />
+            </div>
+            <p className="mt-1 text-xs text-[var(--ophalo-muted)]">
+              Used for margin reporting; customers do not see this.
+            </p>
+            {fieldErrors.cost && <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.cost}</p>}
+          </div>
         </div>
-        <p className="mt-1 text-xs text-[var(--ophalo-muted)]">
-          Used for margin reporting; customers do not see this.
-        </p>
-        {fieldErrors.cost && <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.cost}</p>}
-      </div>
 
-      {showBelowCostWarning && (
+        {showBelowCostWarning && (
         <div className="rounded-lg px-3 py-2 bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)] flex flex-col gap-2">
           <p className="text-sm">Sell price is below cost. This is permitted, but confirm it's intentional.</p>
           <label className="flex items-center gap-2 text-sm">
@@ -294,9 +300,9 @@ export function CatalogItemPricePublishForm({
             I understand this item is priced below cost
           </label>
         </div>
-      )}
+        )}
 
-      <details
+        <details
         open={advancedOpen}
         onToggle={(e) => setAdvancedOpen((e.target as HTMLDetailsElement).open)}
         className="rounded-lg border border-[var(--ophalo-border)] px-3 py-2"
@@ -326,9 +332,9 @@ export function CatalogItemPricePublishForm({
             </span>
           </span>
         </label>
-      </details>
+        </details>
 
-      <div>
+        <div>
         <label htmlFor="publish-reason" className="text-xs font-medium text-[var(--ophalo-muted)]">
           Why are you updating this?
         </label>
@@ -361,40 +367,36 @@ export function CatalogItemPricePublishForm({
           />
         )}
         {fieldErrors.reason && <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.reason}</p>}
-      </div>
+        </div>
 
-      {formError && (
+        {formError && (
         <p className="text-sm rounded-lg px-3 py-2 text-[var(--ophalo-danger)] bg-[var(--ophalo-danger-bg)]">
           {formError}
         </p>
-      )}
+        )}
 
-      {!publishPriceMutation.isPending && noPriceChange && (
+        {!publishPriceMutation.isPending && noPriceChange && (
         <p className="text-xs text-[var(--ophalo-muted)]">Change a price or pricing option to update this item.</p>
-      )}
+        )}
+      </div>
 
-      {/* Sticky save bar (2026-08-13): the reason selector and save action previously sat below
-          the fold, forcing a scroll before an owner arriving from the assembly cost-repair link
-          could finish the fix. This is the form's last child and normal document flow is
-          untouched above it — sticky's own geometry keeps it from ever covering the reason
-          selector, error text, or below-cost confirmation as they scroll past. The negative
-          margin/matching padding bleeds it to the card's edges so it reads as a docked bar rather
-          than a floating box, while `rounded-b-xl` keeps the card's corner radius intact. */}
-      <div className="sticky bottom-0 -mx-4 -mb-4 rounded-b-xl border-t border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 flex items-center gap-3">
+      {/* Dedicated footer keeps the two actions visually balanced and visible as the owner
+          reviews the reason, validation, and below-cost acknowledgement above. */}
+      <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={publishPriceMutation.isPending}
+          className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-surface-muted)] disabled:opacity-60"
+        >
+          Cancel
+        </button>
         <button
           type="submit"
           disabled={publishPriceMutation.isPending || noPriceChange}
           className="rounded-lg bg-[var(--keep-accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
         >
           {publishPriceMutation.isPending ? "Updating…" : "Update pricing & cost"}
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={publishPriceMutation.isPending}
-          className="text-sm text-[var(--ophalo-muted)] hover:underline disabled:opacity-60"
-        >
-          Cancel
         </button>
       </div>
     </form>

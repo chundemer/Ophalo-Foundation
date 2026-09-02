@@ -656,29 +656,31 @@ export function CatalogItemDetail({
               </div>
             )}
 
-            <EconomicsPanel
-              cost={data.currentCost}
-              sellPrice={data.currentPricingMode === "NoStandalonePrice" ? null : data.currentSellPrice}
-              noStandalonePrice={data.currentPricingMode === "NoStandalonePrice"}
-              currency={data.item.currency}
-            />
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+              <div className="space-y-4 xl:col-span-7">
+                <EconomicsPanel
+                  cost={data.currentCost}
+                  sellPrice={data.currentPricingMode === "NoStandalonePrice" ? null : data.currentSellPrice}
+                  noStandalonePrice={data.currentPricingMode === "NoStandalonePrice"}
+                  currency={data.item.currency}
+                />
 
-            {/* The repair/edit form is the first actionable content once opened — directly after
-                the header/summary, before Profitability and Aliases — so an owner arriving via
-                the assembly cost-repair link (or clicking Update pricing & cost normally) doesn't
-                have to scroll past unrelated alias management to reach it (2026-08-13). */}
-            {showPublishForm && (
-              <CatalogItemPricePublishForm
-                catalogItemId={catalogItemId}
-                currency={data.item.currency}
-                currentCost={data.currentCost}
-                currentSellPrice={data.currentSellPrice}
-                currentPricingMode={data.currentPricingMode}
-                onClose={() => setShowPublishForm(false)}
-              />
-            )}
+                {/* Pricing stays next to its economics context, so rate changes can be reviewed
+                    against the current cost, margin, and markup without a detached overlay. */}
+                {showPublishForm && (
+                  <CatalogItemPricePublishForm
+                    catalogItemId={catalogItemId}
+                    currency={data.item.currency}
+                    currentCost={data.currentCost}
+                    currentSellPrice={data.currentSellPrice}
+                    currentPricingMode={data.currentPricingMode}
+                    onClose={() => setShowPublishForm(false)}
+                  />
+                )}
+              </div>
 
-            <section className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-4 shadow-sm" aria-labelledby="aliases-heading">
+              <div className="space-y-4 xl:col-span-5">
+                <section className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-4 shadow-sm" aria-labelledby="aliases-heading">
               <h2 id="aliases-heading" className="text-sm font-semibold text-[var(--ophalo-ink)]">Search aliases</h2>
               <p className="mt-1 text-xs text-[var(--ophalo-muted)]">Helps technicians find this item in field search using alternate terms or shorthand.</p>
               {data.aliases.length === 0 ? (
@@ -740,7 +742,31 @@ export function CatalogItemDetail({
                   {addAliasMutation.isPending ? "Adding…" : "Add"}
                 </button>
               </form>
-            </section>
+                </section>
+
+                <section className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-4 shadow-sm" aria-labelledby="metadata-heading">
+                  <h2 id="metadata-heading" className="text-sm font-semibold text-[var(--ophalo-ink)]">Item metadata</h2>
+                  <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <dt className="text-xs text-[var(--ophalo-muted)]">Category</dt>
+                      <dd className="mt-0.5 font-medium text-[var(--ophalo-ink)]">{data.category?.name ?? "Uncategorized"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-[var(--ophalo-muted)]">Unit of measure</dt>
+                      <dd className="mt-0.5 font-medium text-[var(--ophalo-ink)]">{data.item.unitOfMeasure}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-[var(--ophalo-muted)]">SKU</dt>
+                      <dd className="mt-0.5 break-words font-medium text-[var(--ophalo-ink)]">{data.item.externalKey ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-[var(--ophalo-muted)]">Common item</dt>
+                      <dd className="mt-0.5 font-medium text-[var(--ophalo-ink)]">{data.item.isCommonItem ? "Yes" : "No"}</dd>
+                    </div>
+                  </dl>
+                </section>
+              </div>
+            </div>
           </div>
         )}
 
