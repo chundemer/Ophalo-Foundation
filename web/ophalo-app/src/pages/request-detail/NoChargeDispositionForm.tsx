@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { INPUT_CLS } from "./helpers";
 import { type FinancialReviewOutcome } from "./useActualWorkFinancialReview";
@@ -6,15 +6,24 @@ import { type FinancialReviewOutcome } from "./useActualWorkFinancialReview";
 interface NoChargeDispositionFormProps {
   busy: boolean;
   onSubmit: (reason: string) => Promise<FinancialReviewOutcome>;
+  /** BL138 Slice 2: reports whether the reason field holds unsaved text, so the wide
+   *  financial-review workspace can guard a visit switch / back / next navigation. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /** Inline no-charge disposition entry for a zero-line submitted visit that has no disposition yet.
  * The card renders this only for an unreviewed, zero-line visit with hasNoChargeDisposition === false. */
-export function NoChargeDispositionForm({ busy, onSubmit }: NoChargeDispositionFormProps) {
+export function NoChargeDispositionForm({ busy, onSubmit, onDirtyChange }: NoChargeDispositionFormProps) {
   const [reason, setReason] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [errored, setErrored] = useState(false);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
+
+  const dirty = reason.trim() !== "";
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   async function submit() {
     if (busy) return;

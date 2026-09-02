@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
 import {
   type ActualWorkFinancialDetailResult,
   type ActualWorkFinancialResolutionBody,
+  type ActualWorkRequestPendingReviewEntry,
   type KeepRequestDetailResult,
 } from "../../lib/apiClient";
 
@@ -122,6 +123,14 @@ interface ActualWorkFinancialReviewWorkspaceProps {
   ) => Promise<FinancialReviewOutcome>;
   isVisitMutating: (visitId: string) => boolean;
   onReviewSuccess: () => void;
+  /** BL138 Slice 2: the request's server-ordered pending financial reviews (submitted / unreviewed
+   *  / non-superseded), including this visit while it is still pending. The compact switcher renders
+   *  only when there are 2 or more. */
+  pendingItems: ActualWorkRequestPendingReviewEntry[];
+  /** Navigate the workspace route to another pending visit (replaceState — exact-visit URL kept). */
+  onSwitchVisit: (actualWorkId: string) => void;
+  /** First remaining server-ordered pending visit other than this one, or null. No wraparound. */
+  nextPendingVisitId: string | null;
 }
 
 export function ActualWorkFinancialReviewWorkspace({
@@ -136,6 +145,9 @@ export function ActualWorkFinancialReviewWorkspace({
   onReplace,
   isVisitMutating,
   onReviewSuccess,
+  pendingItems,
+  onSwitchVisit,
+  nextPendingVisitId,
 }: ActualWorkFinancialReviewWorkspaceProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -166,6 +178,51 @@ export function ActualWorkFinancialReviewWorkspace({
 
   const [note, setNote] = useState(visit.reviewNote ?? "");
   const [notice, setNotice] = useState<string | null>(null);
+
+  // BL138 Slice 2 dirty-switch protection. The reviewer note is owned here; each inline resolution
+  // form (line resolution, no-charge disposition, correction) reports its own unsaved input through
+  // `onDirtyChange` into this stable registry. A switch / back / next navigation is intercepted
+  // with a discard confirmation while anything is dirty.
+  const noteDirty = note !== (visit.reviewNote ?? "");
+  const [dirtyForms, setDirtyForms] = useState<ReadonlySet<string>>(() => new Set());
+  const binders = useRef<Map<string, (dirty: boolean) => void>>(new Map());
+  const bindDirty = useCallback((key: string) => {
+    let fn = binders.current.get(key);
+    if (!fn) {
+      fn = (dirty: boolean) =>
+        setDirtyForms((prev) => {
+          if (dirty === prev.has(key)) return prev;
+          const next = new Set(prev);
+          if (dirty) next.add(key);
+          else next.delete(key);
+          return next;
+        });
+      binders.current.set(key, fn);
+    }
+    return fn;
+  }, []);
+  // Once the visit is reviewed the note textarea and every resolution form are unmounted, so their
+  // unsaved-input state no longer matters — the post-success "Review next" / "Back" actions never
+  // prompt.
+  const isDirty = !reviewed && (noteDirty || dirtyForms.size > 0);
+
+  type PendingNav = { kind: "exit" } | { kind: "switch"; visitId: string } | { kind: "next" };
+  const [pendingNav, setPendingNav] = useState<PendingNav | null>(null);
+  const runNav = useCallback(
+    (nav: PendingNav) => {
+      if (nav.kind === "exit") onExit();
+      else if (nav.kind === "switch") onSwitchVisit(nav.visitId);
+      else if (nextPendingVisitId) onSwitchVisit(nextPendingVisitId);
+    },
+    [onExit, onSwitchVisit, nextPendingVisitId],
+  );
+  const attemptNav = useCallback(
+    (nav: PendingNav) => {
+      if (isDirty) setPendingNav(nav);
+      else runNav(nav);
+    },
+    [isDirty, runNav],
+  );
 
   async function markReviewed() {
     if (busy || reviewBlocked) return;
@@ -200,7 +257,7 @@ export function ActualWorkFinancialReviewWorkspace({
           <div className="flex flex-wrap items-center gap-x-2 text-sm">
             <button
               type="button"
-              onClick={onExit}
+              onClick={() => attemptNav({ kind: "exit" })}
               className="inline-flex items-center gap-1 font-medium text-[var(--keep-accent)] hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
@@ -232,6 +289,14 @@ export function ActualWorkFinancialReviewWorkspace({
           </div>
         </div>
       </header>
+
+      {pendingItems.length >= 2 && (
+        <PendingVisitSwitcher
+          items={pendingItems}
+          currentVisitId={visit.id}
+          onSelect={(id) => attemptNav({ kind: "switch", visitId: id })}
+        />
+      )}
 
       <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-6">
         <div className="grid grid-cols-1 gap-5 min-[1001px]:grid-cols-[32fr_68fr]">
@@ -309,6 +374,7 @@ export function ActualWorkFinancialReviewWorkspace({
                       onSubmit={(reason) =>
                         onRecordNoChargeDisposition(visit, reason)
                       }
+                      onDirtyChange={bindDirty("no-charge")}
                     />
                   )}
                 </div>
@@ -331,6 +397,7 @@ export function ActualWorkFinancialReviewWorkspace({
                           onSubmit={(lineId, body) =>
                             onResolveLine(visit, lineId, body)
                           }
+                          onDirtyChange={bindDirty(`resolve-${blocker.lineId}`)}
                         />
                       </div>
                     ))}
@@ -365,17 +432,32 @@ export function ActualWorkFinancialReviewWorkspace({
               )}
 
               {reviewed ? (
-                <div className="mt-3 flex items-start gap-2 text-xs text-[var(--ophalo-muted)]">
-                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ophalo-success)]" />
-                  <span>
-                    <span className="font-semibold text-[var(--ophalo-success)]">
-                      Financial review completed
-                    </span>{" "}
-                    · reviewed {formatDate(visit.reviewedAtUtc!)} by{" "}
-                    {visit.reviewedByDisplayName ?? "an authorized reviewer"}
-                    {visit.reviewNote ? ` · “${visit.reviewNote}”` : ""}
-                  </span>
-                </div>
+                <>
+                  <div className="mt-3 flex items-start gap-2 text-xs text-[var(--ophalo-muted)]">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ophalo-success)]" />
+                    <span>
+                      <span className="font-semibold text-[var(--ophalo-success)]">
+                        Financial review completed
+                      </span>{" "}
+                      · reviewed {formatDate(visit.reviewedAtUtc!)} by{" "}
+                      {visit.reviewedByDisplayName ?? "an authorized reviewer"}
+                      {visit.reviewNote ? ` · “${visit.reviewNote}”` : ""}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {nextPendingVisitId && (
+                      <KeepButton onClick={() => attemptNav({ kind: "next" })}>
+                        Review next pending visit
+                      </KeepButton>
+                    )}
+                    <KeepButton
+                      variant="secondary"
+                      onClick={() => attemptNav({ kind: "exit" })}
+                    >
+                      Back to request
+                    </KeepButton>
+                  </div>
+                </>
               ) : (
                 <>
                   {notice && (
@@ -419,6 +501,7 @@ export function ActualWorkFinancialReviewWorkspace({
                         presentation="button"
                         busy={busy}
                         onSubmit={(reason) => onReplace(visit, reason)}
+                        onDirtyChange={bindDirty("replace")}
                       />
                     </div>
                     <KeepButton
@@ -434,7 +517,102 @@ export function ActualWorkFinancialReviewWorkspace({
           </div>
         </div>
       </div>
+
+      {pendingNav && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="aw-review-discard-heading"
+          aria-describedby="aw-review-discard-body"
+          className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 px-6"
+        >
+          <div className="flex w-full max-w-sm flex-col gap-3 rounded-lg bg-[var(--ophalo-card)] p-4 shadow-xl">
+            <h3
+              id="aw-review-discard-heading"
+              className="font-serif text-lg font-semibold text-[var(--ophalo-ink)]"
+            >
+              Discard your unsaved entries?
+            </h3>
+            <p id="aw-review-discard-body" className="text-sm text-[var(--ophalo-muted)]">
+              Your reviewer note and any in-progress resolution, no-charge, or correction entry on
+              this visit have not been submitted. Leaving now discards them.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingNav(null)}
+                className="rounded text-sm font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const nav = pendingNav;
+                  setPendingNav(null);
+                  runNav(nav);
+                }}
+                className="rounded-lg bg-[var(--ophalo-danger)] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+              >
+                Discard and continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+/** BL138 Slice 2: the compact pending-visit switcher. Rendered only for 2+ pending visits. The
+ * current visit is marked `aria-current`; every row is a direct switch to that exact visit. */
+function PendingVisitSwitcher({
+  items,
+  currentVisitId,
+  onSelect,
+}: {
+  items: ActualWorkRequestPendingReviewEntry[];
+  currentVisitId: string;
+  onSelect: (actualWorkId: string) => void;
+}) {
+  return (
+    <nav
+      aria-label="Pending financial reviews on this request"
+      className="border-b border-[var(--ophalo-border)] bg-[var(--ophalo-card)]"
+    >
+      <div className="mx-auto w-full max-w-6xl px-4 py-3 md:px-6">
+        <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--ophalo-muted)]">
+          Pending financial reviews ({items.length})
+        </p>
+        <ul className="mt-2 flex flex-wrap gap-2">
+          {items.map((item, index) => {
+            const current = item.actualWorkId === currentVisitId;
+            const needsWork = item.reviewStatus !== "ReadyToReview";
+            return (
+              <li key={item.actualWorkId}>
+                <button
+                  type="button"
+                  aria-current={current ? "true" : undefined}
+                  onClick={() => !current && onSelect(item.actualWorkId)}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
+                    current
+                      ? "border-[var(--keep-accent)] bg-[var(--keep-accent)] text-white"
+                      : "border-[var(--ophalo-border)] text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)]"
+                  }`}
+                >
+                  {needsWork ? (
+                    <CircleAlert className="h-3.5 w-3.5 shrink-0" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5 shrink-0" />
+                  )}
+                  Visit #{index + 1} · {formatDate(item.submittedAtUtc)}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </nav>
   );
 }
 

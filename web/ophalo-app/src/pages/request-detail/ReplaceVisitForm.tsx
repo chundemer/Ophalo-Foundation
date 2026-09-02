@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { INPUT_CLS } from "./helpers";
 import { type FinancialReviewOutcome } from "./useActualWorkFinancialReview";
@@ -12,6 +12,9 @@ interface ReplaceVisitFormProps {
    *  card. `"button"`: an outlined secondary-action trigger for the wide financial-review
    *  workspace, so it reads as an operable corrective path beside the primary teal action. */
   presentation?: "inline" | "button";
+  /** BL138 Slice 2: reports whether the correction-reason field holds unsaved text, so the wide
+   *  financial-review workspace can guard a visit switch / back / next navigation. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 const TRIGGER_INLINE =
@@ -24,11 +27,17 @@ const TRIGGER_BUTTON =
  * supersedes this card's data and routes to the successor Draft, so this form only has to surface
  * the failure outcomes. The erroneous source and its financial evidence are retained — this starts
  * a linked correction, it does not delete anything. */
-export function ReplaceVisitForm({ busy, onSubmit, presentation = "inline" }: ReplaceVisitFormProps) {
+export function ReplaceVisitForm({ busy, onSubmit, presentation = "inline", onDirtyChange }: ReplaceVisitFormProps) {
   const [reason, setReason] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [errored, setErrored] = useState(false);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
+
+  const dirty = reason.trim() !== "";
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   async function submit() {
     if (busy) return;

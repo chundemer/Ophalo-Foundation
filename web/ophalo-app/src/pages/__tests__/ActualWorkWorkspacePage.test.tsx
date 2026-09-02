@@ -92,6 +92,7 @@ function renderPage(props: Partial<React.ComponentProps<typeof ActualWorkWorkspa
         visit="draft"
         onExit={props.onExit ?? vi.fn()}
         onResolvedToDraft={props.onResolvedToDraft ?? vi.fn()}
+        onSwitchVisit={props.onSwitchVisit ?? vi.fn()}
         {...props}
       />
     </QueryClientProvider>,

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type ActualWorkFinancialBlockerEntry,
   type ActualWorkFinancialResolutionBody,
@@ -29,17 +29,27 @@ interface FinancialResolutionFormProps {
   blocker: ActualWorkFinancialBlockerEntry;
   busy: boolean;
   onSubmit: (lineId: string, body: ActualWorkFinancialResolutionBody) => Promise<FinancialReviewOutcome>;
+  /** BL138 Slice 2: reports whether any resolution field holds unsaved input, so the wide
+   *  financial-review workspace can guard a visit switch / back / next navigation. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /** Inline, missing-component-only resolution entry for one still-incomplete line. Preserves the
  * draft on a validation failure and focuses the first errored field; never a drawer or modal. */
-export function FinancialResolutionForm({ blocker, busy, onSubmit }: FinancialResolutionFormProps) {
+export function FinancialResolutionForm({ blocker, busy, onSubmit, onDirtyChange }: FinancialResolutionFormProps) {
   const [sellPrice, setSellPrice] = useState("");
   const [directCost, setDirectCost] = useState("");
   const [basis, setBasis] = useState("");
   const [reason, setReason] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [erroredField, setErroredField] = useState<FieldKey | null>(null);
+
+  const dirty =
+    sellPrice.trim() !== "" || directCost.trim() !== "" || basis !== "" || reason.trim() !== "";
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const sellPriceRef = useRef<HTMLInputElement>(null);
   const directCostRef = useRef<HTMLInputElement>(null);

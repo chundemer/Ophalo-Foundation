@@ -414,9 +414,48 @@ review corrections. **7 production + 5 test files; frontend suite 1004/1004, `ts
 - Test infra: `Element.prototype.scrollIntoView` stub is local to `ActualWorkReviewCard.test.tsx`
   (a global stub in `src/test/setup.ts` broke an `ActualWorkComposer` assertion — reverted).
 
+## Slice 2 — implemented (2026-09-02, pending commit)
+
+Frontend only, per the accepted Slice 2 gate. **6 production + 3 test files (1 new); `tsc` clean;
+frontend suite 1014/1014.** No API / permission / migration / server change.
+
+- **Switcher data** — `ActualWorkWorkspacePage` composes `useActualWorkPendingReviews(requestId,
+  canReviewActualWork)` (server-authoritative; the same hook 1B-client added). Keyed to the
+  request, so a visit switch does not refetch it. No client re-derivation.
+- **Switcher UI** — `PendingVisitSwitcher` inside `ActualWorkFinancialReviewWorkspace`, a `<nav>`
+  band below the header, rendered **only for `pendingItems.length >= 2`**. Current visit is
+  `aria-current` and inert; every other row calls the switch path for that exact `actualWorkId`.
+- **Switch mechanism** — new `onSwitchVisit(actualWorkId)` prop; `App.tsx` does
+  `history.replaceState` to `#/request/{id}/actual-work/{visitId}` + `setRoute` (exact-visit URL
+  kept, no Back-stack entry — GAP-061 pattern). The page passes `key={visit.id}` to the workspace
+  so it remounts cleanly per visit.
+- **"Review next pending visit"** — page computes `nextPendingVisitId` = first `pendingItems` entry
+  whose `actualWorkId !== reviewVisitId` (server order, **no wraparound**; `null` when none). The
+  workspace's post-review block shows **Review next pending visit** (when non-null) + **Back to
+  request**; both route through the same guarded nav. Never auto-navigates.
+- **Dirty-switch protection** — optional `onDirtyChange` added to `FinancialResolutionForm`,
+  `NoChargeDispositionForm`, `ReplaceVisitForm` (fires on any non-empty field incl. correction
+  reason text; unmount reports `false`). The workspace aggregates those into a stable keyed
+  registry + the reviewer-note diff → `isDirty`; switch / back / next while dirty opens an inline
+  `role="alertdialog"` discard confirm ("Keep editing" / "Discard and continue"). `isDirty` is
+  forced false once `reviewed` (forms unmounted). Browser refresh is deliberately not guarded.
+- **Refresh** — `reloadPendingUnlessHidden` wraps `review` / `resolveLine` /
+  `recordNoChargeDisposition` in the page and reloads the projection on every non-`hidden` outcome
+  (BL138 §3 list); the `replaced` branch of `handleReplace` reloads too.
+- Wide-only (unchanged): the page still redirects a narrow deep-link to Request Detail.
+- **Known limitation:** while a switched-to visit's financial detail loads, the page briefly shows
+  the price-blind read-only view (no switcher) before the workspace re-renders.
+
+Files: `App.tsx`, `ActualWorkWorkspacePage.tsx`, `ActualWorkFinancialReviewWorkspace.tsx`,
+`FinancialResolutionForm.tsx`, `NoChargeDispositionForm.tsx`, `ReplaceVisitForm.tsx`;
+tests `ActualWorkFinancialReviewWorkspace.slice2.test.tsx` (new — switcher visibility, switch,
+note-dirty + form-dirty guard, keep-editing, review-next target, no-wraparound), plus additions to
+`ActualWorkWorkspacePage.officeRegion.test.tsx` (page-level switcher + post-mutation reload) and a
+one-line `onSwitchVisit` prop in `ActualWorkWorkspacePage.test.tsx`.
+
 ## Handoff instruction
 
-Slice 1B-server (`faf7b64`) and Slice 1B-client (`e27c48c`) are committed. The next slice is **Slice 2**
-(§"Slice 2 — request-scoped workspace continuation"), a separate session: the wide workspace
-pending-visit switcher and post-success **Review next pending visit** continuation with
-dirty-switch protection.
+Slice 1B-server (`faf7b64`) and Slice 1B-client (`e27c48c`) are committed; Slice 2 is implemented
+locally, pending commit. The remaining slice is **Slice 3** (§"Slice 3 — queue discoverability"),
+a separate preflight: the quiet server-authoritative request-row count cue and a clearly named,
+persistent Office/Actual Work Review destination.

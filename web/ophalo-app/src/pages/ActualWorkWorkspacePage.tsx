@@ -17,6 +17,7 @@ import { ActualWorkComposer } from "./request-detail/ActualWorkComposer";
 import { ActualWorkFinancialReviewWorkspace } from "./request-detail/ActualWorkFinancialReviewWorkspace";
 import { ActualWorkReviewCard } from "./request-detail/ActualWorkReviewCard";
 import { useActualWorkWorkspace } from "./request-detail/useActualWorkWorkspace";
+import { useActualWorkPendingReviews } from "./request-detail/useActualWorkPendingReviews";
 // The one Contact customer drawer (QR handoff, direction/channel/outcome, "Log contact") — the
 // same overlay Request Detail owns; the workspace route reuses it, never a workspace-specific UI.
 import { LogContactModal } from "./RequestDetail";
@@ -40,6 +41,9 @@ interface ActualWorkWorkspacePageProps {
   /** Called once the `"new"` entry has created (or found) the Draft — the caller replaces the URL
    *  segment with `"draft"`. */
   onResolvedToDraft: () => void;
+  /** BL138 Slice 2: switch the workspace route to another pending visit on this request. The
+   *  caller uses `replaceState` so the exact-visit URL is retained without a Back-stack entry. */
+  onSwitchVisit: (actualWorkId: string) => void;
 }
 
 /**
@@ -54,6 +58,7 @@ export function ActualWorkWorkspacePage({
   visit,
   onExit,
   onResolvedToDraft,
+  onSwitchVisit,
 }: ActualWorkWorkspacePageProps) {
   const [isWide, setIsWide] = useState(
     () => typeof window?.matchMedia === "function" && window.matchMedia(WIDE_QUERY).matches,
@@ -94,6 +99,10 @@ export function ActualWorkWorkspacePage({
     canReviewActualWork,
     reviewVisitId,
   );
+  // BL138 Slice 2: the request-scoped, server-authoritative pending-review projection powers the
+  // wide workspace's visit switcher and the post-success "Review next pending visit" target. It is
+  // keyed to the request, so switching between visits does not refetch it.
+  const pendingReviews = useActualWorkPendingReviews(requestId, canReviewActualWork);
 
   // `"new"` compatibility path: create (or confirm) the Draft, then hand back to the caller to
   // swap the URL to `/draft`. Guarded so it fires once.
@@ -124,6 +133,7 @@ export function ActualWorkWorkspacePage({
     if (outcome.kind === "replaced") {
       await history.retry();
       await capture.refetchDraft();
+      void pendingReviews.reload();
       onResolvedToDraft();
     }
     return outcome;
@@ -134,6 +144,33 @@ export function ActualWorkWorkspacePage({
       "Internal financial review completed. The customer request status is unchanged.",
     );
   };
+
+  // BL138 Slice 2: every financial mutation outcome except `hidden` can change pending-card row
+  // membership or a row's `reviewStatus` (BL138 §3), so reload the request-scoped projection after
+  // each. The financial-review hook still self-reloads its own detail state; history refresh stays
+  // on `handleReviewSuccess`.
+  const reloadPendingUnlessHidden = <T extends { kind: string }>(outcome: T): T => {
+    if (outcome.kind !== "hidden") void pendingReviews.reload();
+    return outcome;
+  };
+  const handleReview = async (
+    v: Parameters<typeof financialReview.review>[0],
+    note: string | null,
+  ) => reloadPendingUnlessHidden(await financialReview.review(v, note));
+  const handleResolveLine = async (
+    v: Parameters<typeof financialReview.resolveLine>[0],
+    lineId: string,
+    body: Parameters<typeof financialReview.resolveLine>[2],
+  ) => reloadPendingUnlessHidden(await financialReview.resolveLine(v, lineId, body));
+  const handleRecordNoChargeDisposition = async (
+    v: Parameters<typeof financialReview.recordNoChargeDisposition>[0],
+    reason: string,
+  ) => reloadPendingUnlessHidden(await financialReview.recordNoChargeDisposition(v, reason));
+
+  const pendingItems =
+    pendingReviews.state.status === "loaded" ? pendingReviews.state.items : [];
+  const nextPendingVisitId =
+    pendingItems.find((item) => item.actualWorkId !== reviewVisitId)?.actualWorkId ?? null;
 
   if (!isWide) return null;
 
@@ -176,17 +213,21 @@ export function ActualWorkWorkspacePage({
             </div>
           )}
           <ActualWorkFinancialReviewWorkspace
+            key={financialReviewVisit.id}
             request={request}
             visit={financialReviewVisit}
             visitNumber={visitNumber}
             onExit={onExit}
             onContactLaunch={(direction, channel) => setContactModal({ direction, channel })}
-            onReview={financialReview.review}
-            onResolveLine={financialReview.resolveLine}
-            onRecordNoChargeDisposition={financialReview.recordNoChargeDisposition}
+            onReview={handleReview}
+            onResolveLine={handleResolveLine}
+            onRecordNoChargeDisposition={handleRecordNoChargeDisposition}
             onReplace={handleReplace}
             isVisitMutating={financialReview.isVisitMutating}
             onReviewSuccess={handleReviewSuccess}
+            pendingItems={pendingItems}
+            onSwitchVisit={onSwitchVisit}
+            nextPendingVisitId={nextPendingVisitId}
           />
         </div>
         {contactModal && (
@@ -284,9 +325,9 @@ export function ActualWorkWorkspacePage({
                 <ActualWorkReviewCard
                   state={financialReview.state}
                   onRetry={() => void financialReview.retry()}
-                  onReview={financialReview.review}
-                  onResolveLine={financialReview.resolveLine}
-                  onRecordNoChargeDisposition={financialReview.recordNoChargeDisposition}
+                  onReview={handleReview}
+                  onResolveLine={handleResolveLine}
+                  onRecordNoChargeDisposition={handleRecordNoChargeDisposition}
                   onReplace={handleReplace}
                   isVisitMutating={financialReview.isVisitMutating}
                   onReviewSuccess={handleReviewSuccess}

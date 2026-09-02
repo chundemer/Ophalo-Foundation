@@ -120,6 +120,9 @@ vi.mock("../../RequestDetail", () => ({
 const DEFAULT_REQUEST = { customerName: "Jane Doe", referenceCode: "R-100", status: "InProgress" };
 
 let meRole = "owner";
+// BL138 Slice 2: the request-scoped pending-review projection the wide workspace now composes.
+// Default is empty so existing office-region assertions are unaffected (switcher stays hidden).
+let pendingReviewsResult: { count: number; items: unknown[] } = { count: 0, items: [] };
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
   return {
@@ -127,6 +130,7 @@ vi.mock("../../../lib/apiClient", async () => {
     api: {
       ...actual.api,
       getMe: vi.fn().mockImplementation(() => Promise.resolve({ accountUserId: "u1", accountRole: meRole })),
+      getActualWorkPendingReviewsForRequest: vi.fn().mockImplementation(() => Promise.resolve(pendingReviewsResult)),
     },
   };
 });
@@ -154,6 +158,7 @@ function renderPage() {
         visit="aw-42"
         onExit={vi.fn()}
         onResolvedToDraft={vi.fn()}
+        onSwitchVisit={vi.fn()}
       />
     </QueryClientProvider>,
   );
@@ -171,6 +176,7 @@ function Harness() {
         visit={visit}
         onExit={vi.fn()}
         onResolvedToDraft={() => setVisit("draft")}
+        onSwitchVisit={vi.fn()}
       />
     </QueryClientProvider>
   );
@@ -179,6 +185,7 @@ function Harness() {
 describe("ActualWorkWorkspacePage — 4f-ii office region", () => {
   beforeEach(() => {
     meRole = "owner";
+    pendingReviewsResult = { count: 0, items: [] };
     stubWideMatchMedia();
     financialReview.state = { status: "loaded", visits: [financialDetail()] };
     financialReview.review.mockResolvedValue({ kind: "success" });
@@ -247,6 +254,39 @@ describe("ActualWorkWorkspacePage — 4f-ii office region", () => {
         "Internal financial review completed. The customer request status is unchanged.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("BL138 Slice 2: shows the pending-visit switcher only for 2+ pending visits and reloads it after a mutation", async () => {
+    const { api } = await import("../../../lib/apiClient");
+    pendingReviewsResult = {
+      count: 2,
+      items: [
+        { actualWorkId: "aw-42", submittedAtUtc: "2026-08-20T10:00:00Z", lineCount: 1, recorderDisplayName: "Dana", reviewStatus: "ReadyToReview" },
+        { actualWorkId: "aw-77", submittedAtUtc: "2026-08-21T10:00:00Z", lineCount: 2, recorderDisplayName: "Dana", reviewStatus: "NeedsCostPriceResolution" },
+      ],
+    };
+    financialReview.review.mockResolvedValue({ kind: "success" });
+    renderPage();
+    expect(
+      await screen.findByRole("navigation", { name: /pending financial reviews on this request/i }),
+    ).toBeInTheDocument();
+    const calls = (api.getActualWorkPendingReviewsForRequest as ReturnType<typeof vi.fn>).mock.calls.length;
+    await userEvent.click(await screen.findByRole("button", { name: /Complete internal financial review/i }));
+    await waitFor(() =>
+      expect((api.getActualWorkPendingReviewsForRequest as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(calls),
+    );
+  });
+
+  it("BL138 Slice 2: no switcher for a single pending visit", async () => {
+    pendingReviewsResult = {
+      count: 1,
+      items: [
+        { actualWorkId: "aw-42", submittedAtUtc: "2026-08-20T10:00:00Z", lineCount: 1, recorderDisplayName: "Dana", reviewStatus: "ReadyToReview" },
+      ],
+    };
+    renderPage();
+    await screen.findByRole("button", { name: /Complete internal financial review/i });
+    expect(screen.queryByRole("navigation", { name: /pending financial reviews on this request/i })).toBeNull();
   });
 
   it("surfaces a concurrency-reconcile outcome from the review mutation", async () => {

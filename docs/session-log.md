@@ -1,7 +1,8 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-09-02 — **GAP-065 Slice 1B-server (`faf7b64`) and Slice 1B-client
-(`e27c48c`) are implemented and committed.** Submitted visits remain separate immutable field records;
+(`e27c48c`) are committed; Slice 2 (wide workspace pending-visit switcher + continuation) is
+implemented locally, pending commit.** Submitted visits remain separate immutable field records;
 the office experience, not the factual model, will become request-scoped. Delivery is deliberately
 multi-session: (1) Owner/Admin Request Detail **Pending financial reviews (N)** task card with a
 direct route per submitted/unreviewed visit; (2) wide workspace pending-visit switcher and
@@ -90,9 +91,21 @@ retry, and the replacement success branch. Locked zero-line copy: "Record no-cha
 applied (reconcile-outcome refresh, retry refresh, narrow-focus race, copy). No API / permission /
 migration change. BL138 §"Slice 1B-client — implemented" carries the detail.
 
-**Next batch: GAP-065 Slice 2** — wide workspace pending-visit switcher and
-post-success **Review next pending visit** continuation with dirty-switch protection (separate
-session; see [BL138 §"Slice 2"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md)).
+**GAP-065 Slice 2 is implemented locally (pending commit, 2026-09-02).** Frontend only: the wide
+Owner/Admin workspace now composes the server-authoritative `useActualWorkPendingReviews` for a
+compact `PendingVisitSwitcher` (rendered only for 2+ pending visits), switches visits via
+`onSwitchVisit` → `history.replaceState` (exact-visit URL kept, no Back-stack entry), offers a
+post-review **Review next pending visit** (first remaining server-ordered pending visit, no
+wraparound) + **Back to request**, and guards switch/back/next behind an inline discard confirm
+whenever the reviewer note or any resolution / no-charge / correction form holds unsaved input.
+No API / permission / migration change. 6 production + 3 test files; `tsc` clean; frontend suite
+1014/1014. Detail in [BL138 §"Slice 2 — implemented"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
+(Unrelated uncommitted worktree change present: `CatalogItemDetail.test.tsx` — GAP-066 catalog
+work, keep out of the Slice 2 commit.)
+
+**Next batch: GAP-065 Slice 3** — quiet server-authoritative Owner/Admin request-row count cue and
+a clearly named, persistent Office/Actual Work Review destination (separate preflight; see
+[BL138 §"Slice 3"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md)).
 
 **Tracker order after the GAP-065 slices:** GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026,
 GAP-053. Do not pull GAP-047, GAP-048, GAP-049, filters, history, pagination, or generic queue

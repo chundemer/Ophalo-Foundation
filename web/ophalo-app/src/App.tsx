@@ -512,6 +512,17 @@ function AppShell() {
               );
               setRoute({ page: "actual-work", requestId: route.requestId, visit: "draft" });
             }}
+            onSwitchVisit={(visitId) => {
+              // BL138 Slice 2: retain the exact-visit URL, but replace (not push) so browser Back
+              // does not walk through half-reviewed visits — mirrors the GAP-061 "context moved"
+              // pattern and `onResolvedToDraft` above.
+              history.replaceState(
+                null,
+                "",
+                `${window.location.pathname}${window.location.search}#/request/${route.requestId}/actual-work/${visitId}`,
+              );
+              setRoute({ page: "actual-work", requestId: route.requestId, visit: visitId });
+            }}
           />
         )}
         {(route.page === "requests" || route.page === "detail") && role !== "unknown" && role !== "viewer" && (
