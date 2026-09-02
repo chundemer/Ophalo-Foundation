@@ -29,4 +29,14 @@ public interface IActualWorkFinancialReviewPersistence
     /// a <c>COUNT(*)</c>, not a client-side <c>.Length</c> of the full row set — for badge/aggregate
     /// display that must not force a full queue load.</summary>
     Task<int> CountUnreviewedAsync(Guid accountId, CancellationToken ct);
+
+    /// <summary>The same "owes office review" predicate as <see cref="GetUnreviewedQueueAsync"/>
+    /// (<c>Status == Submitted &amp;&amp; ReviewedAtUtc == null &amp;&amp; SupersededAtUtc == null</c>),
+    /// scoped to a single request (BL138 Slice 1B-server). Lines are included for the caller's
+    /// financial projection; the request navigation context the account-wide queue joins is not
+    /// needed for the Request Detail card, so this returns the visits directly. Ordered oldest-first
+    /// (<c>SubmittedAtUtc ASC, Id ASC</c>). Unbounded — a single request carries a handful of visits.
+    /// React must not re-derive this predicate.</summary>
+    Task<IReadOnlyList<ActualWork>> GetPendingReviewsForRequestAsync(
+        Guid accountId, Guid requestId, CancellationToken ct);
 }

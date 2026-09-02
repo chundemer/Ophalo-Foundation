@@ -101,6 +101,43 @@ public sealed record ActualWorkFinancialDetailResult(
     // backstop. Always false for a visit that has lines (disposition is zero-line-only).
     bool HasNoChargeDisposition);
 
+/// <summary>Three-value review readiness for a submitted, unreviewed visit on the Request Detail
+/// <c>Pending financial reviews (N)</c> card (BL138 Slice 1B-server). Never <c>ReviewComplete</c> —
+/// a reviewed visit is excluded by the query and lives in passive history. Derived from the
+/// effective financial projection (captured snapshots folded with effective resolution rows, not
+/// the account-wide queue's snapshot-only shortcut) plus the zero-line no-charge disposition fact.</summary>
+public enum ActualWorkPendingReviewStatus
+{
+    /// <summary>Line financials are complete (or a zero-line visit already carries a <c>NoCharge</c>
+    /// disposition): the visit can be reviewed now.</summary>
+    ReadyToReview,
+
+    /// <summary>At least one line still has a missing sell price or direct cost with no effective
+    /// resolution.</summary>
+    NeedsCostPriceResolution,
+
+    /// <summary>A zero-line submitted visit with no <c>NoCharge</c> office disposition — blocked at
+    /// review by <c>ActualWorkErrors.ReviewBlockedZeroLineDispositionRequired</c>.</summary>
+    NeedsNoChargeDisposition,
+}
+
+/// <summary>One row of the Owner/Admin Request Detail <c>Pending financial reviews</c> card (BL138
+/// Slice 1B-server): a live submitted / unreviewed / non-superseded visit on the request. Carries no
+/// sell price, cost, margin, or line-level amounts — only the facts the card renders and the deep
+/// link target (<see cref="ActualWorkId"/>).</summary>
+public sealed record ActualWorkRequestPendingReviewEntry(
+    Guid ActualWorkId,
+    DateTime SubmittedAtUtc,
+    int LineCount,
+    string? RecorderDisplayName,
+    ActualWorkPendingReviewStatus ReviewStatus);
+
+/// <summary>The Request Detail pending-review card payload: the rows plus their count, so the card
+/// header <c>Pending financial reviews (N)</c> needs no second call.</summary>
+public sealed record ActualWorkRequestPendingReviewsResult(
+    int Count,
+    IReadOnlyList<ActualWorkRequestPendingReviewEntry> Items);
+
 /// <summary>
 /// API-facing read orchestration for Owner/Admin Actual Work financial review (Batch 7,
 /// build-log/129): a lightweight account-wide unreviewed-review queue and a single-visit financial
@@ -152,6 +189,78 @@ public sealed class ActualWorkFinancialReadApiService(
 
         var count = await financialReviewPersistence.CountUnreviewedAsync(currentUser.AccountId, ct);
         return Result<int>.Success(count);
+    }
+
+    /// <summary>Owner/Admin-only, request-scoped list of every live submitted / unreviewed /
+    /// non-superseded visit on <paramref name="requestId"/> with its review readiness (BL138
+    /// Slice 1B-server). Same authorization gate as the rest of this service. Readiness folds each
+    /// visit's effective financial resolutions and its zero-line disposition fact — it does not
+    /// reuse the account-wide queue's snapshot-only shortcut. Resolutions and dispositions for the
+    /// whole pending set load in one batched query each; no per-visit N+1.</summary>
+    public async Task<Result<ActualWorkRequestPendingReviewsResult>> GetPendingReviewsForRequestAsync(
+        Guid requestId, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<ActualWorkRequestPendingReviewsResult>.Failure(gate.Error);
+
+        var visits = await financialReviewPersistence.GetPendingReviewsForRequestAsync(
+            currentUser.AccountId, requestId, ct);
+
+        if (visits.Count == 0)
+            return Result<ActualWorkRequestPendingReviewsResult>.Success(
+                new ActualWorkRequestPendingReviewsResult(0, Array.Empty<ActualWorkRequestPendingReviewEntry>()));
+
+        var visitIds = visits.Select(v => v.Id).ToArray();
+
+        var resolutionsByVisit = await financialResolutionPersistence.GetResolutionsForVisitsAsync(
+            currentUser.AccountId, visitIds, ct);
+        var dispositionsByVisit = await financialResolutionPersistence.GetDispositionsForVisitsAsync(
+            currentUser.AccountId, visitIds, ct);
+
+        // Per-distinct-id memoized recorder-name resolution, mirroring GetFinancialDetailAsync's
+        // performer-name loop — a request's pending visits share a small recorder set.
+        var recorderNames = new Dictionary<Guid, string?>();
+        foreach (var recorderId in visits.Select(v => v.RecorderAccountUserId).Distinct())
+            recorderNames[recorderId] = await operatePersistence.GetActorDisplayNameAsync(recorderId, ct);
+
+        var items = new List<ActualWorkRequestPendingReviewEntry>(visits.Count);
+        foreach (var visit in visits)
+        {
+            var resolutions = resolutionsByVisit.TryGetValue(visit.Id, out var r)
+                ? r
+                : NoResolutions;
+            var hasNoChargeDisposition = dispositionsByVisit.TryGetValue(visit.Id, out var d)
+                && d.Any(x => x.Kind == OfficeFinancialDispositionKind.NoCharge);
+
+            var projection = ActualWorkFinancialProjection.ProjectVisit(visit.Lines, resolutions);
+
+            items.Add(new ActualWorkRequestPendingReviewEntry(
+                visit.Id,
+                visit.SubmittedAtUtc!.Value,
+                visit.Lines.Count,
+                recorderNames.GetValueOrDefault(visit.RecorderAccountUserId),
+                DeriveReviewStatus(visit.Lines.Count, hasNoChargeDisposition, projection.Totals.HasIncompleteFinancialData)));
+        }
+
+        return Result<ActualWorkRequestPendingReviewsResult>.Success(
+            new ActualWorkRequestPendingReviewsResult(items.Count, items));
+    }
+
+    /// <summary>BL138 Slice 1B-server §"Correction 2" table. A zero-line visit's line financials are
+    /// vacuously complete, so its blocking gate is the missing <c>NoCharge</c> disposition; a lined
+    /// visit reaches readiness only when the effective projection has no incomplete line.</summary>
+    internal static ActualWorkPendingReviewStatus DeriveReviewStatus(
+        int lineCount, bool hasNoChargeDisposition, bool hasIncompleteFinancialData)
+    {
+        if (lineCount == 0)
+            return hasNoChargeDisposition
+                ? ActualWorkPendingReviewStatus.ReadyToReview
+                : ActualWorkPendingReviewStatus.NeedsNoChargeDisposition;
+
+        return hasIncompleteFinancialData
+            ? ActualWorkPendingReviewStatus.NeedsCostPriceResolution
+            : ActualWorkPendingReviewStatus.ReadyToReview;
     }
 
     public async Task<Result<ActualWorkFinancialDetailResult>> GetFinancialDetailAsync(

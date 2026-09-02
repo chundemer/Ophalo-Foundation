@@ -124,6 +124,23 @@ public interface IActualWorkFinancialResolutionPersistence
     Task<IReadOnlyList<ActualWorkOfficeFinancialDisposition>> GetDispositionsForVisitAsync(
         Guid accountId, Guid actualWorkId, CancellationToken ct);
 
+    /// <summary>Bounded, request-scoped batch of <see cref="GetResolutionsForVisitAsync"/> (BL138
+    /// Slice 1B-server): resolution rows for a known set of visit ids in one query
+    /// (<c>account_id = @a AND actual_work_id = ANY(@ids)</c>), grouped in memory by
+    /// <see cref="ActualWorkLineFinancialResolution.ActualWorkId"/>. Each group is ordered
+    /// <c>ResolvedAtUtc DESC, Id DESC</c>, matching the per-visit read so the financial projection
+    /// folds identically. A visit id with no rows is absent from the dictionary. Never issue a
+    /// per-visit N+1 in its place.</summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<ActualWorkLineFinancialResolution>>> GetResolutionsForVisitsAsync(
+        Guid accountId, IReadOnlyCollection<Guid> actualWorkIds, CancellationToken ct);
+
+    /// <summary>Bounded, request-scoped batch of <see cref="GetDispositionsForVisitAsync"/> (BL138
+    /// Slice 1B-server): disposition rows for a known set of visit ids in one query, grouped in
+    /// memory by <see cref="ActualWorkOfficeFinancialDisposition.ActualWorkId"/>, each group ordered
+    /// <c>DisposedAtUtc DESC, Id DESC</c>. A visit id with no rows is absent from the dictionary.</summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<ActualWorkOfficeFinancialDisposition>>> GetDispositionsForVisitsAsync(
+        Guid accountId, IReadOnlyCollection<Guid> actualWorkIds, CancellationToken ct);
+
     /// <summary>
     /// Transactional orchestrator for a single financial-resolution append (BL135 §4 Batch 3a-ii).
     /// Loads the visit tracked by <c>(AccountId, Id)</c> with its lines and applies the guards in a

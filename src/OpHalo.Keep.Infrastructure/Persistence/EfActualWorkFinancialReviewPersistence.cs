@@ -28,6 +28,23 @@ public sealed class EfActualWorkFinancialReviewPersistence(OpHaloDbContext dbCon
             .ToArray();
     }
 
+    public async Task<IReadOnlyList<ActualWork>> GetPendingReviewsForRequestAsync(
+        Guid accountId, Guid requestId, CancellationToken ct)
+    {
+        var visits = await dbContext.Set<ActualWork>()
+            .Include(x => x.Lines)
+            .Where(visit => visit.AccountId == accountId
+                            && visit.RequestId == requestId
+                            && visit.Status == ActualWorkStatus.Submitted
+                            && visit.ReviewedAtUtc == null
+                            && visit.SupersededAtUtc == null)
+            .OrderBy(visit => visit.SubmittedAtUtc)
+            .ThenBy(visit => visit.Id)
+            .ToListAsync(ct);
+
+        return visits;
+    }
+
     public Task<int> CountUnreviewedAsync(Guid accountId, CancellationToken ct)
     {
         return dbContext.Set<ActualWork>().CountAsync(

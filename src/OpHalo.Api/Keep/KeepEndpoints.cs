@@ -1105,6 +1105,20 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // BL138 Slice 1B-server — Owner/Admin-only, request-scoped list of submitted/unreviewed
+        // visits with their three-value review readiness, for the Request Detail
+        // "Pending financial reviews (N)" card. Same gate as the account-wide review queue.
+        app.MapGet("/keep/pricebook/actual-work/request/{requestId:guid}/pending-financial-reviews", async (
+            Guid requestId,
+            ActualWorkFinancialReadApiService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.GetPendingReviewsForRequestAsync(requestId, ct);
+            return result.IsSuccess
+                ? Results.Ok(ToActualWorkRequestPendingReviewsResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         // Batch 7 — Owner/Admin-only single-visit financial detail (unreviewed or reviewed).
         app.MapGet("/keep/pricebook/actual-work/{actualWorkId:guid}/financial-detail", async (
             Guid actualWorkId,
@@ -1368,6 +1382,19 @@ public static class KeepEndpoints
         totalSalesPrice = entry.TotalSalesPrice,
         totalStandardExpectedDirectCost = entry.TotalStandardExpectedDirectCost,
         totalMargin = entry.TotalMargin,
+    };
+
+    private static object ToActualWorkRequestPendingReviewsResponse(ActualWorkRequestPendingReviewsResult result) => new
+    {
+        count = result.Count,
+        items = result.Items.Select(entry => new
+        {
+            actualWorkId = entry.ActualWorkId,
+            submittedAtUtc = entry.SubmittedAtUtc,
+            lineCount = entry.LineCount,
+            recorderDisplayName = entry.RecorderDisplayName,
+            reviewStatus = entry.ReviewStatus.ToString(),
+        }).ToArray(),
     };
 
     private static object ToActualWorkFinancialDetailResponse(ActualWorkFinancialDetailResult result) => new

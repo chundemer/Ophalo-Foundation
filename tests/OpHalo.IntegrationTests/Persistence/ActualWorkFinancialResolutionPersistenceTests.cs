@@ -191,6 +191,77 @@ public sealed class ActualWorkFinancialResolutionPersistenceTests
     }
 
     // -------------------------------------------------------------------------
+    // BL138 Slice 1B-server: bounded request-scoped batched reads
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetResolutionsForVisitsAsync_groups_rows_by_visit_ordered_newest_first()
+    {
+        var (visitA, linesA) = await SeedSubmittedVisitAsync(1);
+        var (visitB, linesB) = await SeedSubmittedVisitAsync(1);
+        var (visitC, _) = await SeedSubmittedVisitAsync(1);
+
+        var aOlder = await AppendResolutionAsync(visitA, linesA[0], sell: 10m, cost: null, Now);
+        var aNewer = await AppendResolutionAsync(visitA, linesA[0], sell: 12m, cost: null, Now.AddHours(1));
+        var bRow = await AppendResolutionAsync(visitB, linesB[0], sell: 20m, cost: null, Now);
+
+        await using var readerCtx = CreateContext();
+        var reader = new EfActualWorkFinancialResolutionPersistence(readerCtx);
+        var grouped = await reader.GetResolutionsForVisitsAsync(
+            AccountId, new[] { visitA, visitB, visitC }, CancellationToken.None);
+
+        Assert.Equal(new[] { aNewer, aOlder }, grouped[visitA].Select(r => r.Id).ToArray());
+        Assert.Equal(new[] { bRow }, grouped[visitB].Select(r => r.Id).ToArray());
+        // A visit id with no rows is absent, not an empty list.
+        Assert.False(grouped.ContainsKey(visitC));
+    }
+
+    [Fact]
+    public async Task GetResolutionsForVisitsAsync_excludes_other_accounts_and_unlisted_visits()
+    {
+        var (visitA, linesA) = await SeedSubmittedVisitAsync(1);
+        var (visitB, linesB) = await SeedSubmittedVisitAsync(1);
+        await AppendResolutionAsync(visitA, linesA[0], sell: 10m, cost: null, Now);
+        await AppendResolutionAsync(visitB, linesB[0], sell: 20m, cost: null, Now);
+
+        await using var readerCtx = CreateContext();
+        var reader = new EfActualWorkFinancialResolutionPersistence(readerCtx);
+
+        var grouped = await reader.GetResolutionsForVisitsAsync(
+            AccountId, new[] { visitA }, CancellationToken.None);
+        Assert.True(grouped.ContainsKey(visitA));
+        Assert.False(grouped.ContainsKey(visitB));
+
+        var otherAccount = await reader.GetResolutionsForVisitsAsync(
+            OtherAccountId, new[] { visitA, visitB }, CancellationToken.None);
+        Assert.Empty(otherAccount);
+
+        Assert.Empty(await reader.GetResolutionsForVisitsAsync(
+            AccountId, Array.Empty<Guid>(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetDispositionsForVisitsAsync_groups_rows_by_visit_ordered_newest_first()
+    {
+        var (visitA, _) = await SeedSubmittedVisitAsync(0);
+        var (visitB, _) = await SeedSubmittedVisitAsync(0);
+        var (visitC, _) = await SeedSubmittedVisitAsync(0);
+
+        var aOlder = await AppendDispositionAsync(visitA, "first", Now);
+        var aNewer = await AppendDispositionAsync(visitA, "second", Now.AddHours(1));
+        var bRow = await AppendDispositionAsync(visitB, "only", Now);
+
+        await using var readerCtx = CreateContext();
+        var reader = new EfActualWorkFinancialResolutionPersistence(readerCtx);
+        var grouped = await reader.GetDispositionsForVisitsAsync(
+            AccountId, new[] { visitA, visitB, visitC }, CancellationToken.None);
+
+        Assert.Equal(new[] { aNewer, aOlder }, grouped[visitA].Select(r => r.Id).ToArray());
+        Assert.Equal(new[] { bRow }, grouped[visitB].Select(r => r.Id).ToArray());
+        Assert.False(grouped.ContainsKey(visitC));
+    }
+
+    // -------------------------------------------------------------------------
     // Append seam transaction boundary
     // -------------------------------------------------------------------------
 

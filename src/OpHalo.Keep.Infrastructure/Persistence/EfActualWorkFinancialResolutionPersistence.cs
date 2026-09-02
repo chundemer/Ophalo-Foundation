@@ -34,6 +34,48 @@ public sealed class EfActualWorkFinancialResolutionPersistence(OpHaloDbContext d
             .ThenByDescending(x => x.Id)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<ActualWorkLineFinancialResolution>>> GetResolutionsForVisitsAsync(
+        Guid accountId, IReadOnlyCollection<Guid> actualWorkIds, CancellationToken ct)
+    {
+        if (actualWorkIds.Count == 0)
+            return new Dictionary<Guid, IReadOnlyList<ActualWorkLineFinancialResolution>>();
+
+        var ids = actualWorkIds.ToArray();
+        var rows = await dbContext.Set<ActualWorkLineFinancialResolution>()
+            .AsNoTracking()
+            .Where(x => x.AccountId == accountId && ids.Contains(x.ActualWorkId))
+            .OrderByDescending(x => x.ResolvedAtUtc)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync(ct);
+
+        return rows
+            .GroupBy(x => x.ActualWorkId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<ActualWorkLineFinancialResolution>)g.ToArray());
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<ActualWorkOfficeFinancialDisposition>>> GetDispositionsForVisitsAsync(
+        Guid accountId, IReadOnlyCollection<Guid> actualWorkIds, CancellationToken ct)
+    {
+        if (actualWorkIds.Count == 0)
+            return new Dictionary<Guid, IReadOnlyList<ActualWorkOfficeFinancialDisposition>>();
+
+        var ids = actualWorkIds.ToArray();
+        var rows = await dbContext.Set<ActualWorkOfficeFinancialDisposition>()
+            .AsNoTracking()
+            .Where(x => x.AccountId == accountId && ids.Contains(x.ActualWorkId))
+            .OrderByDescending(x => x.DisposedAtUtc)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync(ct);
+
+        return rows
+            .GroupBy(x => x.ActualWorkId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<ActualWorkOfficeFinancialDisposition>)g.ToArray());
+    }
+
     public async Task<ActualWorkResolutionOutcome> CreateResolutionAsync(
         ActualWorkLineFinancialResolution resolution, Guid expectedVisitVersion, CancellationToken ct)
     {

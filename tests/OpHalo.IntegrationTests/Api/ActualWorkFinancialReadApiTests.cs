@@ -566,9 +566,244 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         Assert.False(body.GetProperty("hasNoChargeDisposition").GetBoolean());
     }
 
+    // --- BL138 Slice 1B-server: request-scoped pending financial reviews ---
+
+    [Fact]
+    public async Task PendingReviews_ReturnsOnlyLiveSubmittedUnreviewedVisits_ForTheRequest()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("pending-membership");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+
+        var draftId = await CreateVisitAsync(accountId, requestId, ownerId, submit: false, review: false);
+        var pendingOne = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        var pendingTwo = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        var reviewedId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: true);
+
+        var supersededId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        var successorId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        await SupersedeVisitAsync(accountId, supersededId, successorId, ownerId);
+
+        // A pending visit on a different request must not appear.
+        var otherRequestId = await SeedRequestAsync(accountId, "Other Request");
+        await CreateVisitAsync(accountId, otherRequestId, ownerId, submit: true, review: false);
+
+        var body = await (await GetPendingReviewsAsync(ownerCookie, requestId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        var ids = body.GetProperty("items").EnumerateArray()
+            .Select(e => e.GetProperty("actualWorkId").GetGuid()).ToArray();
+        Assert.Equal(new[] { pendingOne, pendingTwo, successorId }.OrderBy(x => x), ids.OrderBy(x => x));
+        Assert.DoesNotContain(draftId, ids);
+        Assert.DoesNotContain(reviewedId, ids);
+        Assert.DoesNotContain(supersededId, ids);
+        Assert.Equal(3, body.GetProperty("count").GetInt32());
+    }
+
+    [Fact]
+    public async Task PendingReviews_OrdersOldestSubmittedFirst()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("pending-order");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+
+        var now = DateTime.UtcNow;
+        var newerId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false, submittedAtUtc: now);
+        var olderId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false, submittedAtUtc: now.AddHours(-3));
+
+        var body = await (await GetPendingReviewsAsync(ownerCookie, requestId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        var ids = body.GetProperty("items").EnumerateArray()
+            .Select(e => e.GetProperty("actualWorkId").GetGuid()).ToArray();
+        Assert.Equal([olderId, newerId], ids);
+    }
+
+    [Fact]
+    public async Task PendingReviews_RowCarriesSubmittedTimeLineCountRecorderAndStatus()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("pending-row-shape");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var (catalogItemId, priceBookVersionLineId) = await SeedCatalogItemWithSnapshotAsync(accountId, ownerId);
+        var visitId = await CreateVisitAsync(
+            accountId, requestId, ownerId, submit: true, review: false,
+            lines:
+            [
+                (catalogItemId, priceBookVersionLineId, 42.50m, 18.00m, 2m),
+                (catalogItemId, priceBookVersionLineId, 42.50m, 18.00m, 1m),
+            ]);
+
+        var body = await (await GetPendingReviewsAsync(ownerCookie, requestId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        var row = body.GetProperty("items").EnumerateArray().Single();
+        Assert.Equal(visitId, row.GetProperty("actualWorkId").GetGuid());
+        Assert.NotEqual(JsonValueKind.Null, row.GetProperty("submittedAtUtc").ValueKind);
+        Assert.Equal(2, row.GetProperty("lineCount").GetInt32());
+        Assert.Equal("Owner", row.GetProperty("recorderDisplayName").GetString());
+        Assert.Equal("ReadyToReview", row.GetProperty("reviewStatus").GetString());
+        // No price/cost/margin on the card contract.
+        Assert.False(row.TryGetProperty("totalSalesPrice", out _));
+        Assert.False(row.TryGetProperty("totalMargin", out _));
+    }
+
+    [Fact]
+    public async Task PendingReviews_LinedVisitWithMissingComponentAndNoResolution_IsNeedsCostPriceResolution()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("pending-status-incomplete");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var visitId = await CreateVisitAsync(
+            accountId, requestId, ownerId, submit: true, review: false,
+            lines: [((Guid?)null, (Guid?)null, (decimal?)null, (decimal?)null, 1m)]);
+
+        var body = await (await GetPendingReviewsAsync(ownerCookie, requestId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        var row = body.GetProperty("items").EnumerateArray().Single();
+        Assert.Equal("NeedsCostPriceResolution", row.GetProperty("reviewStatus").GetString());
+    }
+
+    [Fact]
+    public async Task PendingReviews_LinedVisitWithEffectiveResolution_IsReadyToReview_NotUsingQueueShortcut()
+    {
+        // BL138 Correction 1: the request-scoped card folds effective resolutions, unlike the
+        // account-wide queue's snapshot-only shortcut. A line missing both snapshots but carrying
+        // an effective resolution for each component reads ReadyToReview.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("pending-status-resolved");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var visitId = await CreateVisitAsync(
+            accountId, requestId, ownerId, submit: true, review: false,
+            lines: [((Guid?)null, (Guid?)null, (decimal?)null, (decimal?)null, 1m)]);
+        var lineId = await FirstLineIdAsync(visitId);
+        await SeedResolutionAsync(
+            accountId, visitId, lineId, sell: 5.00m, cost: 2.00m,
+            FinancialResolutionBasis.Other, DateTime.UtcNow, ownerId);
+
+        var body = await (await GetPendingReviewsAsync(ownerCookie, requestId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        var row = body.GetProperty("items").EnumerateArray().Single();
+        Assert.Equal("ReadyToReview", row.GetProperty("reviewStatus").GetString());
+    }
+
+    [Fact]
+    public async Task PendingReviews_ZeroLineVisitWithoutDisposition_IsNeedsNoChargeDisposition()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("pending-status-zeroline");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+
+        var body = await (await GetPendingReviewsAsync(ownerCookie, requestId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        var row = body.GetProperty("items").EnumerateArray().Single();
+        Assert.Equal("NeedsNoChargeDisposition", row.GetProperty("reviewStatus").GetString());
+    }
+
+    [Fact]
+    public async Task PendingReviews_ZeroLineVisitWithNoChargeDisposition_IsReadyToReview()
+    {
+        // BL138 Correction 2: a zero-line visit's line financials are vacuously complete; the
+        // NoCharge disposition fact is what moves it to ReadyToReview.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("pending-status-zeroline-disp");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var visitId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        await SeedDispositionAsync(accountId, visitId, ownerId);
+
+        var body = await (await GetPendingReviewsAsync(ownerCookie, requestId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        var row = body.GetProperty("items").EnumerateArray().Single();
+        Assert.Equal("ReadyToReview", row.GetProperty("reviewStatus").GetString());
+    }
+
+    [Fact]
+    public async Task PendingReviews_NoPendingVisits_ReturnsEmptyWithZeroCount()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("pending-empty");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: true);
+
+        var body = await (await GetPendingReviewsAsync(ownerCookie, requestId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(0, body.GetProperty("count").GetInt32());
+        Assert.Empty(body.GetProperty("items").EnumerateArray().ToArray());
+    }
+
+    [Fact]
+    public async Task PendingReviews_CrossAccount_DoesNotLeakAnotherAccountsRequest()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("pending-cross-owner");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+
+        var (otherAccountId, otherOwnerId, otherOwnerCookie) = await SeedAccountAsync("pending-cross-other");
+        await EnrollAsync(otherAccountId, otherOwnerId);
+
+        var body = await (await GetPendingReviewsAsync(otherOwnerCookie, requestId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(0, body.GetProperty("count").GetInt32());
+        Assert.Empty(body.GetProperty("items").EnumerateArray().ToArray());
+    }
+
+    [Fact]
+    public async Task PendingReviews_Operator_Returns403()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("pending-operator-forbidden");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        var operatorId = await SeedOperatorAsync(accountId, "pending-operator-forbidden");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+
+        var response = await GetPendingReviewsAsync(operatorCookie, requestId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PendingReviews_Viewer_Returns403()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("pending-viewer-forbidden");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        var viewerId = await SeedViewerAsync(accountId, "pending-viewer-forbidden");
+        var viewerCookie = await GetCookieAsync(viewerId, accountId);
+
+        var response = await GetPendingReviewsAsync(viewerCookie, requestId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PendingReviews_WithoutPriceBookEntitlement_Returns403()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("pending-no-entitlement");
+        // Deliberately no EnrollAsync — the account lacks the Price Book entitlement.
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+
+        var response = await GetPendingReviewsAsync(ownerCookie, requestId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PendingReviews_Unauthenticated_Returns401()
+    {
+        var response = await _factory.CreateClient()
+            .GetAsync($"/keep/pricebook/actual-work/request/{Guid.NewGuid()}/pending-financial-reviews");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private async Task<HttpResponseMessage> GetPendingReviewsAsync(string cookie, Guid requestId) =>
+        await AuthRequest(cookie).GetAsync(
+            $"/keep/pricebook/actual-work/request/{requestId}/pending-financial-reviews");
 
     private async Task SeedDispositionAsync(Guid accountId, Guid visitId, Guid actorAccountUserId)
     {
@@ -719,9 +954,12 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
     private async Task<Guid> SeedRequestAsync(Guid accountId, string customerName)
     {
         var now = DateTime.UtcNow;
-        var customer = KeepCustomer.Create(accountId, customerName, "+15555550100");
+        // Distinct phone per customer name so a single account can hold several requests without
+        // tripping ix_keep_customers_account_canonical_phone.
+        var phone = $"+1555555{Math.Abs(customerName.GetHashCode()) % 10000:D4}";
+        var customer = KeepCustomer.Create(accountId, customerName, phone);
         var request = KeepRequest.CreateByBusiness(
-            accountId, customer.Id, customerName, "+15555550100", null, "AC not cooling",
+            accountId, customer.Id, customerName, phone, null, "AC not cooling",
             $"R{Guid.NewGuid():N}"[..20], $"tok_{Guid.NewGuid():N}", now, KeepRequestSource.Phone);
 
         await using var scope = _factory.CreateScope();
