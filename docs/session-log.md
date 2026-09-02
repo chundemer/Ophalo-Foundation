@@ -3,8 +3,8 @@
 **Last updated:** 2026-09-02 — **GAP-067 revised Request reference page is locked for the later
 presentation pass;
 GAP-065 Slice 1B-server (`faf7b64`), Slice 1B-client
-(`e27c48c`), and Slice 2 (`6ab880b`) are committed; Slice 3a (server-authoritative Owner/Admin
-request-row financial-review count cue + ADR-463 amendment) is implemented locally, pending commit.**
+(`e27c48c`), Slice 2 (`6ab880b`), and Slice 3a (`baaeff1`, server-authoritative Owner/Admin
+request-row financial-review count cue + ADR-463 amendment) are committed.**
 Submitted visits remain separate immutable field records;
 the office experience, not the factual model, will become request-scoped. Delivery is deliberately
 multi-session: (1) Owner/Admin Request Detail **Pending financial reviews (N)** task card with a
@@ -115,7 +115,7 @@ No API / permission / migration change. 6 production + 3 test files; `tsc` clean
 (Unrelated uncommitted worktree change present: `CatalogItemDetail.test.tsx` — GAP-066 catalog
 work, keep out of the Slice 2 commit.)
 
-**GAP-065 Slice 3a is implemented locally (pending commit).** Server only: `KeepRequestSummary`
+**GAP-065 Slice 3a is committed (`baaeff1`, 2026-09-02).** Server only: `KeepRequestSummary`
 gains `pendingFinancialReviewCount`; `GetKeepRequestListService` folds an exact server-authoritative
 per-request count from a bounded batched `IKeepRequestListPersistence.GetPendingFinancialReviewCountsAsync`
 projection, gated identically to the Actual Work Review destination (Owner/Admin + `RequestsOperate`
@@ -123,7 +123,7 @@ projection, gated identically to the Actual Work Review destination (Owner/Admin
 neither Blocked nor read-only). No migration, no DI registration change. ADR-463 amended;
 decision-index updated. 4 production + 3 test files; unit + architecture suites green, touched
 integration classes green. Detail in
-[BL138 §"Slice 3a — implemented locally, pending commit"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
+[BL138 §"Slice 3a — implemented"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 
 **Next batch: GAP-065 Slice 3b** — the client `KeepRequestSummary` type field plus the Owner/Admin-gated
 `RequestRow` quiet, non-interactive "{N} visit(s) need financial review" metadata line and focused

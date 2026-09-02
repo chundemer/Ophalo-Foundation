@@ -475,11 +475,11 @@ cannot open the destination — entitlement disabled with retained history, or O
 neither the cue nor a dead link. Quiet, non-interactive; no ranking/Attention/count/routing change;
 never for Operators/Viewers.
 
-## Slice 3a — implemented locally, pending commit (2026-09-02)
+## Slice 3a — implemented (`baaeff1`, 2026-09-02)
 
 Server only. **4 production + 3 test files; unit suite green, architecture 14/14, touched
 integration classes green.** No migration, no DI registration change (the interface is extended,
-not new). The commit hash is recorded here in the later hash-follow-up commit.
+not new).
 
 - **Contract** — `KeepRequestSummary` gains `int PendingFinancialReviewCount` (serialises as
   `pendingFinancialReviewCount`; 0 for every caller that has not cleared the full gate).
@@ -513,8 +513,7 @@ Operator/Viewer see `0`).
 
 ## Handoff instruction
 
-Slice 1B-server (`faf7b64`), Slice 1B-client (`e27c48c`), and Slice 2 (`6ab880b`) are committed.
-**Slice 3a is implemented locally, pending commit** (its hash lands in the later hash-follow-up).
-Slice 3c is closed documentation-only. The remaining slice is **Slice 3b** — the client type plus
-the Owner/Admin-gated `RequestRow` "{N} visit(s) need financial review" metadata line (quiet,
-non-interactive) and focused frontend tests.
+Slice 1B-server (`faf7b64`), Slice 1B-client (`e27c48c`), Slice 2 (`6ab880b`), and Slice 3a
+(`baaeff1`) are committed. Slice 3c is closed documentation-only. The remaining slice is
+**Slice 3b** — the client type plus the Owner/Admin-gated `RequestRow` "{N} visit(s) need financial
+review" metadata line (quiet, non-interactive) and focused frontend tests.
