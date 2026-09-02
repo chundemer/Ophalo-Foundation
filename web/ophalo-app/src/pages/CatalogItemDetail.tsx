@@ -484,7 +484,10 @@ export function CatalogItemDetail({
           </div>
         )}
 
-        {!isLoading && !isError && data && !isEditing && (
+        {/* Keep the read-only detail mounted while the identity editor is open. The editor is a
+            modal side drawer, so unmounting this surface leaves the operator staring at an
+            empty, dimmed page instead of retaining the item context behind the drawer. */}
+        {!isLoading && !isError && data && (
           <div className="mx-auto w-full max-w-6xl space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
@@ -534,7 +537,7 @@ export function CatalogItemDetail({
                   disabled={itemBusy}
                   className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
                 >
-                  {itemBusy ? "Refreshing…" : "Edit"}
+                  {itemBusy ? "Refreshing…" : "Edit item details"}
                 </button>
                 {data.item.activeState === "Active" && !confirmInactivate && (
                   <button
