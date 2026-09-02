@@ -414,7 +414,7 @@ review corrections. **7 production + 5 test files; frontend suite 1004/1004, `ts
 - Test infra: `Element.prototype.scrollIntoView` stub is local to `ActualWorkReviewCard.test.tsx`
   (a global stub in `src/test/setup.ts` broke an `ActualWorkComposer` assertion — reverted).
 
-## Slice 2 — implemented (2026-09-02, pending commit)
+## Slice 2 — implemented (`6ab880b`, 2026-09-02)
 
 Frontend only, per the accepted Slice 2 gate. **6 production + 3 test files (1 new); `tsc` clean;
 frontend suite 1014/1014.** No API / permission / migration / server change.
@@ -455,7 +455,6 @@ one-line `onSwitchVisit` prop in `ActualWorkWorkspacePage.test.tsx`.
 
 ## Handoff instruction
 
-Slice 1B-server (`faf7b64`) and Slice 1B-client (`e27c48c`) are committed; Slice 2 is implemented
-locally, pending commit. The remaining slice is **Slice 3** (§"Slice 3 — queue discoverability"),
+Slice 1B-server (`faf7b64`) and Slice 1B-client (`e27c48c`) are committed; Slice 2 is committed (`6ab880b`). The remaining slice is **Slice 3** (§"Slice 3 — queue discoverability"),
 a separate preflight: the quiet server-authoritative request-row count cue and a clearly named,
 persistent Office/Actual Work Review destination.

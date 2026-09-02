@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-09-02 — **GAP-065 Slice 1B-server (`faf7b64`) and Slice 1B-client
 (`e27c48c`) are committed; Slice 2 (wide workspace pending-visit switcher + continuation) is
-implemented locally, pending commit.** Submitted visits remain separate immutable field records;
+committed (`6ab880b`, 2026-09-02).** Submitted visits remain separate immutable field records;
 the office experience, not the factual model, will become request-scoped. Delivery is deliberately
 multi-session: (1) Owner/Admin Request Detail **Pending financial reviews (N)** task card with a
 direct route per submitted/unreviewed visit; (2) wide workspace pending-visit switcher and
@@ -91,7 +91,7 @@ retry, and the replacement success branch. Locked zero-line copy: "Record no-cha
 applied (reconcile-outcome refresh, retry refresh, narrow-focus race, copy). No API / permission /
 migration change. BL138 §"Slice 1B-client — implemented" carries the detail.
 
-**GAP-065 Slice 2 is implemented locally (pending commit, 2026-09-02).** Frontend only: the wide
+**GAP-065 Slice 2 is committed (`6ab880b`, 2026-09-02).** Frontend only: the wide
 Owner/Admin workspace now composes the server-authoritative `useActualWorkPendingReviews` for a
 compact `PendingVisitSwitcher` (rendered only for 2+ pending visits), switches visits via
 `onSwitchVisit` → `history.replaceState` (exact-visit URL kept, no Back-stack entry), offers a
