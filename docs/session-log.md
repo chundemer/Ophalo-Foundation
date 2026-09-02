@@ -1,8 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-02 — **Next implementation session: GAP-042 — fresh authenticated
-business identity in the finished Request workspace.** GAP-067 is complete: Slices 1–4 landed
-(`80b853b`, `022bc89`, `63e9906`, `4877c4c`). GAP-065 Owner/Admin
+**Last updated:** 2026-09-02 — **GAP-067 remains open: Slices 1–4 established tokens and partial
+presentation treatment, but did not complete the retained reference-page port.** GAP-065 Owner/Admin
 financial-review discovery is complete through Slice 3b (`f231126`, `606203d`); its detailed record
 is in [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 
@@ -31,32 +30,21 @@ relevant build log.
 
 ## Next implementation sequence
 
-**GAP-067: Request workspace presentation coherence — COMPLETE.** The retained desktop reference is
-implemented across Request List and Request Detail: Slate-50 operational canvas; restrained white
-cards; compact identity/contact/location/owner anchor; retained planning row; neutral Customer Need;
-semantic queue cues; and the locked action hierarchy. Behavior, authority, ranking, lifecycle,
-financial-review semantics, responsive behavior, and keyboard access are unchanged. Mechanical
-contract: [Request Workspace Visual Token Specification](ux-design/v2/request-workspace-visual-spec.md).
-Slice commits: Slice 1 `80b853b`, Slice 2 `022bc89`, Slice 3 `63e9906`, Slice 4 `4877c4c` — each
-slice's exact file-level record is in its `feat(gap-067)` commit message. The 11 locked
-`--keep-request-*` aliases live in both token sources (`web/shared/styles/ophalo-tokens.css`,
-`web/ophalo-app/src/styles/app.css`).
+**Next session: finish GAP-067 against the retained desktop reference.** Slices 1–4 landed
+(`80b853b`, `022bc89`, `63e9906`, `4877c4c`) and established the Request tokens, Slate-50 page
+shell, queue refinements, Anchor label treatment, attention panel, and action hierarchy. They are
+not acceptance evidence for the full port.
 
-Deferred GAP-067 polish (not blocking; pick up opportunistically): non-attention Request Detail
-lifecycle/nav controls (Confirm, Close request, Retry) still use `--keep-accent` rather than the
-spec's outlined treatment, and `ProminentFeedbackCard` (`DetailPanels.tsx`) still uses the legacy
-`--ophalo-attention` amber rather than a neutral or `--keep-request-attention-*` surface — the
-Slice 4 gate scoped these out to keep the batch to presentation-only, low-regression changes.
+The remaining GAP-067 work is the visible workspace composition: anchor the work canvas 24 px from
+the queue divider at its locked `min(100%, 1000px)` width; bring Customer Need into the Request
+Anchor beneath the planning row; finish the consistent card/module spacing and white-surface
+treatment across the Work Canvas; and compare the complete wide and narrow screens directly with
+the retained reference. Preserve all locked GAP-027/GAP-065 queue signals, planning controls,
+financial-review clarifier, composer behavior, authority, and responsive/keyboard behavior.
 
-**Next session: GAP-042 — authenticated business identity implementation.** Add the restrained,
-fresh authenticated business identity to the now-finished Request workspace structure without
-competing with request/customer context or exposing it publicly.
-
-Placement preflight (done, read-only): business name is `meQuery.data?.businessName` from the
-auth-gated `/me` endpoint (`apiClient.ts:730`), already rendered authenticated-only as muted
-`· {businessName}` in `RequestDetailHeader`; never on the public customer page. In the finished
-workspace it belongs in the shell chrome (workbench/list header), outside the Request Anchor
-identity grid. No GAP-042 code landed in any GAP-067 slice.
+Do not begin GAP-042 implementation until GAP-067 passes that screenshot/acceptance review. Its
+read-only placement preflight remains valid: business name is `meQuery.data?.businessName` from the
+authenticated `/me` endpoint and belongs in shell chrome, outside Request Anchor identity.
 
 ## Deferred next work
 

@@ -595,6 +595,13 @@ from but not semantically dependent on the cool financial Price Book canvas. The
 cards remain white with Slate-200 borders, rounded-xl geometry, and only a restrained shadow where
 elevation is meaningful. Do not reintroduce the prior cream/amber page canvas.
 
+**Current implementation state:** Slices 1–4 landed the aliases and partial component treatment,
+but GAP-067 is not complete. The workbench still needs reference-verified composition: a work
+canvas anchored 24 px from the queue divider at `min(100%, 1000px)`, Customer Need inside the
+Request Anchor beneath planning, and the complete module/card spacing pass. Do not close this gap
+or begin GAP-042 implementation until wide and narrow screenshot verification proves the retained
+reference and every acceptance criterion below.
+
 - **Queue state grammar:** preserve GAP-027's one lifecycle cue, one server-ranked exception cue,
   and one next-action line. Teal identifies selection; red is reserved for genuine active,
   unacknowledged overdue/high-risk work; amber covers customer replies and routine follow-ups;
