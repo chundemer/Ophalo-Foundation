@@ -1,6 +1,18 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-01 — BL136 4f-ii **presentation upgrade** landed locally: the wide
+**Last updated:** 2026-09-02 — **GAP-065 multi-visit financial-review workflow direction is
+locked; no implementation has started.** Submitted visits remain separate immutable field records;
+the office experience, not the factual model, will become request-scoped. Delivery is deliberately
+multi-session: (1) Owner/Admin Request Detail **Pending financial reviews (N)** task card with a
+direct route per submitted/unreviewed visit; (2) wide workspace pending-visit switcher and
+post-success **Review next pending visit** continuation, with dirty-switch protection; (3) a
+server-authoritative Owner/Admin request-row count cue and persistent Office Review discovery,
+with any cross-request queue preflighted separately. No billing/invoice grouping entity, automatic
+navigation, generic batch-review action, client-inferred review state, lifecycle/ranking change,
+or authorization broadening is authorized by this decision. See [GAP-065](pilot-readiness-bug-tracker.md#gap-065--owneradmin-internal-financial-review-work-is-hard-to-discover-from-requests).
+The implementation contract and Slice 1A stop gate are in [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
+
+BL136 4f-ii **presentation upgrade** landed locally: the wide
 Owner/Admin Actual Work financial-review view is now a dedicated two-column workspace
 (`ActualWorkFinancialReviewWorkspace.tsx`) — context rail + KPI cards with semantic margin tone +
 line-item breakdown table + review card, on a cool `--keep-workspace-canvas` shell, reusing the
@@ -49,11 +61,20 @@ with customer promises needing attention first." UI-004 (2026-08-21) controls th
 ADR-449's lowercase "All work" was stale. No labels, copy placement, server ranking, or navigation
 changed. UI-004's Office Review discoverability requirement stays with GAP-065, not GAP-045.
 
-**Next batch: GAP-042** — Authenticated request work lacks visible business identity. Add restrained,
-fresh business-name context to authenticated list/detail views without competing with the
-request/customer, duplicating stale labels, or exposing account identity publicly. After GAP-042 the
-tracker order continues: GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, GAP-053. Do not pull GAP-047,
-GAP-048, GAP-049, filters, history, pagination, or generic queue redesign into these sessions.
+**Next batch: GAP-065 Slice 1B-server.** Slice 1A discovery is complete and accepted (2026-09-02);
+findings and the corrected file-level gate are in [BL138 §Slice 1A findings](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
+1B-server only, awaiting explicit go: new Owner/Admin-only
+`GET /keep/pricebook/actual-work/request/{requestId}/pending-financial-reviews` on
+`ActualWorkFinancialReadApiService`, request-scoped variant of the unreviewed-queue query, plus a
+bounded batched resolution/disposition-by-visit-ids read; no-price/cost DTO with a three-value
+`reviewStatus` (`ReadyToReview` / `NeedsCostPriceResolution` / `NeedsNoChargeDisposition`) folded
+from effective resolutions + the disposition fact; no migration; auth + query + status-derivation
+tests. Stop for the reviewed-diff gate. 1B-client (task card, narrow scroll-and-focus, cross-hook
+refresh wiring) is a separate session.
+
+**Tracker order after the GAP-065 slices:** GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026,
+GAP-053. Do not pull GAP-047, GAP-048, GAP-049, filters, history, pagination, or generic queue
+redesign into these sessions.
 
 ## Deferred next work
 

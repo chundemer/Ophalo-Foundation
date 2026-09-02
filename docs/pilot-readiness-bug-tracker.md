@@ -470,43 +470,63 @@ and that no customer data beyond the minimum notification payload is exposed.
 
 ### GAP-065 — Owner/Admin internal financial-review work is hard to discover from requests
 
-**Status:** Needs decision
+**Status:** Open
 **Severity:** P1
 **Area:** Request List, Office Review navigation, and Actual Work review context
 
-A current **Actual Work draft** correctly is not itself review work. However, when a request also
-has a prior submitted, unreviewed visit, `RequestDetailActualWorkSection` suppresses the entire
-`ActualWorkHistoryCard` while the current draft is editable. The card contains the wide-viewport
-**Open in workspace** route to that submitted visit's Owner/Admin financial-review surface, so the
-request collapses to a count such as “1 prior visit locked” with no route to review it. Separately,
-a submitted, unreviewed visit has no factual cue in the normal request queue, and the
-Owner/Admin-only **Actual Work Review** destination is nested in the `Views` menu under Office
-Review. It appears as an actionable destination only when Office Review has work.
+**Implementation contract:** [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md)
 
-**Decision required:** Define the smallest discovery treatment without merging Office Review into
-customer-promise risk:
+**Locked product boundary:** A submitted Actual Work visit is an immutable, dated field record;
+it is never merged with another visit merely because both belong to the same request or service
+account. Financial review is also per visit, preserving the submitted price/cost snapshots,
+performer attribution, visit notes, correction/supersession history, and audit trail. A future
+customer charge may group one or more reviewed visits, but that billing/invoice grouping is not a
+current Keep entity or scope.
 
-- Whether a request with at least one submitted, unreviewed visit receives a quiet, factual
-  **Internal review pending** cue in the normal Owner/Admin queue, and whether selecting that cue
-  opens Request Detail's Owner/Admin review workspace or the account-wide Actual Work Review queue.
-- Restore the submitted-visit history and its existing **Open in workspace** route when a current
-  Draft is also present; the Draft must not hide earlier locked records or prevent their review.
-- Whether Owner/Admin navigation needs a persistent, clearly named **Office Review** affordance
-  (including its empty state), rather than relying on a nested `Views` menu item that becomes
-  actionable only when its aggregate is non-zero.
-- The server-authoritative projection needed for any row cue. The client must not infer financial
-  review state from local request lifecycle, visit/draft presence, or queue membership.
+**Locked workflow rule:** **submitted and unreviewed is an active office task; reviewed is
+history.** A current Actual Work Draft is not review work, but it must never hide an earlier
+submitted/unreviewed visit.
 
-**Guardrails:** Do not show this cue for a Draft, a reviewed visit, an Operator/Viewer, or a
-terminal request with no unreviewed submitted visit. Do not change request ranking, queue counts,
-attention severity, lifecycle status, or financial-review authorization. Office Review remains
-separate from Needs Attention and customer communication.
+**Phased resolution:**
 
-**Done when:** An Owner/Admin can discover pending internal financial review from both the normal
-request workflow and a clearly named Office Review destination. A Draft — not submitted is
-truthfully not presented as review work, but it does not hide an earlier submitted/unreviewed visit
-or its review route. Focused coverage proves the submitted/unreviewed, submitted/reviewed,
-draft-plus-prior-visit, role, empty-state, and navigation cases.
+1. **Request Detail direct entry (first implementation slice).** For Owner/Admin only, promote
+   every submitted, unreviewed visit into a factual **Pending financial reviews (N)** task card in
+   the Actual Work region, ahead of passive Visit history. Each visit gets its own row with
+   submitted timestamp, technician/recorder where truthfully available, line count, and a direct
+   **Review financials** route to that exact workspace visit. Use **Ready to review** for
+   financially complete-but-unreviewed work, **Needs cost/price resolution** when applicable, and
+   reserve **Review complete** for a visit with `reviewedAtUtc`. Keep reviewed and superseded
+   records in passive history. The completed GAP-065A history fix remains in force.
+2. **Request-scoped workspace continuation (second slice).** Preserve the exact-visit deep link,
+   but add a compact Owner/Admin pending-visit switcher in the wide financial-review workspace.
+   It lists the outstanding submitted visits for this request, with the selected visit explicit.
+   After a successful review, show confirmation and **Review next pending visit** plus **Back to
+   request**; never auto-navigate. Switching with a dirty reviewer note or open financial
+   resolution input requires a discard confirmation. Reviewed visits may be available in a
+   secondary audit section, but pending visits are dominant.
+3. **Queue discoverability (separate preflight/implementation slices).** Add a quiet,
+   server-authoritative Owner/Admin request-row count cue such as **2 visits need review**. A
+   normal request-row click continues to open Request Detail; it must not unexpectedly jump to a
+   financial workspace. The existing account-wide Office/Actual Work Review destination should
+   become a clearly named, persistent destination with a truthful empty state. A later dedicated
+   cross-request review queue may offer one row per pending visit and a direct Review action, but
+   requires its own query, authorization, ranking, and empty-state preflight.
+
+**Guardrails:** Do not show review work for a Draft, reviewed or superseded visit, an
+Operator/Viewer, or a terminal request with no unreviewed submitted visit. Do not change request
+ranking, queue counts, attention severity, lifecycle status, financial-review authorization, or
+the server's review gate as a presentation fix. Any request-row cue/count must come from a
+server-authoritative projection, never client inference from lifecycle, Draft, or history data.
+Do not introduce a generic “Review all” action until its eligibility, per-visit reviewer-note
+semantics, resolution handling, and audit evidence are separately locked.
+
+**Done when:** An Owner/Admin can open Request Detail once, enter any outstanding visit directly,
+review one visit, and deliberately continue to the next outstanding visit without returning to the
+request list. The request-level review signal remains active until every submitted, unsuperseded
+visit is reviewed. Queue discovery is clear but remains distinct from customer-promise attention.
+Focused coverage proves multiple pending visits, reviewed/superseded visits, draft-plus-prior
+visit, role, dirty-switch, success continuation, deep-link, empty-state, and server-authoritative
+cue/count behavior.
 
 ### GAP-037 — Pilot has no weekly, evidence-based value report
 
