@@ -3,10 +3,10 @@
 **Status:** Slice 1A discovery complete and accepted (2026-09-02). **Slice 1B-server implemented and
 committed (`faf7b64`, 2026-09-02)** — the privileged request-scoped projection, the request-scoped
 pending read, the bounded batched resolution/disposition reads, the endpoint, and auth / query /
-status-derivation / batched-read tests. **Slice 1B-client implemented and committed (2026-09-02) —
-the hook, the `Pending financial reviews (N)` card, wide/narrow entry, and the cross-hook refresh
-wiring (Option 1) with four review corrections; frontend suite 1004/1004.** See §"Slice 1B-client —
-implemented" below.
+status-derivation / batched-read tests. **Slice 1B-client implemented and committed (`e27c48c`,
+2026-09-02) — the hook, the `Pending financial reviews (N)` card, wide/narrow entry, and the
+cross-hook refresh wiring (Option 1) with four review corrections; frontend suite 1004/1004.** See
+§"Slice 1B-client — implemented" below.
 **Date:** 2026-09-02
 **Related:** [GAP-065](../pilot-readiness-bug-tracker.md#gap-065--owneradmin-internal-financial-review-work-is-hard-to-discover-from-requests), [BL136](136-actual-work-paper-compatible-pilot-upgrade.md), [ADR-494](../decisions/ADR-494-actual-work-paper-compatible-pilot-upgrade.md), [ADR-493](../decisions/ADR-493-actual-work-office-financial-resolution-and-billing-revisions.md)
 
@@ -383,7 +383,7 @@ Slice 1B as one change is over the batch gate. Split:
   scrolls to and focuses the matching inline review card; card refreshes after resolution, review,
   and replacement outcomes; card still renders with an open editable Draft.
 
-## Slice 1B-client — implemented (2026-09-02, committed)
+## Slice 1B-client — implemented (`e27c48c`, 2026-09-02)
 
 Built per §"Slice 1B-client refresh ownership — DECIDED" and the frontend gate section, plus four
 review corrections. **7 production + 5 test files; frontend suite 1004/1004, `tsc` clean.**
@@ -416,7 +416,7 @@ review corrections. **7 production + 5 test files; frontend suite 1004/1004, `ts
 
 ## Handoff instruction
 
-Slice 1B-server (`faf7b64`) and Slice 1B-client are committed. The next slice is **Slice 2**
+Slice 1B-server (`faf7b64`) and Slice 1B-client (`e27c48c`) are committed. The next slice is **Slice 2**
 (§"Slice 2 — request-scoped workspace continuation"), a separate session: the wide workspace
 pending-visit switcher and post-success **Review next pending visit** continuation with
 dirty-switch protection.

@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-02 — **GAP-065 Slice 1B-server (`faf7b64`) and Slice 1B-client are
-implemented and committed.** Submitted visits remain separate immutable field records;
+**Last updated:** 2026-09-02 — **GAP-065 Slice 1B-server (`faf7b64`) and Slice 1B-client
+(`e27c48c`) are implemented and committed.** Submitted visits remain separate immutable field records;
 the office experience, not the factual model, will become request-scoped. Delivery is deliberately
 multi-session: (1) Owner/Admin Request Detail **Pending financial reviews (N)** task card with a
 direct route per submitted/unreviewed visit; (2) wide workspace pending-visit switcher and
@@ -76,7 +76,7 @@ from effective resolutions + the disposition fact. No migration, no DI change, n
 architecture 14/14. (Unrelated worktree hunk: the `requestStatus.ts` frontend crash guard + its
 test remain uncommitted for a separate standalone UI bugfix commit.)
 
-**GAP-065 Slice 1B-client is implemented and committed (2026-09-02).**
+**GAP-065 Slice 1B-client is implemented and committed (`e27c48c`, 2026-09-02).**
 New `useActualWorkPendingReviews(requestId, enabled)` hook with its own `reload()`;
 `ActualWorkPendingReviewsCard` (`Pending financial reviews (N)`) rendered by
 `RequestDetailActualWorkSection` above the Actual Work module, gated on `canReviewActualWork`, both
