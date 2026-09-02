@@ -42,7 +42,7 @@ of every GAP-067 slice preflight.
 
 Slices (start a fresh session per slice after each approved commit):
 
-- **Slice 1 — token foundation + operational canvas — DONE (`<pending-hash>`).** Added the 11
+- **Slice 1 — token foundation + operational canvas — DONE (`80b853b`).** Added the 11
   `--keep-request-*` aliases to both token sources; swapped the Request List and Request Detail
   page-root canvas (`Requests.tsx`, `RequestDetail.tsx`) from `--ophalo-canvas` to
   `--keep-request-canvas`. 4 files. `check:tokens` + typecheck clean; requests/request-detail
