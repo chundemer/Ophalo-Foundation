@@ -45,8 +45,8 @@
   --keep-accent-hover: #107a90;
   --keep-info: #244c95;
   --keep-info-bg: #eaf1ff;
-  /* Cool, pale blue-gray outer canvas for the Requests/Keep workspace shells. Distinct from the
-     warm --ophalo-canvas cream that Price Book retains. */
+  /* Cool, pale blue-gray outer canvas shared by financial workspaces: the Actual Work financial
+     review and Price Book. Request communication/data remains on the warm --ophalo-canvas. */
   --keep-workspace-canvas: #eef2f7;
 }
 

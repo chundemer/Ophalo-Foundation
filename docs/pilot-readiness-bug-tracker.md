@@ -528,6 +528,50 @@ Focused coverage proves multiple pending visits, reviewed/superseded visits, dra
 visit, role, dirty-switch, success continuation, deep-link, empty-state, and server-authoritative
 cue/count behavior.
 
+### GAP-066 — Catalog Item detail is not yet a usable financial and operational-impact workspace
+
+**Status:** Open
+**Severity:** P1
+**Area:** Price Book Catalog Item detail
+
+The existing Catalog Item page has the correct item, price/cost, profitability, alias, edit, and
+inactivation behavior, but presents them as a narrow sequence of raw fields on the canvas. It does
+not match the financial-review workspace's clear hierarchy, and it gives an Owner/Admin no
+at-a-glance answer to the operational question: where will changing or inactivating this item have
+an effect?
+
+**Locked direction:** Treat Catalog Item detail as a financial workspace. The visual order is
+**item identity → economics → discoverability → operational impact**. Price Book uses the same
+cool financial-workspace canvas as Actual Work financial review; request communication/data keeps
+its distinct request canvas. Preserve existing mutation, price-version, alias, inactivation,
+conflict, entitlement, and authorization behavior.
+
+**Phased resolution:**
+
+1. **Existing-data presentation slice.** Recompose the Owner/Admin page into a wide responsive
+   workspace: item identity/status and action hierarchy in the header; an **Economics &
+   profitability** card with Sell price, Direct cost, Gross profit, Margin %, and secondary Markup
+   %; and a dedicated **Search aliases** card. `Update pricing & cost` is the primary financial
+   action; Edit is secondary; Inactivate remains quiet/destructive. Use semantic margin tone:
+   healthy positive margin green, thin/non-negative margin amber, negative margin red, and missing
+   data neutral/unavailable. Do not create a fake “standard catalog rate” concept.
+2. **Operational-impact slice (new read-model preflight required).** Add Owner/Admin-only,
+   server-authoritative reverse relationships for active assemblies/offers and relevant nudge
+   rules. Each section must provide truthful counts, useful empty states, and deep links to the
+   affected records. Do not infer relationships in the client, expose unavailable relationships,
+   or show decorative empty cards. The existing inactivation dependency check is not by itself a
+   general impact projection.
+
+**Guardrails:** Do not alter price/cost snapshots, reuse mutable current catalog values as history,
+broaden Price Book entitlement/role access, or imply invoices, billing, inventory, or accounting
+behavior. Association/nudge display must not delay, replace, or weaken the existing safe
+inactivation dependency check.
+
+**Done when:** An Owner/Admin can scan the economic decision, update pricing/cost safely, manage
+field-search aliases, and—once the second slice is delivered—understand every live operational
+relationship before changing an item. Desktop, narrow layout, missing-price/cost, zero-cost,
+thin/negative-margin, conflict, and alias-management coverage remain correct.
+
 ### GAP-037 — Pilot has no weekly, evidence-based value report
 
 **Status:** Open

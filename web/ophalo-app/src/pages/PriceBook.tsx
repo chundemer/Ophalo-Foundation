@@ -311,7 +311,7 @@ export function PriceBook({
 
   if (!isOwnerOrAdmin) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--keep-workspace-canvas)]">
         <div className="max-w-sm text-center px-6">
           <Tag className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
           <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">
@@ -335,7 +335,7 @@ export function PriceBook({
 
   if (entitlementError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--keep-workspace-canvas)]">
         <div className="max-w-sm text-center px-6">
           <Tag className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
           <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">
@@ -358,7 +358,7 @@ export function PriceBook({
 
   if (!entitled) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--keep-workspace-canvas)]">
         <div className="max-w-sm text-center px-6">
           <Tag className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
           <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">
@@ -460,7 +460,7 @@ export function PriceBook({
           to sm+ only; below `sm` the block stays in normal flow exactly as before, since the
           global app header (App.tsx) is not itself sticky today, there's no header-height offset
           to track — `top-0` pins directly under the viewport edge. */}
-      <div className="sm:sticky sm:top-0 sm:z-20 sm:bg-[var(--ophalo-canvas)] sm:border-b sm:border-[var(--ophalo-border)] sm:shadow-sm">
+      <div className="sm:sticky sm:top-0 sm:z-20 sm:bg-[var(--keep-workspace-canvas)] sm:border-b sm:border-[var(--ophalo-border)] sm:shadow-sm">
       <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6" role="tablist" aria-label="Price Book sections">
         <div className="flex gap-5 border-b border-[var(--ophalo-border)]" >
           {(

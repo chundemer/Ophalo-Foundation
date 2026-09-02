@@ -282,7 +282,7 @@ export function OfferingAssemblyDetail({
 
   if (!isOwnerOrAdmin) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--keep-workspace-canvas)]">
         <div className="max-w-sm text-center px-6">
           <Package className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
           <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">
@@ -306,7 +306,7 @@ export function OfferingAssemblyDetail({
 
   if (entitlementError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--keep-workspace-canvas)]">
         <div className="max-w-sm text-center px-6">
           <Package className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
           <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">
@@ -325,7 +325,7 @@ export function OfferingAssemblyDetail({
 
   if (!entitled) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--keep-workspace-canvas)]">
         <div className="max-w-sm text-center px-6">
           <Package className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
           <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">

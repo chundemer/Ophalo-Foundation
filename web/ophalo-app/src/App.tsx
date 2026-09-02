@@ -325,11 +325,18 @@ function AppShell() {
   // band stays pinned and the capture surface owns its own scroll, rather than the document
   // growing past the viewport.
   const boundedShell = workbenchWideActive || route.page === "actual-work";
+  // Financial work uses one cool workspace canvas: Actual Work review and the entitlement-gated
+  // Price Book. Request communication/data keeps the warm operational canvas.
+  const usesFinancialCanvas =
+    route.page === "actual-work" ||
+    route.page === "pricebook" ||
+    route.page === "pricebook-item" ||
+    route.page === "pricebook-assembly";
 
   // Every route is a column: mobile top bar or desktop top-nav header above the content.
   return (
     <div
-      className={`flex flex-col bg-[var(--ophalo-canvas)] ${
+      className={`flex flex-col ${usesFinancialCanvas ? "bg-[var(--keep-workspace-canvas)]" : "bg-[var(--ophalo-canvas)]"} ${
         boundedShell ? "h-dvh overflow-hidden" : "min-h-screen"
       } ${usesTopNavShell ? "" : "md:flex-row"}`}
     >

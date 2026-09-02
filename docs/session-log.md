@@ -13,6 +13,12 @@ navigation, generic batch-review action, client-inferred review state, lifecycle
 or authorization broadening is authorized by this decision. See [GAP-065](pilot-readiness-bug-tracker.md#gap-065--owneradmin-internal-financial-review-work-is-hard-to-discover-from-requests).
 The implementation contract and Slice 1A stop gate are in [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 
+**GAP-066 Catalog Item financial-workspace direction is locked.** The existing-data UI slice may
+recompose identity, economics/profitability, aliases, and action hierarchy on the shared cool
+financial canvas without changing behavior. Associated Assemblies and Nudges are deliberately a
+later Owner/Admin-only server-authoritative impact-read slice; do not mock, client-infer, or
+decorate unsupported relationships. See [GAP-066](pilot-readiness-bug-tracker.md#gap-066--catalog-item-detail-is-not-yet-a-usable-financial-and-operational-impact-workspace).
+
 BL136 4f-ii **presentation upgrade** landed locally: the wide
 Owner/Admin Actual Work financial-review view is now a dedicated two-column workspace
 (`ActualWorkFinancialReviewWorkspace.tsx`) — context rail + KPI cards with semantic margin tone +

@@ -51,46 +51,73 @@ function formatPercent(value: number): string {
  * Cost or SellPrice makes all three unavailable. A zero Cost keeps gross profit/margin valid but
  * makes markup unavailable (division by zero); a zero SellPrice makes margin unavailable.
  */
-function ProfitabilityPanel({
+function EconomicsPanel({
   cost,
   sellPrice,
+  noStandalonePrice,
   currency,
 }: {
   cost: number | null;
   sellPrice: number | null;
+  noStandalonePrice: boolean;
   currency: string;
 }) {
-  if (cost == null || sellPrice == null) {
-    return (
-      <p className="text-sm text-[var(--ophalo-muted)]">
-        Profitability is unavailable until both Cost and Sell Price are set.
-      </p>
-    );
-  }
-
-  const grossProfit = sellPrice - cost;
-  const margin = sellPrice !== 0 ? grossProfit / sellPrice : null;
-  const markup = cost !== 0 ? grossProfit / cost : null;
+  const grossProfit = cost != null && sellPrice != null ? sellPrice - cost : null;
+  const hasCompleteEconomics = grossProfit != null;
+  const margin = grossProfit != null && sellPrice != null && sellPrice !== 0 ? grossProfit / sellPrice : null;
+  const markup = grossProfit != null && cost != null && cost !== 0 ? grossProfit / cost : null;
+  const marginTone = margin == null
+    ? "border-[var(--ophalo-border)] bg-[var(--ophalo-surface-muted)] text-[var(--ophalo-ink)]"
+    : margin < 0
+      ? "border-[var(--ophalo-danger)] bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
+      : margin < 0.15
+        ? "border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
+        : "border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] text-[var(--ophalo-success)]";
 
   return (
-    <dl className="grid grid-cols-3 gap-4">
-      <div>
-        <dt className="text-xs font-medium text-[var(--ophalo-muted)]">Gross profit</dt>
-        <dd className="text-sm text-[var(--ophalo-ink)] font-medium">{formatCurrency(grossProfit, currency)}</dd>
+    <section className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm" aria-labelledby="economics-heading">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--ophalo-border)] px-4 py-3">
+        <div>
+          <h2 id="economics-heading" className="text-sm font-semibold text-[var(--ophalo-ink)]">Economics &amp; profitability</h2>
+          <p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">Current internal price and cost for future use.</p>
+        </div>
       </div>
-      <div>
-        <dt className="text-xs font-medium text-[var(--ophalo-muted)]">Margin</dt>
-        <dd className="text-sm text-[var(--ophalo-ink)] font-medium">
-          {margin != null ? formatPercent(margin) : "Unavailable"}
-        </dd>
-      </div>
-      <div>
-        <dt className="text-xs font-medium text-[var(--ophalo-muted)]">Markup</dt>
-        <dd className="text-sm text-[var(--ophalo-ink)] font-medium">
-          {markup != null ? formatPercent(markup) : "Unavailable"}
-        </dd>
-      </div>
-    </dl>
+      <dl className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
+        <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-surface-muted)] px-4 py-3">
+          <dt className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--ophalo-muted)]">Sell price</dt>
+          <dd className="mt-1 text-lg font-semibold text-[var(--ophalo-ink)]">
+            {noStandalonePrice ? "No standalone price" : sellPrice != null ? formatCurrency(sellPrice, currency) : "Unavailable"}
+          </dd>
+        </div>
+        <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-surface-muted)] px-4 py-3">
+          <dt className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--ophalo-muted)]">Direct cost</dt>
+          <dd className="mt-1 text-lg font-semibold text-[var(--ophalo-ink)]">
+            {cost != null ? formatCurrency(cost, currency) : "Unavailable"}
+          </dd>
+        </div>
+        <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-surface-muted)] px-4 py-3">
+          <dt className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--ophalo-muted)]">Gross profit</dt>
+          <dd className="mt-1 text-lg font-semibold text-[var(--ophalo-ink)]">
+            {grossProfit != null ? formatCurrency(grossProfit, currency) : "Unavailable"}
+          </dd>
+        </div>
+      </dl>
+      <dl className="grid grid-cols-1 gap-3 border-t border-[var(--ophalo-border)] px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className={`rounded-lg border px-4 py-3 ${marginTone}`}>
+          <dt className="text-[10px] font-bold uppercase tracking-[0.1em] opacity-80">Margin %</dt>
+          <dd className="mt-1 text-lg font-semibold">{margin != null ? formatPercent(margin) : "Unavailable"}</dd>
+        </div>
+        <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-surface-muted)] px-4 py-3 text-[var(--ophalo-ink)]">
+          <dt className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--ophalo-muted)]">Markup %</dt>
+          <dd className="mt-1 text-lg font-semibold">{markup != null ? formatPercent(markup) : "Unavailable"}</dd>
+        </div>
+      </dl>
+      {!hasCompleteEconomics && (
+        <p className="border-t border-[var(--ophalo-border)] px-4 py-3 text-sm text-[var(--ophalo-muted)]">
+          Profitability is unavailable until both Cost and Sell Price are set.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -361,7 +388,7 @@ export function CatalogItemDetail({
 
   if (!isOwnerOrAdmin) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--keep-workspace-canvas)]">
         <div className="max-w-sm text-center px-6">
           <Tag className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
           <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">
@@ -385,7 +412,7 @@ export function CatalogItemDetail({
 
   if (entitlementError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--keep-workspace-canvas)]">
         <div className="max-w-sm text-center px-6">
           <Tag className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
           <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">
@@ -408,7 +435,7 @@ export function CatalogItemDetail({
 
   if (!entitled) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--keep-workspace-canvas)]">
         <div className="max-w-sm text-center px-6">
           <Tag className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
           <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">
@@ -425,14 +452,16 @@ export function CatalogItemDetail({
   return (
     <div className="flex-1 min-w-0 flex flex-col">
       <div className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--keep-accent)] hover:underline mb-3"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {backLabel}
-        </button>
+        <div className="mx-auto w-full max-w-6xl">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--keep-accent)] hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {backLabel}
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 min-w-0 px-4 sm:px-6 pb-6">
@@ -456,17 +485,28 @@ export function CatalogItemDetail({
         )}
 
         {!isLoading && !isError && data && !isEditing && (
-          <div className="max-w-2xl space-y-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
+          <div className="mx-auto w-full max-w-6xl space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0">
                 <h1 className="keep-page-title tracking-tight">{data.item.displayName}</h1>
-                <p className="mt-1 keep-page-subtitle">
-                  {TYPE_LABELS[data.item.type] ?? data.item.type}
-                  {data.category ? ` · ${data.category.name}` : ""}
-                  {data.item.isCommonItem ? " · Common item" : ""}
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--ophalo-muted)]">
+                  <span className="rounded-md border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-2 py-0.5 font-medium text-[var(--ophalo-ink)]">
+                    {TYPE_LABELS[data.item.type] ?? data.item.type}
+                  </span>
+                  <span className={`rounded-md px-2 py-0.5 font-medium ${data.item.activeState === "Active" ? "bg-[var(--ophalo-success-bg)] text-[var(--ophalo-success)]" : "bg-[var(--ophalo-surface-muted)] text-[var(--ophalo-muted)]"}`}>
+                    {data.item.activeState}
+                  </span>
+                  {data.category && <span>{data.category.name}</span>}
+                  {data.item.isCommonItem && <span>Common item</span>}
+                </div>
+                <span className="sr-only">
+                  {TYPE_LABELS[data.item.type] ?? data.item.type}{data.category ? ` · ${data.category.name}` : ""}
+                </span>
+                <p className="mt-2 text-sm text-[var(--ophalo-muted)]">
+                  SKU: {data.item.externalKey ?? "—"} <span aria-hidden="true">·</span> Unit of measure: {data.item.unitOfMeasure}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                 {data.item.activeState !== "Active" && (
                   <button
                     type="button"
@@ -477,6 +517,25 @@ export function CatalogItemDetail({
                     {reactivatePending ? "Reactivating…" : "Reactivate"}
                   </button>
                 )}
+                {data.item.activeState === "Active" && !showPublishForm && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPublishForm(true)}
+                    disabled={itemBusy}
+                    className="rounded-lg bg-[var(--keep-accent)] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[var(--keep-accent-hover)] disabled:opacity-60"
+                  >
+                    Update pricing &amp; cost
+                  </button>
+                )}
+                <button
+                  ref={editTriggerRef}
+                  type="button"
+                  onClick={startEditing}
+                  disabled={itemBusy}
+                  className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+                >
+                  {itemBusy ? "Refreshing…" : "Edit"}
+                </button>
                 {data.item.activeState === "Active" && !confirmInactivate && (
                   <button
                     type="button"
@@ -517,25 +576,6 @@ export function CatalogItemDetail({
                     </button>
                   </div>
                 )}
-                {data.item.activeState === "Active" && !showPublishForm && (
-                  <button
-                    type="button"
-                    onClick={() => setShowPublishForm(true)}
-                    disabled={itemBusy}
-                    className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
-                  >
-                    Update pricing &amp; cost
-                  </button>
-                )}
-                <button
-                  ref={editTriggerRef}
-                  type="button"
-                  onClick={startEditing}
-                  disabled={itemBusy}
-                  className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
-                >
-                  {itemBusy ? "Refreshing…" : "Edit"}
-                </button>
               </div>
             </div>
 
@@ -613,34 +653,12 @@ export function CatalogItemDetail({
               </div>
             )}
 
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 rounded-xl border border-[var(--ophalo-border)] p-4">
-              <div>
-                <dt className="text-xs font-medium text-[var(--ophalo-muted)]">SKU</dt>
-                <dd className="text-sm text-[var(--ophalo-ink)]">{data.item.externalKey ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium text-[var(--ophalo-muted)]">Unit of measure</dt>
-                <dd className="text-sm text-[var(--ophalo-ink)]">{data.item.unitOfMeasure}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium text-[var(--ophalo-muted)]">Status</dt>
-                <dd className="text-sm text-[var(--ophalo-ink)]">{data.item.activeState}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium text-[var(--ophalo-muted)]">Sell price</dt>
-                <dd className="text-sm text-[var(--ophalo-ink)]">
-                  {data.currentPricingMode === "NoStandalonePrice" || data.currentSellPrice == null
-                    ? "No standalone price"
-                    : formatCurrency(data.currentSellPrice, data.item.currency)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium text-[var(--ophalo-muted)]">Cost</dt>
-                <dd className="text-sm text-[var(--ophalo-ink)]">
-                  {data.currentCost != null ? formatCurrency(data.currentCost, data.item.currency) : "—"}
-                </dd>
-              </div>
-            </dl>
+            <EconomicsPanel
+              cost={data.currentCost}
+              sellPrice={data.currentPricingMode === "NoStandalonePrice" ? null : data.currentSellPrice}
+              noStandalonePrice={data.currentPricingMode === "NoStandalonePrice"}
+              currency={data.item.currency}
+            />
 
             {/* The repair/edit form is the first actionable content once opened — directly after
                 the header/summary, before Profitability and Aliases — so an owner arriving via
@@ -657,28 +675,19 @@ export function CatalogItemDetail({
               />
             )}
 
-            <div>
-              <h2 className="text-sm font-semibold text-[var(--ophalo-ink)] mb-2">Profitability</h2>
-              <ProfitabilityPanel cost={data.currentCost} sellPrice={data.currentSellPrice} currency={data.item.currency} />
-            </div>
-
-            <div>
-              <h2 className="text-sm font-semibold text-[var(--ophalo-ink)] mb-2">Aliases</h2>
+            <section className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-4 shadow-sm" aria-labelledby="aliases-heading">
+              <h2 id="aliases-heading" className="text-sm font-semibold text-[var(--ophalo-ink)]">Search aliases</h2>
+              <p className="mt-1 text-xs text-[var(--ophalo-muted)]">Helps technicians find this item in field search using alternate terms or shorthand.</p>
               {data.aliases.length === 0 ? (
-                <p className="text-sm text-[var(--ophalo-muted)]">No search aliases yet.</p>
+                <p className="mt-4 text-sm text-[var(--ophalo-muted)]">No search aliases yet.</p>
               ) : (
-                <ul className="text-sm text-[var(--ophalo-ink)] space-y-1">
+                <ul className="mt-4 flex flex-wrap gap-2">
                   {data.aliases.map((alias) => {
                     const isThisAliasPending =
                       aliasTransitionMutation.isPending && aliasTransitionMutation.variables?.aliasId === alias.id;
                     return (
-                      <li key={alias.id} className="flex items-center justify-between gap-3">
-                        <span>
-                          {alias.aliasText}
-                          {alias.activeState !== "Active" && (
-                            <span className="text-[var(--ophalo-muted)]"> (inactive)</span>
-                          )}
-                        </span>
+                      <li key={alias.id} className="inline-flex items-center gap-2 rounded-full border border-[var(--ophalo-border)] bg-[var(--ophalo-surface-muted)] py-1 pl-3 pr-2 text-sm text-[var(--ophalo-ink)]">
+                        <span>{alias.aliasText}{alias.activeState !== "Active" && <span className="text-[var(--ophalo-muted)]"> (inactive)</span>}</span>
                         <button
                           type="button"
                           onClick={() =>
@@ -702,7 +711,7 @@ export function CatalogItemDetail({
                 </ul>
               )}
 
-              <form onSubmit={handleAddAlias} className="mt-3 flex items-start gap-2">
+              <form onSubmit={handleAddAlias} className="mt-4 flex items-start gap-2 border-t border-[var(--ophalo-border)] pt-4">
                 <div className="flex-1">
                   <label htmlFor="new-alias-text" className="sr-only">
                     New alias
@@ -723,12 +732,12 @@ export function CatalogItemDetail({
                 <button
                   type="submit"
                   disabled={itemBusy || addAliasMutation.isPending || newAliasText.trim() === ""}
-                  className="shrink-0 rounded-lg border border-[var(--ophalo-border)] px-3 py-2 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+                  className="shrink-0 rounded-lg border border-[var(--ophalo-border)] px-3 py-2 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-surface-muted)] disabled:opacity-60"
                 >
                   {addAliasMutation.isPending ? "Adding…" : "Add"}
                 </button>
               </form>
-            </div>
+            </section>
           </div>
         )}
 

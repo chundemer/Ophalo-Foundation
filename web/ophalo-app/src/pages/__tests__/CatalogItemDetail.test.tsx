@@ -920,7 +920,7 @@ describe("CatalogItemDetail", () => {
     await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     const formHeading = await screen.findByRole("heading", { name: "Update pricing & cost" });
-    const aliasesHeading = screen.getByRole("heading", { name: "Aliases" });
+    const aliasesHeading = screen.getByRole("heading", { name: "Search aliases" });
     // DOCUMENT_POSITION_FOLLOWING on aliasesHeading (relative to formHeading) means the form
     // comes first — the repair form must be the first actionable content, not placed after
     // unrelated alias management.
