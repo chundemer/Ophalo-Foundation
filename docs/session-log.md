@@ -61,7 +61,7 @@ Slices (start a fresh session per slice after each approved commit):
   rendering + non-interactivity) unchanged. `check:tokens` + typecheck clean; 573/573
   request-touching suites; wide-pane browser check confirmed. Also lands the spec's "Consistency
   with Actual Work and Price Book" section.
-- **Slice 3 — Request Detail anchor — DONE (`<slice-3-hash>`).** Scope expanded at the gate from
+- **Slice 3 — Request Detail anchor — DONE (`63e9906`).** Scope expanded at the gate from
   the 4 named files to the 8 the visual spec implicates (presentation only). Anchor + mobile-anchor
   bands swapped `--ophalo-canvas` → `--keep-request-canvas` (`RequestDetailAnchor.tsx`,
   `MobileRequestAnchor.tsx`). Semantic section eyebrows in the Anchor render tree → the locked
