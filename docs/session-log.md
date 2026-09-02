@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-02 — **Next implementation session: GAP-067 Slice 4 — Detail work
-canvas: attention + action hierarchy.** GAP-067 Slices 1–3 are complete (`80b853b`, `022bc89`,
-plus this commit). GAP-065 Owner/Admin
+**Last updated:** 2026-09-02 — **Next implementation session: GAP-042 — fresh authenticated
+business identity in the finished Request workspace.** GAP-067 is complete: Slices 1–4 landed
+(`80b853b`, `022bc89`, `63e9906`, plus this commit). GAP-065 Owner/Admin
 financial-review discovery is complete through Slice 3b (`f231126`, `606203d`); its detailed record
 is in [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 
@@ -75,10 +75,26 @@ Slices (start a fresh session per slice after each approved commit):
   `<label>` `htmlFor` association preserved. `check:tokens` + typecheck clean; new
   `OriginalRequestCard.surface.test.tsx` guards the neutral surface; request-detail + requests
   suites 581/581.
-- **Slice 4 — Detail work canvas: attention + action hierarchy** (`RequestDetailWorkCanvas.tsx`,
-  `BusinessSection.tsx`, `PrimaryActionControl.tsx`, financial-review module): single amber
-  attention card, teal customer primary, dark-slate financial emphasis, outlined secondaries.
-  Full narrow + keyboard + WCAG-AA acceptance evidence lands at this slice.
+- **Slice 4 — Detail work canvas: attention + action hierarchy — DONE (`<slice-4-hash>`).**
+  Two additive, Request-Detail-scoped shared button variants (existing `teal`/`primary`/`secondary`
+  preserved): `KeepButton` + `KeepSplitButton` gain `request-primary` (`--keep-request-primary`
+  teal fill) and `KeepButton` gains `request-financial` (`--keep-request-financial` dark slate).
+  `HeroAttentionBanner` (`DetailPanels.tsx`): panel → `--keep-request-attention-bg` + full
+  `--keep-request-attention-border`, left accent rail removed; "Resolve another way…", info
+  trigger, and Why/Resolve-by labels → `--keep-request-attention-text`; disclosure source inset
+  `--ophalo-canvas` → `--keep-request-surface-muted`. `PrimaryActionControl.tsx`: `PrimaryActionSlot`
+  gains `primaryEmphasis` (default `teal`); `HeroAttentionBanner` passes `request-primary` so the
+  routed customer-resolution primary (respond / acknowledge / follow-up / logged contact) is the
+  dominant fill; `mutation` (mark work done / close) and no-attention Anchor mounts stay `teal`.
+  `BusinessSection.tsx`: customer-update composer submit (split button + status-only fallback) →
+  `request-primary`; internal-note submit unchanged. `ActualWorkReviewCard.tsx` "Complete internal
+  financial review" and `ActualWorkPendingReviewsCard.tsx` "Review financials" → `request-financial`.
+  Lifecycle/nav/Retry/Confirm/Close controls deliberately unchanged (recorded as later polish, with
+  `ProminentFeedbackCard`'s legacy `--ophalo-attention` treatment). WCAG-AA verified for all new
+  pairings. `check:tokens` + typecheck clean; new `KeepButton.test.tsx`, +1 focused case each in
+  `HeroAttentionBanner`, `ActualWorkReviewCard`, `ActualWorkPendingReviewsCard`,
+  `BusinessSection.notify`; request-detail + requests + keep suites 584/584; desktop browser check
+  confirmed the amber panel / teal primary / dark-slate financial hierarchy.
 
 GAP-042 placement preflight (done, read-only): business name is `meQuery.data?.businessName` from
 the auth-gated `/me` endpoint (`apiClient.ts:730`), already rendered authenticated-only as muted

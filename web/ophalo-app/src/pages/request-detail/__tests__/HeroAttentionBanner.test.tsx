@@ -60,6 +60,23 @@ describe("HeroAttentionBanner — active Customer message (respond_to_customer)"
     expect(screen.getByText("Resolve by")).toBeInTheDocument();
   });
 
+  it("GAP-067 Slice 4: the banner is a single amber panel (full amber-400 border, no left accent bar) and its routed customer-resolution primary uses the dominant request-primary fill", () => {
+    const detail = detailWith("respond_to_customer", {
+      canSendBusinessUpdate: true,
+      primaryAction: { key: "respond_to_customer", label: "Respond to customer", target: "customer_update_composer", requiresConfirmation: false, confirmationCopy: null },
+    });
+    const { container } = render(<HeroAttentionBanner detail={detail} {...requiredProps()} />);
+
+    const banner = container.querySelector("section")!;
+    expect(banner.className).toContain("bg-[var(--keep-request-attention-bg)]");
+    expect(banner.className).toContain("border-[var(--keep-request-attention-border)]");
+    expect(banner.className).not.toContain("border-l-4");
+
+    expect(screen.getByRole("button", { name: "Respond to customer" }).className).toContain(
+      "bg-[var(--keep-request-primary)]",
+    );
+  });
+
   it("activates the inline composer when the teal primary action is clicked, not a new sheet", async () => {
     const onActivateCustomerUpdateComposer = vi.fn();
     const detail = detailWith("respond_to_customer", {

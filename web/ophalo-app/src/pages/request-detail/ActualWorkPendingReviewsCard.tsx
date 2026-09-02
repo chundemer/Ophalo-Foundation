@@ -74,7 +74,7 @@ export function ActualWorkPendingReviewsCard({ state, onRetry, onReviewVisit }: 
                   {STATUS_LABELS[item.reviewStatus]}
                 </p>
               </div>
-              <KeepButton variant="secondary" onClick={() => onReviewVisit(item.actualWorkId)}>
+              <KeepButton variant="request-financial" onClick={() => onReviewVisit(item.actualWorkId)}>
                 Review financials
               </KeepButton>
             </li>

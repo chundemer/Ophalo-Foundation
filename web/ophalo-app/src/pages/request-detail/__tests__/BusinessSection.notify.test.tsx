@@ -196,4 +196,31 @@ describe("BusinessUpdateSection — notify-step wiring (GAP-052b)", () => {
     await waitFor(() => expect(mockPatchRequestStatus).toHaveBeenCalled());
     expect(screen.queryByTestId("notify-panel")).not.toBeInTheDocument();
   });
+
+  // GAP-067 Slice 4: the customer-update composer submit is a customer-resolution primary, so the
+  // KeepSplitButton renders the `request-primary` fill on BOTH halves (main action + caret menu
+  // trigger), not the quiet `--keep-accent`.
+  it("renders the customer-update split-button submit with the request-primary fill on both halves", () => {
+    const detail = baseDetail();
+    render(
+      <BusinessUpdateSection
+        requestId="req-77"
+        detail={detail}
+        onDetailUpdated={() => {}}
+        draft="We're on our way."
+        onDraftChange={() => {}}
+        draftStatus=""
+        onDraftStatusChange={() => {}}
+        composerMode
+      />
+    );
+
+    const mainHalf = screen.getByRole("button", { name: "Post & prepare text" });
+    const caretHalf = screen.getByRole("button", { name: "More notify options" });
+    for (const half of [mainHalf, caretHalf]) {
+      expect(half.className).toContain("bg-[var(--keep-request-primary)]");
+      expect(half.className).toContain("hover:bg-[var(--keep-request-primary-hover)]");
+      expect(half.className).not.toContain("bg-[var(--keep-accent)]");
+    }
+  });
 });

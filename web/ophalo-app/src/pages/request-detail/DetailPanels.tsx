@@ -1038,7 +1038,7 @@ function AttentionGuidanceDisclosure({
         aria-controls={isOpen ? popoverId : undefined}
         aria-label="Why this needs attention"
         onClick={() => (isOpen ? dismiss() : onOpenChange(true))}
-        className="flex items-center justify-center rounded p-0.5 text-[var(--ophalo-attention)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ophalo-attention)]"
+        className="flex items-center justify-center rounded p-0.5 text-[var(--keep-request-attention-text)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-request-attention-border)]"
       >
         <Info className="h-4 w-4" />
       </button>
@@ -1050,14 +1050,14 @@ function AttentionGuidanceDisclosure({
           className="absolute left-0 z-20 mt-1 w-72 rounded-md border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 space-y-3 shadow-lg"
         >
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--keep-request-attention-text)]">
               Why
             </p>
             <p className="mt-1 text-sm leading-6 text-[var(--ophalo-ink)]">{guidance.why}</p>
           </div>
 
           {guidance.sourceText && (
-            <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5">
+            <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--keep-request-surface-muted)] px-3 py-2.5">
               {guidance.sourceLabel && (
                 <p className="text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
                   {guidance.sourceLabel}
@@ -1070,7 +1070,7 @@ function AttentionGuidanceDisclosure({
           )}
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--keep-request-attention-text)]">
               Resolve by
             </p>
             <p className="mt-1 text-sm leading-6 text-[var(--ophalo-ink)]">{guidance.resolveBy}</p>
@@ -1108,7 +1108,7 @@ export function HeroAttentionBanner({
     detail.availableActions.canAcknowledgeAttention && detail.effectiveAttention.guidanceKey !== "acknowledge_attention";
 
   return (
-    <section className="rounded-xl border border-[var(--ophalo-border)] border-l-4 border-l-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-4 py-2.5">
+    <section className="rounded-xl border border-[var(--keep-request-attention-border)] bg-[var(--keep-request-attention-bg)] px-4 py-2.5">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <KeepBadge variant={isOverdue ? "danger" : "attention"}>
@@ -1128,7 +1128,7 @@ export function HeroAttentionBanner({
             <button
               type="button"
               onClick={() => setGuidanceOpen(true)}
-              className="text-sm font-medium text-[var(--ophalo-attention)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ophalo-attention)] rounded"
+              className="text-sm font-medium text-[var(--keep-request-attention-text)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-request-attention-border)] rounded"
             >
               Resolve another way…
             </button>
@@ -1141,6 +1141,7 @@ export function HeroAttentionBanner({
             onRecordFollowUp={onRecordFollowUp}
             onContactLaunched={onContactLaunched}
             onActivateCustomerUpdateComposer={onActivateCustomerUpdateComposer}
+            primaryEmphasis="request-primary"
           />
         </div>
       </div>

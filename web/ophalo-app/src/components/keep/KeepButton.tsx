@@ -1,6 +1,15 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 
-export type KeepButtonVariant = "teal" | "primary" | "secondary";
+// `request-primary` and `request-financial` are additive, Request-Detail-scoped fills
+// (GAP-067 Slice 4): the teal customer-resolution primary (`--keep-request-primary`) and the
+// dark-slate internal financial-review emphasis (`--keep-request-financial`). They are distinct
+// from `teal` (`--keep-accent`, quiet selection/active) and are only consumed by Request Detail.
+export type KeepButtonVariant =
+  | "teal"
+  | "primary"
+  | "secondary"
+  | "request-primary"
+  | "request-financial";
 
 export const KeepButton = forwardRef<
   HTMLButtonElement,
@@ -24,11 +33,23 @@ export const KeepButton = forwardRef<
   const enabledSecondary = "border-2 border-[var(--ophalo-navy)] text-[var(--ophalo-navy)] bg-transparent hover:bg-[var(--ophalo-canvas)]";
   const disabledSecondary = "border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-muted)]";
 
+  const enabledRequestPrimary =
+    "bg-[var(--keep-request-primary)] text-white hover:bg-[var(--keep-request-primary-hover)]";
+  const disabledRequestPrimary = "border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-muted)]";
+
+  const enabledRequestFinancial =
+    "bg-[var(--keep-request-financial)] text-white hover:bg-[var(--keep-request-financial-hover)]";
+  const disabledRequestFinancial = "border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-muted)]";
+
   let variantClass: string;
   if (variant === "teal") {
     variantClass = disabled ? disabledTeal : enabledTeal;
   } else if (variant === "secondary") {
     variantClass = disabled ? disabledSecondary : enabledSecondary;
+  } else if (variant === "request-primary") {
+    variantClass = disabled ? disabledRequestPrimary : enabledRequestPrimary;
+  } else if (variant === "request-financial") {
+    variantClass = disabled ? disabledRequestFinancial : enabledRequestFinancial;
   } else {
     variantClass = disabled ? disabledPrimary : enabledPrimary;
   }

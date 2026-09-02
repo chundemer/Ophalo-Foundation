@@ -29,6 +29,12 @@ export interface PrimaryActionSlotProps {
   onRecordFollowUp: () => void;
   onContactLaunched: (direction: string, channel: string) => void;
   onActivateCustomerUpdateComposer: () => void;
+  // GAP-067 Slice 4: `HeroAttentionBanner` passes `"request-primary"` so its routed
+  // customer-resolution action (respond / acknowledge / follow-up / logged contact) renders as the
+  // visually dominant teal `--keep-request-primary` fill. The no-attention Anchor mounts leave it
+  // at the default `"teal"`. The `mutation` route (mark work done / close) is a lifecycle action
+  // and stays `"teal"` regardless.
+  primaryEmphasis?: "teal" | "request-primary";
 }
 
 export function PrimaryActionSlot({
@@ -39,6 +45,7 @@ export function PrimaryActionSlot({
   onRecordFollowUp,
   onContactLaunched,
   onActivateCustomerUpdateComposer,
+  primaryEmphasis = "teal",
 }: PrimaryActionSlotProps) {
   const action = detail.availableActions.primaryAction;
   if (!action) return null;
@@ -47,7 +54,7 @@ export function PrimaryActionSlot({
     case "attention_sheet":
       if (action.key !== "acknowledge_attention") return <PrimaryActionUnavailable />;
       return (
-        <KeepButton type="button" variant="teal" onClick={onOpenClearAttention}>
+        <KeepButton type="button" variant={primaryEmphasis} onClick={onOpenClearAttention}>
           {action.label}
         </KeepButton>
       );
@@ -55,7 +62,7 @@ export function PrimaryActionSlot({
     case "follow_up_sheet":
       if (action.key !== "resolve_follow_up") return <PrimaryActionUnavailable />;
       return (
-        <KeepButton type="button" variant="teal" onClick={onRecordFollowUp}>
+        <KeepButton type="button" variant={primaryEmphasis} onClick={onRecordFollowUp}>
           {action.label}
         </KeepButton>
       );
@@ -63,7 +70,7 @@ export function PrimaryActionSlot({
     case "customer_update_composer":
       if (action.key !== "respond_to_customer") return <PrimaryActionUnavailable />;
       return (
-        <KeepButton type="button" variant="teal" onClick={onActivateCustomerUpdateComposer}>
+        <KeepButton type="button" variant={primaryEmphasis} onClick={onActivateCustomerUpdateComposer}>
           {action.label}
         </KeepButton>
       );
@@ -72,7 +79,7 @@ export function PrimaryActionSlot({
       if (action.key !== "log_external_contact") return <PrimaryActionUnavailable />;
       const channel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
       return (
-        <KeepButton type="button" variant="teal" onClick={() => onContactLaunched("outbound", channel)}>
+        <KeepButton type="button" variant={primaryEmphasis} onClick={() => onContactLaunched("outbound", channel)}>
           {action.label}
         </KeepButton>
       );

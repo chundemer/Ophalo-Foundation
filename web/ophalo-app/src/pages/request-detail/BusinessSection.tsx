@@ -586,6 +586,7 @@ export function BusinessUpdateSection({
           label={isSubmitting ? "Saving…" : `Post & prepare ${notifyChannelLabel(notifyChannel)}`}
           onClick={() => void doSubmit(notifyChannel)}
           disabled={!canSubmit}
+          variant="request-primary"
           className="w-full"
           options={[
             ...(alternateNotifyChannel
@@ -605,7 +606,7 @@ export function BusinessUpdateSection({
           ]}
         />
       ) : (
-        <KeepButton type="submit" variant="teal" disabled={!canSubmit} className="w-full">
+        <KeepButton type="submit" variant="request-primary" disabled={!canSubmit} className="w-full">
           {isSubmitting ? "Saving…" : submitLabel}
         </KeepButton>
       )}

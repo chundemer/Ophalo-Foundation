@@ -48,6 +48,13 @@ describe("ActualWorkReviewCard", () => {
     expect(onFinancialReviewChanged).not.toHaveBeenCalled();
   });
 
+  it("GAP-067 Slice 4: the Complete internal financial review action carries the dark-slate financial emphasis", () => {
+    render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} />);
+    expect(
+      screen.getByRole("button", { name: /Complete internal financial review/ }).className,
+    ).toContain("bg-[var(--keep-request-financial)]");
+  });
+
   it("BL138 1B-client: tags each visit with a per-visit anchor id for narrow scroll-and-focus", () => {
     render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} />);
     expect(document.getElementById("actual-work-review-visit-visit-1")).toBeInTheDocument();

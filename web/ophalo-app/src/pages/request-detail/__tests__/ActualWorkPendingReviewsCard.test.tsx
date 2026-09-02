@@ -42,6 +42,13 @@ describe("ActualWorkPendingReviewsCard", () => {
     expect(onReviewVisit).toHaveBeenCalledWith("aw-1");
   });
 
+  it("gives the Review financials action the dark-slate internal-financial emphasis (GAP-067 Slice 4)", () => {
+    render(<ActualWorkPendingReviewsCard {...baseProps} state={loaded(item)} />);
+    expect(screen.getByRole("button", { name: "Review financials" }).className).toContain(
+      "bg-[var(--keep-request-financial)]",
+    );
+  });
+
   it("renders nothing while loading, hidden, or when nothing is pending", () => {
     const { rerender, container } = render(
       <ActualWorkPendingReviewsCard {...baseProps} state={{ status: "loading" }} />,

@@ -14,11 +14,14 @@ interface KeepSplitButtonProps {
   options: KeepSplitButtonOption[];
   disabled?: boolean;
   className?: string;
+  variant?: "teal" | "request-primary";
 }
 
-// Teal-only split button: primary action on the left, a caret-triggered menu of alternate
-// actions on the right. Shares KeepButton's teal design tokens rather than introducing new ones.
-export function KeepSplitButton({ label, onClick, options, disabled, className = "" }: KeepSplitButtonProps) {
+// Split button: primary action on the left, a caret-triggered menu of alternate actions on the
+// right. Defaults to the quiet teal accent; `request-primary` (GAP-067 Slice 4) is the additive
+// Request-Detail customer-resolution fill (`--keep-request-primary`), used only by the
+// customer-update composer submit. Both reuse existing KeepButton design tokens.
+export function KeepSplitButton({ label, onClick, options, disabled, className = "", variant = "teal" }: KeepSplitButtonProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -38,7 +41,10 @@ export function KeepSplitButton({ label, onClick, options, disabled, className =
     };
   }, [open]);
 
-  const enabledCls = "bg-[var(--keep-accent)] text-white hover:bg-[var(--keep-accent-hover)]";
+  const enabledCls =
+    variant === "request-primary"
+      ? "bg-[var(--keep-request-primary)] text-white hover:bg-[var(--keep-request-primary-hover)]"
+      : "bg-[var(--keep-accent)] text-white hover:bg-[var(--keep-accent-hover)]";
   const disabledCls = "border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-muted)]";
   const focusRing =
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2";
