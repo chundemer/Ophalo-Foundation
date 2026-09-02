@@ -125,12 +125,15 @@ decision-index updated. 4 production + 3 test files; unit + architecture suites 
 integration classes green. Detail in
 [BL138 §"Slice 3a — implemented"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 
-**GAP-065 Slice 3b is committed (`f231126`, 2026-09-02).** Frontend only: client
-`KeepRequestSummary` gains `pendingFinancialReviewCount: number`; `RequestRow` renders a quiet,
-non-interactive default-row cue when the server-authoritative count is > 0 — a tiny amber dot +
-muted `text-slate-600` "1 visit needs financial review" / "N visits need financial review", no
-badge/link/button/hover, `paneMode` row omits it. No API / permission / routing / migration change.
-2 production + 3 test/mock files; frontend suite 1017/1017, `tsc` clean. Detail in
+**GAP-065 Slice 3b is committed (`f231126`, amended by the pane-mode follow-up, 2026-09-02).**
+Frontend only: client `KeepRequestSummary` gains `pendingFinancialReviewCount: number`;
+`RequestRow` renders a quiet, non-interactive cue when the server-authoritative count is > 0 — a
+tiny amber dot + muted `text-slate-600` "1 visit needs financial review" / "N visits need financial
+review", no badge/rail/link/button/hover, no ranking or attention change. Rendered in the default
+row **and** the compact `paneMode` row (beneath the `Next:` / action-signal line) — a Christian-
+approved scoped exception to the 2026-08-24 compact-row rule, since the wide two-pane queue is the
+normal operational surface. No API / permission / routing / migration change. Frontend suite
+1017/1017, `tsc` clean. Detail in
 [BL138 §"Slice 3b — implemented"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 **Slice 3c is closed documentation-only** — the existing "Actual Work Review" Office Review tab
 already satisfies BL138's persistent-destination requirement. GAP-065 delivery is complete.

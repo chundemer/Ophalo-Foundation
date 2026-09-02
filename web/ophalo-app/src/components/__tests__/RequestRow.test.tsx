@@ -438,11 +438,19 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(cue).not.toHaveAttribute("role", "button");
   });
 
-  it("BL138 Slice 3b: the financial-review cue is default-row only — the compact pane row omits it", () => {
-    render(
+  it("BL138 Slice 3b (2026-09-02 scoped exception): the financial-review cue also renders in the compact pane row", () => {
+    const { rerender } = render(
       <RequestRow row={buildRow({ pendingFinancialReviewCount: 2 })} onSelect={noop} paneMode />,
     );
-    expect(screen.queryByText("2 visits need financial review")).not.toBeInTheDocument();
+    const cue = screen.getByText("2 visits need financial review");
+    expect(cue).toBeInTheDocument();
+    expect(cue.closest("a")).toBeNull();
+    expect(cue.closest("button")).toBeNull();
+
+    rerender(
+      <RequestRow row={buildRow({ pendingFinancialReviewCount: 0 })} onSelect={noop} paneMode />,
+    );
+    expect(screen.queryByText(/needs? financial review/)).not.toBeInTheDocument();
   });
 
   it("ADR-450: keyboard activation (Enter) of the real toggle expands without navigating — no interactive ancestor to intercept it", async () => {

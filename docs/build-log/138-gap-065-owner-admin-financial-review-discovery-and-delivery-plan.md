@@ -520,17 +520,29 @@ permission, routing, ranking/attention, or migration change.
   (non-optional; mirrors the server record). The client never infers it — the server sends the
   exact count only to a caller that clears the full Actual Work Review gate and `0` to everyone
   else (Slice 3a).
-- **Cue** — `RequestRow.tsx` renders a quiet metadata entry in the default-row context block
-  (beside `hasInternalNote`) iff `row.pendingFinancialReviewCount > 0`: a tiny amber dot
-  (`bg-amber-500`, `aria-hidden`) + muted `text-slate-600` text, factual pluralization
-  **"1 visit needs financial review"** / **"N visits need financial review"**. No badge, link,
-  button, or hover affordance. Default row only — the compact `paneMode` row drops metadata cues
-  (matches `hasInternalNote`); the persistent Actual Work Review destination (3c) and the Request
-  Detail card (1B) remain the deeper discovery paths.
+- **Cue** — `RequestRow.tsx` renders a quiet metadata entry iff `row.pendingFinancialReviewCount
+  > 0`: a tiny amber dot (`bg-amber-500`, `aria-hidden`) + muted `text-slate-600` text, factual
+  pluralization **"1 visit needs financial review"** / **"N visits need financial review"**. No
+  badge, rail, link, button, or hover affordance; no ranking or attention change. Rendered in the
+  default-row context block (beside `hasInternalNote`) **and** in the compact `paneMode` row,
+  directly beneath the `Next:` / action-signal line — see the scoped compact-row exception below.
+  The persistent Actual Work Review destination (3c) and the Request Detail card (1B) remain the
+  deeper discovery paths.
+
+### Scoped exception to the 2026-08-24 compact-row rule (approved 2026-09-02)
+
+The 2026-08-24 lock limits the `paneMode` row to identity, status/exception, the `Next:` cue, and
+the conditional action-signal line. The wide two-pane queue is the normal operational surface, so
+suppressing the financial-review cue there defeats GAP-065's premise (Owner/Admin financial-review
+work is hard to discover from requests). Christian explicitly approved a narrow amendment: the same
+quiet, server-authoritative cue renders in `paneMode` too, on its own line beneath the action-signal
+line. It stays metadata only — never a badge, rail, ranked exception cue, attention treatment, or
+interactive control. No other compact-row content is added.
 - **Mocks** — `pendingFinancialReviewCount: 0` added to the 5 `fixtures.ts` summaries, the
   `mockApiClient.ts` create-request summary, and the `RequestRow.test.tsx` `buildRow` default.
 - **Tests** — `RequestRow.test.tsx`: non-zero-count render + pluralization, zero-count absence,
-  non-interactive (no `a`/`button`/`role=button` ancestor), `paneMode` omission.
+  non-interactive (no `a`/`button`/`role=button` ancestor), and `paneMode` render + non-interactive
+  + zero-count absence.
 
 Files: `apiClient.types.ts`, `RequestRow.tsx`; `fixtures.ts`, `mockApiClient.ts`,
 `RequestRow.test.tsx`.

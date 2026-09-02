@@ -402,6 +402,22 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
     .slice(0, 3)
     .join(" · ") || null;
 
+  // BL138 Slice 3b: quiet, non-interactive Owner/Admin financial-review discovery cue.
+  // Server-authoritative — rendered iff the server sent a non-zero count (see
+  // KeepRequestSummary.pendingFinancialReviewCount; every caller outside the full Actual Work
+  // Review gate receives 0). Reference-page treatment: a tiny amber dot + muted small text, no
+  // badge/rail/link/button/hover; it must not compete with the customer-attention or lifecycle
+  // cues and never changes ranking or attention. Rendered in both the default row and the compact
+  // pane row (2026-09-02 scoped exception to the 2026-08-24 compact-row rule).
+  const financialReviewCue = row.pendingFinancialReviewCount > 0 ? (
+    <span className="flex items-center gap-1.5 text-slate-600">
+      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+      {row.pendingFinancialReviewCount === 1
+        ? "1 visit needs financial review"
+        : `${row.pendingFinancialReviewCount} visits need financial review`}
+    </span>
+  ) : null;
+
   const borderAccent = exception
     ? exception.tone === "danger"
       ? "border-l-4 border-l-[var(--ophalo-danger)]"
@@ -524,9 +540,15 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
           city/state-only treatment: identity, status/exception, and the Next: cue above already
           carry the scan signal a compact row needs. */}
       {paneMode ? (
-        actionSignalLine && (
-          <div className="keep-row-meta flex items-center gap-1 px-4 pt-1 pb-3">
-            {actionSignalLine}
+        // BL138 Slice 3b (scoped exception to the 2026-08-24 compact-row rule, approved
+        // 2026-09-02): the wide two-pane queue is the normal operational surface, so the
+        // server-authoritative Owner/Admin financial-review cue renders here too — directly
+        // beneath the Next: / action-signal line, same tiny amber dot + muted text, still no
+        // badge, rail, link, button, ranking, or attention change.
+        (actionSignalLine || row.pendingFinancialReviewCount > 0) && (
+          <div className="keep-row-meta flex flex-col gap-0.5 px-4 pt-1 pb-3">
+            {actionSignalLine && <div className="flex items-center gap-1">{actionSignalLine}</div>}
+            {financialReviewCue}
           </div>
         )
       ) : (
@@ -568,21 +590,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
               Internal note
             </span>
           )}
-          {/* BL138 Slice 3b: quiet, non-interactive Owner/Admin financial-review discovery cue.
-              Server-authoritative — rendered iff the server sent a non-zero count (see
-              KeepRequestSummary.pendingFinancialReviewCount). Reference-page treatment: a tiny
-              amber dot + muted small text, no badge/link/button/hover; it must not compete with
-              the customer-attention or lifecycle cues. Default row only — the compact pane row
-              drops metadata cues (matches hasInternalNote), and the persistent Actual Work Review
-              destination and the Request Detail card remain the deeper discovery paths. */}
-          {row.pendingFinancialReviewCount > 0 && (
-            <span className="flex items-center gap-1.5 text-slate-600">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
-              {row.pendingFinancialReviewCount === 1
-                ? "1 visit needs financial review"
-                : `${row.pendingFinancialReviewCount} visits need financial review`}
-            </span>
-          )}
+          {financialReviewCue}
         </div>
       )}
 
