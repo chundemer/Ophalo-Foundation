@@ -38,7 +38,7 @@ export function CustomerContactStrip({
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] shrink-0">
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)] shrink-0">
         Customer contact
       </span>
       {phone && <p className="text-sm text-[var(--ophalo-ink)]">{formatNaPhone(phone)}</p>}

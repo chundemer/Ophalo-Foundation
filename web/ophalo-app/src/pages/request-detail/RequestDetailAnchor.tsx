@@ -51,7 +51,7 @@ export function RequestDetailAnchor({
   const hasActiveAttention = detail.effectiveAttention.level !== "none";
 
   return (
-    <div className="shrink-0 bg-[var(--ophalo-canvas)] px-4 md:px-6 py-3">
+    <div className="shrink-0 bg-[var(--keep-request-canvas)] px-4 md:px-6 py-3">
       {/* Inner content aligns to the Work Canvas reading frame (RD-058B-2): one shared
           `max-w-4xl mx-auto` horizontal boundary, inside the outer gutter. */}
       <div className="mx-auto w-full max-w-4xl rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm px-4 py-3 md:px-5 md:py-4">

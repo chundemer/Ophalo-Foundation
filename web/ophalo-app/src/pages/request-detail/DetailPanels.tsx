@@ -500,8 +500,8 @@ interface OriginalRequestCardProps {
 export function OriginalRequestCard({ detail }: OriginalRequestCardProps) {
   if (!detail.description) return null;
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-2.5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
+    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--keep-request-surface-muted)] px-4 py-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)] mb-0.5">
         Customer need
       </p>
       <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
@@ -712,7 +712,7 @@ export function ServiceLocationPanel({ detail, onEditLocation }: ServiceLocation
   // border/padding/background; the Anchor owns the one boundary for the whole strip.
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] shrink-0">
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)] shrink-0">
         Service location
       </span>
       <div className="flex items-center gap-2">
@@ -841,7 +841,7 @@ export function TriagePanel({ detail, onDetailUpdated, bare = false, strip = fal
     const emphasize = displayPriority === "urgent";
     return (
       <div className="flex flex-col gap-1 min-w-0">
-        <label htmlFor={canEdit ? "internal-priority-strip-select" : undefined} className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">
+        <label htmlFor={canEdit ? "internal-priority-strip-select" : undefined} className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)]">
           Internal priority
         </label>
         {canEdit ? (

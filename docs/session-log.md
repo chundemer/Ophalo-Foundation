@@ -1,7 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-02 — **Next implementation session: GAP-067 Slice 3 — Request Detail
-anchor.** GAP-067 Slices 1–2 are complete (`80b853b`, plus this commit). GAP-065 Owner/Admin
+**Last updated:** 2026-09-02 — **Next implementation session: GAP-067 Slice 4 — Detail work
+canvas: attention + action hierarchy.** GAP-067 Slices 1–3 are complete (`80b853b`, `022bc89`,
+plus this commit). GAP-065 Owner/Admin
 financial-review discovery is complete through Slice 3b (`f231126`, `606203d`); its detailed record
 is in [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 
@@ -60,9 +61,20 @@ Slices (start a fresh session per slice after each approved commit):
   rendering + non-interactivity) unchanged. `check:tokens` + typecheck clean; 573/573
   request-touching suites; wide-pane browser check confirmed. Also lands the spec's "Consistency
   with Actual Work and Price Book" section.
-- **Slice 3 — Request Detail anchor** (`RequestDetailAnchor.tsx`, `MobileRequestAnchor.tsx`,
-  `RequestDetailHeader.tsx`, `DetailHero.tsx`): compact identity/contact/location/owner grid,
-  distinct planning row, neutral Slate Customer Need.
+- **Slice 3 — Request Detail anchor — DONE (`<slice-3-hash>`).** Scope expanded at the gate from
+  the 4 named files to the 8 the visual spec implicates (presentation only). Anchor + mobile-anchor
+  bands swapped `--ophalo-canvas` → `--keep-request-canvas` (`RequestDetailAnchor.tsx`,
+  `MobileRequestAnchor.tsx`). Semantic section eyebrows in the Anchor render tree → the locked
+  Slice 2 form `text-[10px] font-bold uppercase tracking-[0.08em] --keep-request-eyebrow`:
+  "Customer contact" (`CustomerContactStrip.tsx`), "Service location" + strip "Internal priority"
+  (`DetailPanels.tsx`), compact "Owner" (`TeamSection.tsx`), strip "Internal follow-up (optional)"
+  + "Planned work date" (`TimingPanel.tsx`). Customer Need (`OriginalRequestCard`) → neutral
+  `--keep-request-surface-muted` with the standard `--ophalo-border` kept visible; never attention
+  styling. `RequestDetailHeader.tsx` / `DetailHero.tsx` needed no change (no `--ophalo-canvas`, no
+  semantic eyebrow). No field/order/interaction/layout/responsive/authorization change. Priority
+  `<label>` `htmlFor` association preserved. `check:tokens` + typecheck clean; new
+  `OriginalRequestCard.surface.test.tsx` guards the neutral surface; request-detail + requests
+  suites 581/581.
 - **Slice 4 — Detail work canvas: attention + action hierarchy** (`RequestDetailWorkCanvas.tsx`,
   `BusinessSection.tsx`, `PrimaryActionControl.tsx`, financial-review module): single amber
   attention card, teal customer primary, dark-slate financial emphasis, outlined secondaries.

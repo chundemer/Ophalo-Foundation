@@ -265,7 +265,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
             its accessible name entirely, which would hide the current value from screen
             readers. The label stays a persistent visual heading; the button carries its own
             aria-label with the value. */}
-        <label className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">
+        <label className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)]">
           Internal follow-up (optional)
         </label>
         {canSetFollowUpOn ? (
@@ -437,7 +437,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
             its accessible name entirely, which would hide the current value from screen
             readers. The label stays a persistent visual heading; the button carries its own
             aria-label with the value. */}
-        <label className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">
+        <label className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)]">
           Planned work date
         </label>
         {canSetPlannedFor ? (

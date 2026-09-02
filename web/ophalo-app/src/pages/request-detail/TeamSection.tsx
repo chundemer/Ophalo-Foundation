@@ -92,7 +92,7 @@ export function TeamSection({ requestId, detail, onDetailUpdated, compact = fals
     // (CustomerContactStrip, ServiceLocationPanel) — consistent label-to-value rhythm across
     // the three-column row (desktop-polish, 2026-08-24).
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] shrink-0">
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)] shrink-0">
         Owner
       </span>
       <div className="flex items-center gap-2">

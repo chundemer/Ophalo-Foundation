@@ -17,7 +17,7 @@ interface MobileRequestAnchorProps extends Pick<RequestDetailLayoutProps, "detai
 
 export function MobileRequestAnchor({ detail }: MobileRequestAnchorProps) {
   return (
-    <div className="shrink-0 sticky top-0 z-10 border-b border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+    <div className="shrink-0 sticky top-0 z-10 border-b border-[var(--ophalo-border)] bg-[var(--keep-request-canvas)] px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
       <DetailHeroBadges detail={detail} />
       <div className="mt-1">
         <DetailHeroName detail={detail} />
