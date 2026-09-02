@@ -1,8 +1,9 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-02 — **Next implementation session: GAP-067 Request workspace
-presentation coherence.** GAP-065 Owner/Admin financial-review discovery is complete through
-Slice 3b (`f231126`, `606203d`); its detailed record is in [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
+**Last updated:** 2026-09-02 — **Next implementation session: GAP-067 Slice 3 — Request Detail
+anchor.** GAP-067 Slices 1–2 are complete (`80b853b`, plus this commit). GAP-065 Owner/Admin
+financial-review discovery is complete through Slice 3b (`f231126`, `606203d`); its detailed record
+is in [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
@@ -48,10 +49,17 @@ Slices (start a fresh session per slice after each approved commit):
   `--keep-request-canvas`. 4 files. `check:tokens` + typecheck clean; requests/request-detail
   suites 655/655; wide-pane browser check confirmed the Slate-50 canvas. Inner queue/inset/input
   cream surfaces deliberately left for later slices.
-- **Slice 2 — Request List rows + header** (`RequestRow.tsx`, `RequestListContent.tsx`,
-  `RequestsWorkspaceHeader.tsx`, `RequestListToolbar.tsx`, `RequestQueueNavigation.tsx`): card
-  edges/spacing/eyebrows, calm queue cues, 20–24 px rhythm; preserve GAP-027 grammar and the
-  Slice 3b financial dot.
+- **Slice 2 — Request List rows + header — DONE (`__PENDING__`).** Group/pane/popover eyebrows →
+  `text-[10px] font-bold tracking-[0.08em] --keep-request-eyebrow`; queue-row rhythm `space-y-3`
+  (12 px) with a 24 px break between Needs attention / Open work (row padding kept at 16 px per
+  the scan-density decision); active queue tab `bg-slate-100`, inactive hover `bg-slate-50`;
+  financial dot tokenised to `--keep-request-financial-dot`; "Unassigned" chip and quick-action
+  button fills off `--ophalo-canvas` onto white / `--keep-request-surface-muted`; Views-popover
+  cream hovers → `bg-slate-50`. No `--ophalo-canvas` reference remains in the 5 Request List
+  components. GAP-027 grammar, server ranking, and the Slice 3b financial cue (text + both-row
+  rendering + non-interactivity) unchanged. `check:tokens` + typecheck clean; 573/573
+  request-touching suites; wide-pane browser check confirmed. Also lands the spec's "Consistency
+  with Actual Work and Price Book" section.
 - **Slice 3 — Request Detail anchor** (`RequestDetailAnchor.tsx`, `MobileRequestAnchor.tsx`,
   `RequestDetailHeader.tsx`, `DetailHero.tsx`): compact identity/contact/location/owner grid,
   distinct planning row, neutral Slate Customer Need.

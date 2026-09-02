@@ -143,7 +143,7 @@ export function RequestListContent({
         )}
 
         {!isLoading && !isError && rows.itemCount > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {rows.isAvailableTab
               ? rows.availableRequests.map((row) => (
                   <AvailableRequestRow key={row.requestId} row={row} onSelect={rows.onAvailableSelect} />
@@ -152,16 +152,16 @@ export function RequestListContent({
                 ? (
                   <>
                     {rows.needsAttentionRows.length > 0 && (
-                      <div className="space-y-2">
-                        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
+                      <div className="space-y-3">
+                        <h2 className="px-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)]">
                           Needs attention
                         </h2>
                         {rows.needsAttentionRows.map(rows.renderRow)}
                       </div>
                     )}
                     {rows.openWorkRows.length > 0 && (
-                      <div className={`space-y-2 ${rows.needsAttentionRows.length > 0 ? "mt-4" : ""}`}>
-                        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
+                      <div className={`space-y-3 ${rows.needsAttentionRows.length > 0 ? "mt-6" : ""}`}>
+                        <h2 className="px-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)]">
                           Open work
                         </h2>
                         {rows.openWorkRows.map(rows.renderRow)}

@@ -100,8 +100,8 @@ export function RequestQueueNavigation({
           fill ? `flex-1 min-w-0 min-h-11 py-2 ${denseCount ? "px-1 text-xs" : "px-2 text-sm"}` : "px-3 py-1.5 text-sm whitespace-nowrap"
         } ${
           isActive
-            ? "font-semibold bg-[var(--ophalo-canvas)] text-[var(--ophalo-navy)]"
-            : "font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)]/60"
+            ? "font-semibold bg-slate-100 text-[var(--ophalo-navy)]"
+            : "font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:bg-slate-50"
         }`}
       >
         {compactLabel ? (COMPACT_TAB_LABELS[tab.id] ?? tab.label) : tab.label}

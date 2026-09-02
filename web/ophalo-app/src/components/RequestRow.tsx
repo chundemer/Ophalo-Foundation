@@ -59,11 +59,11 @@ function actionButtonClass(code: string): string {
     case "teal":
       return "border border-transparent bg-[var(--keep-accent)] text-white hover:bg-[var(--keep-accent-hover)]";
     case "navy-outline":
-      return "border border-[var(--ophalo-navy)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-navy)] hover:bg-[var(--ophalo-navy)] hover:text-white";
+      return "border border-[var(--ophalo-navy)] bg-[var(--ophalo-card)] text-[var(--ophalo-navy)] hover:bg-[var(--ophalo-navy)] hover:text-white";
     case "danger":
-      return "border border-[var(--ophalo-danger)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger)] hover:text-white";
+      return "border border-[var(--ophalo-danger)] bg-[var(--ophalo-card)] text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger)] hover:text-white";
     default:
-      return "border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-ink)] hover:border-[var(--ophalo-navy)] hover:text-[var(--ophalo-navy)]";
+      return "border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-[var(--ophalo-ink)] hover:border-[var(--ophalo-navy)] hover:text-[var(--ophalo-navy)]";
   }
 }
 
@@ -411,7 +411,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
   // pane row (2026-09-02 scoped exception to the 2026-08-24 compact-row rule).
   const financialReviewCue = row.pendingFinancialReviewCount > 0 ? (
     <span className="flex items-center gap-1.5 text-slate-600">
-      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+      <span className="h-1.5 w-1.5 rounded-full bg-[var(--keep-request-financial-dot)]" aria-hidden="true" />
       {row.pendingFinancialReviewCount === 1
         ? "1 visit needs financial review"
         : `${row.pendingFinancialReviewCount} visits need financial review`}
@@ -560,7 +560,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
             </span>
           )}
           {row.participation.isUnassigned && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-[var(--ophalo-canvas)] px-1.5 py-0.5 text-[var(--ophalo-muted)]">
+            <span className="inline-flex items-center gap-1 rounded-md border border-[var(--ophalo-border)] bg-[var(--keep-request-surface-muted)] px-1.5 py-0.5 text-[var(--ophalo-muted)]">
               <UserRound className="h-3 w-3" />
               Unassigned
             </span>

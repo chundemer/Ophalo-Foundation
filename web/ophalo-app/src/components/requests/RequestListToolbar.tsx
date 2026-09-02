@@ -200,7 +200,7 @@ function ViewsPopover({
             visibility: position ? "visible" : "hidden",
           }}
         >
-          <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
+          <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)]">
             Saved views
           </div>
           {secondaryViews.map((tab) => {
@@ -212,7 +212,7 @@ function ViewsPopover({
                 type="button"
                 aria-current={isActive}
                 onClick={() => { onSelectTab(tab); dismiss(); }}
-                className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-sm hover:bg-[var(--ophalo-canvas)] ${
+                className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 ${
                   isActive ? "font-semibold text-[var(--ophalo-navy)]" : "text-[var(--ophalo-ink)]"
                 }`}
               >
@@ -227,7 +227,7 @@ function ViewsPopover({
           })}
 
           {showOfficeReview && officeReview.status === "loading" && (
-            <div aria-hidden="true" className="mx-3 my-1.5 h-6 animate-pulse motion-reduce:animate-none rounded bg-[var(--ophalo-canvas)]" />
+            <div aria-hidden="true" className="mx-3 my-1.5 h-6 animate-pulse motion-reduce:animate-none rounded bg-slate-100" />
           )}
           {showOfficeReview && officeReview.status === "error" && (
             <button
@@ -260,7 +260,7 @@ function ViewsPopover({
                       type="button"
                       aria-current={isActive}
                       onClick={() => { onSelectTab(tab); dismiss(); }}
-                      className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-sm hover:bg-[var(--ophalo-canvas)] ${
+                      className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 ${
                         isActive ? "font-semibold text-[var(--ophalo-navy)]" : "text-[var(--ophalo-ink)]"
                       }`}
                     >
@@ -284,7 +284,7 @@ function ViewsPopover({
             <button
               type="button"
               onClick={() => { onEnterHistory(); dismiss(); }}
-              className="flex w-full items-center px-3 py-1.5 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)]"
+              className="flex w-full items-center px-3 py-1.5 text-sm text-[var(--ophalo-ink)] hover:bg-slate-50"
             >
               History Log
             </button>
@@ -292,7 +292,7 @@ function ViewsPopover({
 
           <div className="my-1 border-t border-[var(--ophalo-border)]" />
 
-          <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
+          <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)]">
             Filter by status
           </div>
           <div role="radiogroup" aria-label="Filter by status">
@@ -305,7 +305,7 @@ function ViewsPopover({
                   role="radio"
                   aria-checked={isSelected}
                   onClick={() => setDraftStatus(o.value)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)]"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-[var(--ophalo-ink)] hover:bg-slate-50"
                 >
                   <Check className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "opacity-100 text-[var(--keep-accent)]" : "opacity-0"}`} />
                   {o.label}
@@ -367,7 +367,7 @@ export function RequestListToolbar({
           search-with-different-placeholder path handled below. Views hides only in history
           mode; it stays mounted across the isAvailableTab toggle so a popover selection
           into/out of those tabs can still return focus to its own trigger. */}
-      <div className={`flex items-center gap-2 px-4 py-2 sm:px-6 border-t border-[var(--ophalo-border)] ${paneMode ? "" : "flex-wrap"}`}>
+      <div className={`flex items-center gap-3 px-4 py-2 sm:px-6 border-t border-[var(--ophalo-border)] ${paneMode ? "" : "flex-wrap"}`}>
         {!isAvailableTab && (
           <form onSubmit={onSubmitSearch} className={`flex items-center gap-2 flex-1 ${paneMode ? "min-w-0" : "min-w-[180px]"}`}>
             <div className="relative flex-1">

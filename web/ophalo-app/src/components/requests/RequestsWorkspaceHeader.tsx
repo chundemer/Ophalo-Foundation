@@ -44,7 +44,7 @@ export function RequestsWorkspaceHeader({
             />
           </div>
         )}
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
+        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)]">
           Request Queue
           {queueIdentityLabel && <> · {queueIdentityLabel}</>}
           {queueIdentityCount != null && <> · {queueIdentityCount}</>}

@@ -32,6 +32,20 @@ Do not repurpose `--ophalo-canvas`, which remains a shared warm legacy canvas fo
 
 All text/background pairings must meet WCAG AA at the rendered size. In particular, eyebrow labels and muted metadata must not be replaced with low-contrast gray from a reference image.
 
+## Consistency with Actual Work and Price Book
+
+Request work is not a visual clone of the financial-review workspace. The distinct canvases are
+intentional: Request work uses operational Slate-50 (`#f8fafc`); Actual Work financial review uses
+the cooler `--keep-workspace-canvas` (`#eef2f7`). This distinction helps users recognize whether
+they are triaging customer work or evaluating internal financial records.
+
+The shared product grammar is non-negotiable: white surfaces, Slate-200 borders, rounded-xl cards,
+rounded-lg controls, restrained one-step card shadows, the same ink/muted type scale, uppercase
+micro-label treatment, visible focus rings, and the same 4/8/12/16/20/24 spacing scale. Queue rows
+remain denser than financial-workspace modules (12 px between rows and 16 px row padding); this is
+an intentional scan-density difference, not a new component system. GAP-067 does not restyle the
+existing Actual Work financial workspace.
+
 ## Geometry and typography
 
 | Element | Locked value |
