@@ -76,6 +76,7 @@ function buildRow(overrides: Partial<KeepRequestSummary> = {}): KeepRequestSumma
     originalSummary: { fullText: "Fix leak" },
     latestActivity: null,
     hasInternalNote: false,
+    pendingFinancialReviewCount: 0,
     participation: {
       responsibleCount: 0,
       watchingCount: 0,
@@ -415,6 +416,33 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     const withoutNote = buildRow({ hasInternalNote: false });
     rerender(<RequestRow row={withoutNote} onSelect={noop} />);
     expect(screen.queryByText("Internal note")).not.toBeInTheDocument();
+  });
+
+  it("BL138 Slice 3b: shows a quiet financial-review cue only when the server sent a non-zero count, with factual pluralization", () => {
+    const none = buildRow({ pendingFinancialReviewCount: 0 });
+    const { rerender } = render(<RequestRow row={none} onSelect={noop} />);
+    expect(screen.queryByText(/needs? financial review/)).not.toBeInTheDocument();
+
+    rerender(<RequestRow row={buildRow({ pendingFinancialReviewCount: 1 })} onSelect={noop} />);
+    expect(screen.getByText("1 visit needs financial review")).toBeInTheDocument();
+
+    rerender(<RequestRow row={buildRow({ pendingFinancialReviewCount: 3 })} onSelect={noop} />);
+    expect(screen.getByText("3 visits need financial review")).toBeInTheDocument();
+  });
+
+  it("BL138 Slice 3b: the financial-review cue is non-interactive — no link, button, or nested activation target", () => {
+    render(<RequestRow row={buildRow({ pendingFinancialReviewCount: 2 })} onSelect={noop} />);
+    const cue = screen.getByText("2 visits need financial review");
+    expect(cue.closest("a")).toBeNull();
+    expect(cue.closest("button")).toBeNull();
+    expect(cue).not.toHaveAttribute("role", "button");
+  });
+
+  it("BL138 Slice 3b: the financial-review cue is default-row only — the compact pane row omits it", () => {
+    render(
+      <RequestRow row={buildRow({ pendingFinancialReviewCount: 2 })} onSelect={noop} paneMode />,
+    );
+    expect(screen.queryByText("2 visits need financial review")).not.toBeInTheDocument();
   });
 
   it("ADR-450: keyboard activation (Enter) of the real toggle expands without navigating — no interactive ancestor to intercept it", async () => {

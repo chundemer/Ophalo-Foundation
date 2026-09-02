@@ -511,9 +511,34 @@ cases), `KeepPersistenceProofTests.cs` (2 real-query proofs: state exclusion + a
 `KeepRequestListQueryApiTests.cs` (1 end-to-end contract test: entitled Owner sees `2`,
 Operator/Viewer see `0`).
 
+## Slice 3b — implemented (2026-09-02)
+
+Frontend only. **2 production + 3 test/mock files; frontend suite 1017/1017, `tsc` clean.** No API,
+permission, routing, ranking/attention, or migration change.
+
+- **Type** — `KeepRequestSummary` (`apiClient.types.ts`) gains `pendingFinancialReviewCount: number`
+  (non-optional; mirrors the server record). The client never infers it — the server sends the
+  exact count only to a caller that clears the full Actual Work Review gate and `0` to everyone
+  else (Slice 3a).
+- **Cue** — `RequestRow.tsx` renders a quiet metadata entry in the default-row context block
+  (beside `hasInternalNote`) iff `row.pendingFinancialReviewCount > 0`: a tiny amber dot
+  (`bg-amber-500`, `aria-hidden`) + muted `text-slate-600` text, factual pluralization
+  **"1 visit needs financial review"** / **"N visits need financial review"**. No badge, link,
+  button, or hover affordance. Default row only — the compact `paneMode` row drops metadata cues
+  (matches `hasInternalNote`); the persistent Actual Work Review destination (3c) and the Request
+  Detail card (1B) remain the deeper discovery paths.
+- **Mocks** — `pendingFinancialReviewCount: 0` added to the 5 `fixtures.ts` summaries, the
+  `mockApiClient.ts` create-request summary, and the `RequestRow.test.tsx` `buildRow` default.
+- **Tests** — `RequestRow.test.tsx`: non-zero-count render + pluralization, zero-count absence,
+  non-interactive (no `a`/`button`/`role=button` ancestor), `paneMode` omission.
+
+Files: `apiClient.types.ts`, `RequestRow.tsx`; `fixtures.ts`, `mockApiClient.ts`,
+`RequestRow.test.tsx`.
+
 ## Handoff instruction
 
 Slice 1B-server (`faf7b64`), Slice 1B-client (`e27c48c`), Slice 2 (`6ab880b`), and Slice 3a
-(`baaeff1`) are committed. Slice 3c is closed documentation-only. The remaining slice is
-**Slice 3b** — the client type plus the Owner/Admin-gated `RequestRow` "{N} visit(s) need financial
-review" metadata line (quiet, non-interactive) and focused frontend tests.
+(`baaeff1`) are committed. Slice 3b (frontend cue) is implemented locally, pending commit. Slice
+3c is closed documentation-only. Once 3b commits, GAP-065 delivery is complete; a cross-request
+one-row-per-visit review queue stays out of scope and needs its own read model, authorization,
+ranking, and empty-state decision.

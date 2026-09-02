@@ -125,11 +125,19 @@ decision-index updated. 4 production + 3 test files; unit + architecture suites 
 integration classes green. Detail in
 [BL138 §"Slice 3a — implemented"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 
-**Next batch: GAP-065 Slice 3b** — the client `KeepRequestSummary` type field plus the Owner/Admin-gated
-`RequestRow` quiet, non-interactive "{N} visit(s) need financial review" metadata line and focused
-frontend tests. **Slice 3c is closed documentation-only** — the existing "Actual Work Review" Office
-Review tab already satisfies BL138's persistent-destination requirement (see BL138 §"Slice 3 —
-preflight decisions").
+**GAP-065 Slice 3b is implemented (uncommitted, 2026-09-02).** Frontend only: client
+`KeepRequestSummary` gains `pendingFinancialReviewCount: number`; `RequestRow` renders a quiet,
+non-interactive default-row cue when the server-authoritative count is > 0 — a tiny amber dot +
+muted `text-slate-600` "1 visit needs financial review" / "N visits need financial review", no
+badge/link/button/hover, `paneMode` row omits it. No API / permission / routing / migration change.
+2 production + 3 test/mock files; frontend suite 1017/1017, `tsc` clean. Detail in
+[BL138 §"Slice 3b — implemented"](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
+**Slice 3c is closed documentation-only** — the existing "Actual Work Review" Office Review tab
+already satisfies BL138's persistent-destination requirement. GAP-065 delivery is complete pending
+this commit.
+
+**Next batch: GAP-042** (authenticated request work lacks visible business identity) — see tracker
+order below.
 
 **Tracker order after the GAP-065 slices:** GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026,
 GAP-053, then GAP-067. Do not pull GAP-047, GAP-048, GAP-049, filters, history, pagination, or generic queue

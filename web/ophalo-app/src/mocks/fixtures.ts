@@ -363,6 +363,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
       previewAtUtc: "2026-06-29T14:30:00Z",
     },
     hasInternalNote: false,
+    pendingFinancialReviewCount: 0,
     participation: {
       responsibleCount: 1,
       watchingCount: 0,
@@ -452,6 +453,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     },
     latestActivity: null,
     hasInternalNote: false,
+    pendingFinancialReviewCount: 0,
     participation: {
       responsibleCount: 0,
       watchingCount: 0,
@@ -557,6 +559,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
       previewAtUtc: "2026-06-27T15:30:00Z",
     },
     hasInternalNote: false,
+    pendingFinancialReviewCount: 0,
     participation: {
       responsibleCount: 1,
       watchingCount: 1,
@@ -650,6 +653,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
       previewAtUtc: "2026-06-30T08:00:00Z",
     },
     hasInternalNote: false,
+    pendingFinancialReviewCount: 0,
     participation: {
       responsibleCount: 1,
       watchingCount: 0,
@@ -739,6 +743,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     },
     latestActivity: null,
     hasInternalNote: false,
+    pendingFinancialReviewCount: 0,
     participation: {
       responsibleCount: 0,
       watchingCount: 0,

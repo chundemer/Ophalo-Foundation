@@ -568,6 +568,21 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
               Internal note
             </span>
           )}
+          {/* BL138 Slice 3b: quiet, non-interactive Owner/Admin financial-review discovery cue.
+              Server-authoritative — rendered iff the server sent a non-zero count (see
+              KeepRequestSummary.pendingFinancialReviewCount). Reference-page treatment: a tiny
+              amber dot + muted small text, no badge/link/button/hover; it must not compete with
+              the customer-attention or lifecycle cues. Default row only — the compact pane row
+              drops metadata cues (matches hasInternalNote), and the persistent Actual Work Review
+              destination and the Request Detail card remain the deeper discovery paths. */}
+          {row.pendingFinancialReviewCount > 0 && (
+            <span className="flex items-center gap-1.5 text-slate-600">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+              {row.pendingFinancialReviewCount === 1
+                ? "1 visit needs financial review"
+                : `${row.pendingFinancialReviewCount} visits need financial review`}
+            </span>
+          )}
         </div>
       )}
 

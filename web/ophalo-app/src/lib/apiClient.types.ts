@@ -518,6 +518,12 @@ export interface KeepRequestSummary {
   originalSummary: KeepRequestOriginalSummaryInfo;
   latestActivity: KeepRequestPreviewInfo | null;
   hasInternalNote: boolean;
+  // BL138 Slice 3a/3b: server-authoritative Owner/Admin request-row financial-review cue. The
+  // server sends the exact count only to a caller that clears the full Actual Work Review gate
+  // (Owner/Admin + RequestsOperate + AccountingManage + Price Book entitlement + non-Blocked,
+  // non-read-only office-financial account access); every other caller receives 0. The client
+  // never infers this — it renders a quiet metadata line iff the count is > 0.
+  pendingFinancialReviewCount: number;
   participation: KeepRequestParticipationInfo;
   actions: KeepRequestActionsInfo;
   timing?: KeepRequestTimingInfo;

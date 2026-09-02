@@ -482,6 +482,7 @@ export function installMockApi(): void {
       originalSummary: { fullText: body.description },
       latestActivity: null,
       hasInternalNote: false,
+      pendingFinancialReviewCount: 0,
       participation: {
         responsibleCount: 1,
         watchingCount: 0,
