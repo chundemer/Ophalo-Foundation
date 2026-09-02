@@ -29,7 +29,13 @@ const STATUS_BADGE_VARIANTS: Record<string, KeepBadgeVariant> = {
   test: "default",
 };
 
-export function statusLabel(status: string): string {
+/**
+ * Status is authoritative server data, but UI rendering must remain fail-safe if a mixed-version
+ * deployment or malformed response omits it. Normal contracts still require the value; this
+ * prevents a missing display value from taking down the whole screen.
+ */
+export function statusLabel(status: string | null | undefined): string {
+  if (!status) return "Status unavailable";
   return (
     STATUS_LABELS[status] ??
     status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())

@@ -19,6 +19,11 @@ describe("statusLabel", () => {
   it("falls back to a capitalized form for an unrecognized status", () => {
     expect(statusLabel("some_new_status")).toBe("Some New Status");
   });
+
+  it("does not throw when a response omits a status", () => {
+    expect(statusLabel(undefined)).toBe("Status unavailable");
+    expect(statusLabel(null)).toBe("Status unavailable");
+  });
 });
 
 describe("statusBadgeVariant", () => {
