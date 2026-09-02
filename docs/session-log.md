@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-09-02 — **Next implementation session: GAP-042 — fresh authenticated
 business identity in the finished Request workspace.** GAP-067 is complete: Slices 1–4 landed
-(`80b853b`, `022bc89`, `63e9906`, plus this commit). GAP-065 Owner/Admin
+(`80b853b`, `022bc89`, `63e9906`, `4877c4c`). GAP-065 Owner/Admin
 financial-review discovery is complete through Slice 3b (`f231126`, `606203d`); its detailed record
 is in [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 
@@ -31,79 +31,32 @@ relevant build log.
 
 ## Next implementation sequence
 
-**GAP-067: Request workspace presentation coherence — in progress, sliced.** Implement the retained
-desktop reference across Request List and Request Detail: Slate-50 operational canvas; restrained
-white cards; compact identity/contact/location/owner anchor; retained planning row; neutral
-Customer Need; semantic queue cues; and the locked action hierarchy. Preserve all current behavior,
-authority, ranking, lifecycle, financial-review semantics, responsive behavior, and keyboard access.
-Use the [Request Workspace Visual Token Specification](ux-design/v2/request-workspace-visual-spec.md)
-as the mechanical implementation contract; add only the locked `--keep-request-*` aliases to both
-token sources (`web/shared/styles/ophalo-tokens.css`, `web/ophalo-app/src/styles/app.css`) without
-changing existing `--ophalo-*`/`--keep-*`/Price Book values or comments. That exact check is part
-of every GAP-067 slice preflight.
+**GAP-067: Request workspace presentation coherence — COMPLETE.** The retained desktop reference is
+implemented across Request List and Request Detail: Slate-50 operational canvas; restrained white
+cards; compact identity/contact/location/owner anchor; retained planning row; neutral Customer Need;
+semantic queue cues; and the locked action hierarchy. Behavior, authority, ranking, lifecycle,
+financial-review semantics, responsive behavior, and keyboard access are unchanged. Mechanical
+contract: [Request Workspace Visual Token Specification](ux-design/v2/request-workspace-visual-spec.md).
+Slice commits: Slice 1 `80b853b`, Slice 2 `022bc89`, Slice 3 `63e9906`, Slice 4 `4877c4c` — each
+slice's exact file-level record is in its `feat(gap-067)` commit message. The 11 locked
+`--keep-request-*` aliases live in both token sources (`web/shared/styles/ophalo-tokens.css`,
+`web/ophalo-app/src/styles/app.css`).
 
-Slices (start a fresh session per slice after each approved commit):
+Deferred GAP-067 polish (not blocking; pick up opportunistically): non-attention Request Detail
+lifecycle/nav controls (Confirm, Close request, Retry) still use `--keep-accent` rather than the
+spec's outlined treatment, and `ProminentFeedbackCard` (`DetailPanels.tsx`) still uses the legacy
+`--ophalo-attention` amber rather than a neutral or `--keep-request-attention-*` surface — the
+Slice 4 gate scoped these out to keep the batch to presentation-only, low-regression changes.
 
-- **Slice 1 — token foundation + operational canvas — DONE (`80b853b`).** Added the 11
-  `--keep-request-*` aliases to both token sources; swapped the Request List and Request Detail
-  page-root canvas (`Requests.tsx`, `RequestDetail.tsx`) from `--ophalo-canvas` to
-  `--keep-request-canvas`. 4 files. `check:tokens` + typecheck clean; requests/request-detail
-  suites 655/655; wide-pane browser check confirmed the Slate-50 canvas. Inner queue/inset/input
-  cream surfaces deliberately left for later slices.
-- **Slice 2 — Request List rows + header — DONE (`022bc89`).** Group/pane/popover eyebrows →
-  `text-[10px] font-bold tracking-[0.08em] --keep-request-eyebrow`; queue-row rhythm `space-y-3`
-  (12 px) with a 24 px break between Needs attention / Open work (row padding kept at 16 px per
-  the scan-density decision); active queue tab `bg-slate-100`, inactive hover `bg-slate-50`;
-  financial dot tokenised to `--keep-request-financial-dot`; "Unassigned" chip and quick-action
-  button fills off `--ophalo-canvas` onto white / `--keep-request-surface-muted`; Views-popover
-  cream hovers → `bg-slate-50`. No `--ophalo-canvas` reference remains in the 5 Request List
-  components. GAP-027 grammar, server ranking, and the Slice 3b financial cue (text + both-row
-  rendering + non-interactivity) unchanged. `check:tokens` + typecheck clean; 573/573
-  request-touching suites; wide-pane browser check confirmed. Also lands the spec's "Consistency
-  with Actual Work and Price Book" section.
-- **Slice 3 — Request Detail anchor — DONE (`63e9906`).** Scope expanded at the gate from
-  the 4 named files to the 8 the visual spec implicates (presentation only). Anchor + mobile-anchor
-  bands swapped `--ophalo-canvas` → `--keep-request-canvas` (`RequestDetailAnchor.tsx`,
-  `MobileRequestAnchor.tsx`). Semantic section eyebrows in the Anchor render tree → the locked
-  Slice 2 form `text-[10px] font-bold uppercase tracking-[0.08em] --keep-request-eyebrow`:
-  "Customer contact" (`CustomerContactStrip.tsx`), "Service location" + strip "Internal priority"
-  (`DetailPanels.tsx`), compact "Owner" (`TeamSection.tsx`), strip "Internal follow-up (optional)"
-  + "Planned work date" (`TimingPanel.tsx`). Customer Need (`OriginalRequestCard`) → neutral
-  `--keep-request-surface-muted` with the standard `--ophalo-border` kept visible; never attention
-  styling. `RequestDetailHeader.tsx` / `DetailHero.tsx` needed no change (no `--ophalo-canvas`, no
-  semantic eyebrow). No field/order/interaction/layout/responsive/authorization change. Priority
-  `<label>` `htmlFor` association preserved. `check:tokens` + typecheck clean; new
-  `OriginalRequestCard.surface.test.tsx` guards the neutral surface; request-detail + requests
-  suites 581/581.
-- **Slice 4 — Detail work canvas: attention + action hierarchy — DONE (`4877c4c`).**
-  Two additive, Request-Detail-scoped shared button variants (existing `teal`/`primary`/`secondary`
-  preserved): `KeepButton` + `KeepSplitButton` gain `request-primary` (`--keep-request-primary`
-  teal fill) and `KeepButton` gains `request-financial` (`--keep-request-financial` dark slate).
-  `HeroAttentionBanner` (`DetailPanels.tsx`): panel → `--keep-request-attention-bg` + full
-  `--keep-request-attention-border`, left accent rail removed; "Resolve another way…", info
-  trigger, and Why/Resolve-by labels → `--keep-request-attention-text`; disclosure source inset
-  `--ophalo-canvas` → `--keep-request-surface-muted`. `PrimaryActionControl.tsx`: `PrimaryActionSlot`
-  gains `primaryEmphasis` (default `teal`); `HeroAttentionBanner` passes `request-primary` so the
-  routed customer-resolution primary (respond / acknowledge / follow-up / logged contact) is the
-  dominant fill; `mutation` (mark work done / close) and no-attention Anchor mounts stay `teal`.
-  `BusinessSection.tsx`: customer-update composer submit (split button + status-only fallback) →
-  `request-primary`; internal-note submit unchanged. `ActualWorkReviewCard.tsx` "Complete internal
-  financial review" and `ActualWorkPendingReviewsCard.tsx` "Review financials" → `request-financial`.
-  Lifecycle/nav/Retry/Confirm/Close controls deliberately unchanged (recorded as later polish, with
-  `ProminentFeedbackCard`'s legacy `--ophalo-attention` treatment). WCAG-AA verified for all new
-  pairings. `check:tokens` + typecheck clean; new `KeepButton.test.tsx`, +1 focused case each in
-  `HeroAttentionBanner`, `ActualWorkReviewCard`, `ActualWorkPendingReviewsCard`,
-  `BusinessSection.notify`; request-detail + requests + keep suites 584/584; desktop browser check
-  confirmed the amber panel / teal primary / dark-slate financial hierarchy.
+**Next session: GAP-042 — authenticated business identity implementation.** Add the restrained,
+fresh authenticated business identity to the now-finished Request workspace structure without
+competing with request/customer context or exposing it publicly.
 
-GAP-042 placement preflight (done, read-only): business name is `meQuery.data?.businessName` from
-the auth-gated `/me` endpoint (`apiClient.ts:730`), already rendered authenticated-only as muted
+Placement preflight (done, read-only): business name is `meQuery.data?.businessName` from the
+auth-gated `/me` endpoint (`apiClient.ts:730`), already rendered authenticated-only as muted
 `· {businessName}` in `RequestDetailHeader`; never on the public customer page. In the finished
 workspace it belongs in the shell chrome (workbench/list header), outside the Request Anchor
-identity grid. No GAP-042 code in any GAP-067 slice.
-
-**Following session: GAP-042** — add the restrained, fresh authenticated business identity to the
-finished Request workspace without competing with request/customer context or exposing it publicly.
+identity grid. No GAP-042 code landed in any GAP-067 slice.
 
 ## Deferred next work
 
