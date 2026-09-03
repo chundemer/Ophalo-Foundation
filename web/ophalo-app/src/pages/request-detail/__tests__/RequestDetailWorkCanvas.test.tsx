@@ -22,6 +22,9 @@ vi.mock("../MobileContactLocationCard", () => ({
   MobileContactLocationCard: () => <div data-testid="region-contact-location" />,
 }));
 vi.mock("../UnifiedComposer", () => ({ UnifiedComposer: () => <div data-testid="region-communication" /> }));
+vi.mock("../RequestCommunicationsWorkspace", () => ({
+  RequestCommunicationsWorkspace: ({ composer }: { composer: React.ReactNode }) => <div data-testid="communications-workspace">{composer}</div>,
+}));
 
 function baseDetail(): KeepRequestDetailResult {
   return mockRequestDetails["mock-req-001"];
@@ -31,6 +34,7 @@ function renderCanvas(
   isWide: boolean,
   reviewSuccessMsg: string | null = null,
   detail: KeepRequestDetailResult = baseDetail(),
+  activeWorkspaceTab: "work" | "communications" = "work",
 ) {
   return render(
     <RequestDetailWorkCanvas
@@ -56,6 +60,8 @@ function renderCanvas(
       actualWorkSection={<div data-testid="region-actual-work" />}
       activityBlock={<div data-testid="region-activity" />}
       recordDetailsBlock={<div data-testid="region-record-details" />}
+      activeWorkspaceTab={activeWorkspaceTab}
+      onWorkspaceTabChange={vi.fn()}
     />,
   );
 }
@@ -83,21 +89,17 @@ describe("RequestDetailWorkCanvas", () => {
     expect(context?.className).toContain("grid-cols-[minmax(0,1fr)_300px]");
   });
 
-  it("desktop: Customer Need moves to the Anchor; passive Record details and Activity occupy the supporting context column", () => {
+  it("desktop: Work is the primary workspace while passive history and details occupy the supporting rail", () => {
     const { container } = renderCanvas(true);
     expect(container.querySelector('[data-testid="region-contact-location"]')).toBeNull();
     expect(container.querySelector('[data-testid="region-customer-need"]')).toBeNull();
-    const positions = order(container, [
-      "region-attention",
-      "region-communication",
-      "region-actual-work",
-      "region-record-details",
-      "region-activity",
-    ]);
+    expect(container.querySelector("#request-workspace-panel-work")).not.toHaveAttribute("hidden");
+    expect(container.querySelector("#request-workspace-panel-communications")).toHaveAttribute("hidden");
+    const positions = order(container, ["region-attention", "region-actual-work", "region-record-details", "region-activity"]);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
-  it("places communication immediately after attention and keeps the quiet lifecycle block after Actual Work", () => {
+  it("keeps the quiet lifecycle block after Actual Work in the Work tab", () => {
     const base = baseDetail();
     const withoutSecondary = renderCanvas(true);
     expect(withoutSecondary.queryByText("Request lifecycle")).toBeNull();
@@ -117,11 +119,17 @@ describe("RequestDetailWorkCanvas", () => {
     const idx = (predicate: (el: Element) => boolean) => all.findIndex(predicate);
     const actualWork = idx((el) => el.getAttribute("data-testid") === "region-actual-work");
     const lifecycle = idx((el) => el.textContent === "Request lifecycle");
-    const communication = idx((el) => el.getAttribute("data-testid") === "region-communication");
     expect(actualWork).toBeGreaterThanOrEqual(0);
     expect(lifecycle).toBeGreaterThan(actualWork);
-    expect(communication).toBeLessThan(actualWork);
     expect(getByText(/does not notify the customer or complete internal financial review/i)).toBeInTheDocument();
+  });
+
+  it("renders the composer and conversation together in the Communications tab", () => {
+    const { container, getByRole } = renderCanvas(true, null, baseDetail(), "communications");
+    expect(getByRole("tab", { name: "Communications" })).toHaveAttribute("aria-selected", "true");
+    expect(container.querySelector("#request-workspace-panel-work")).toHaveAttribute("hidden");
+    expect(container.querySelector("#request-workspace-panel-communications")).not.toHaveAttribute("hidden");
+    expect(container.querySelector('[data-testid="communications-workspace"] [data-testid="region-communication"]')).not.toBeNull();
   });
 
   it("announces the internal-financial-review success message as a status region when supplied", () => {

@@ -87,15 +87,4 @@ describe("UnifiedComposer — imperative activation handles", () => {
     expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: "auto" }));
   });
 
-  it("switches to and focuses Internal note when activated from Request Memory", () => {
-    const ref = createRef<UnifiedComposerHandle>();
-    renderComposer(ref);
-
-    act(() => {
-      ref.current?.activateInternalNote();
-    });
-
-    expect(screen.getByRole("tab", { name: "Internal note" })).toHaveAttribute("aria-selected", "true");
-    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Internal note — not visible to customer" }));
-  });
 });

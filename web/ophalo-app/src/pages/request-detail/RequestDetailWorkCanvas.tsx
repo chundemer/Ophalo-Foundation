@@ -1,4 +1,4 @@
-import { type ReactNode, type Ref } from "react";
+import { type KeyboardEvent, type ReactNode, type Ref } from "react";
 import {
   type RequestDetailLayoutProps,
   ProminentFeedbackCard,
@@ -11,6 +11,9 @@ import { MobileContactLocationCard } from "./MobileContactLocationCard";
 import { UnifiedComposer, type UnifiedComposerHandle } from "./UnifiedComposer";
 import { MarkWorkDoneSecondarySlot } from "./PrimaryActionControl";
 import { KeepButton } from "../../components/keep/KeepButton";
+import { RequestCommunicationsWorkspace } from "./RequestCommunicationsWorkspace";
+
+export type RequestWorkspaceTab = "work" | "communications";
 
 interface RequestDetailWorkCanvasProps
   extends Pick<
@@ -41,6 +44,8 @@ interface RequestDetailWorkCanvasProps
   visitHistoryBlock?: ReactNode;
   requestAnchor?: ReactNode;
   requestMemoryRail?: ReactNode;
+  activeWorkspaceTab: RequestWorkspaceTab;
+  onWorkspaceTabChange: (tab: RequestWorkspaceTab) => void;
 }
 
 export function RequestDetailWorkCanvas({
@@ -69,11 +74,9 @@ export function RequestDetailWorkCanvas({
   visitHistoryBlock,
   requestAnchor,
   requestMemoryRail,
+  activeWorkspaceTab,
+  onWorkspaceTabChange,
 }: RequestDetailWorkCanvasProps) {
-  const composeWithinAttention =
-    detail.effectiveAttention.level !== "none" &&
-    detail.availableActions.primaryAction?.target === "customer_update_composer";
-
   const composer = (
     <div
       id="focus-panel-update"
@@ -84,34 +87,23 @@ export function RequestDetailWorkCanvas({
     </div>
   );
 
-  const attentionAndCommunication = (
-    <>
-      <div id="focus-panel-attention" className="space-y-3">
-        <HeroAttentionBanner
-          requestId={requestId}
-          detail={detail}
-          onDetailUpdated={onDetailUpdated}
-          onOpenClearAttention={onOpenClearAttention}
-          onRecordFollowUp={onRecordFollowUp}
-          onContactLaunched={onContactLaunched}
-          onActivateCustomerUpdateComposer={onActivateCustomerUpdateComposer}
-          inlineComposer={composeWithinAttention ? composer : undefined}
-        />
-        <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} />
-      </div>
-      {!composeWithinAttention && composer}
-    </>
+  const attention = (
+    <div id="focus-panel-attention" className="space-y-3">
+      <HeroAttentionBanner
+        requestId={requestId}
+        detail={detail}
+        onDetailUpdated={onDetailUpdated}
+        onOpenClearAttention={onOpenClearAttention}
+        onRecordFollowUp={onRecordFollowUp}
+        onContactLaunched={onContactLaunched}
+        onActivateCustomerUpdateComposer={onActivateCustomerUpdateComposer}
+      />
+      <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} />
+    </div>
   );
 
-  const activeWork = (
-    <div className="min-w-0 space-y-5">
-      {attentionAndCommunication}
-
-      {!isWide && (
-        <MobileContactLocationCard detail={detail} onContactLaunched={onContactLaunched} onEditLocation={onEditLocation} />
-      )}
-      {!isWide && <OriginalRequestCard detail={detail} />}
-
+  const workModules = (
+    <>
       {actualWorkSection}
 
       {detail.availableActions.markWorkDoneSecondary && (
@@ -150,6 +142,75 @@ export function RequestDetailWorkCanvas({
             Create follow-up request
           </KeepButton>
         </div>
+      )}
+    </>
+  );
+
+  function handleWorkspaceTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+    event.preventDefault();
+    const next: RequestWorkspaceTab = event.key === "ArrowLeft" || event.key === "Home"
+      ? "work"
+      : "communications";
+    onWorkspaceTabChange(next);
+    document.getElementById(`request-workspace-tab-${next}`)?.focus();
+  }
+
+  const workspaceTabs = (
+    <div className="overflow-hidden rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm">
+      <div role="tablist" aria-label="Request workspace" className="grid grid-cols-2">
+        {(["work", "communications"] as const).map((tab) => (
+          <button
+            key={tab}
+            id={`request-workspace-tab-${tab}`}
+            type="button"
+            role="tab"
+            aria-selected={activeWorkspaceTab === tab}
+            aria-controls={`request-workspace-panel-${tab}`}
+            tabIndex={activeWorkspaceTab === tab ? 0 : -1}
+            onClick={() => onWorkspaceTabChange(tab)}
+            onKeyDown={handleWorkspaceTabKeyDown}
+            className={`border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--keep-accent)] ${activeWorkspaceTab === tab ? "border-[var(--keep-accent)] bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]" : "border-transparent text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"}`}
+          >
+            {tab === "work" ? "Work" : "Communications"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const activeWork = (
+    <div className="min-w-0 space-y-5">
+      {attention}
+
+      {isWide ? (
+        <>
+          {workspaceTabs}
+          <div
+            id="request-workspace-panel-work"
+            role="tabpanel"
+            aria-labelledby="request-workspace-tab-work"
+            hidden={activeWorkspaceTab !== "work"}
+            className="space-y-5"
+          >
+            {workModules}
+          </div>
+          <div
+            id="request-workspace-panel-communications"
+            role="tabpanel"
+            aria-labelledby="request-workspace-tab-communications"
+            hidden={activeWorkspaceTab !== "communications"}
+          >
+            <RequestCommunicationsWorkspace detail={detail} composer={composer} />
+          </div>
+        </>
+      ) : (
+        <>
+          {composer}
+          <MobileContactLocationCard detail={detail} onContactLaunched={onContactLaunched} onEditLocation={onEditLocation} />
+          <OriginalRequestCard detail={detail} />
+          {workModules}
+        </>
       )}
 
       {!isWide && activityBlock}

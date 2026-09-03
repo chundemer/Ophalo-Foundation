@@ -37,7 +37,6 @@ const NOTE_CONFLICT_MESSAGE =
 // auto-focuses merely because the request loaded.
 export interface UnifiedComposerHandle {
   activateCustomerUpdate: () => void;
-  activateInternalNote: () => void;
 }
 
 export const UnifiedComposer = forwardRef<UnifiedComposerHandle, UnifiedComposerProps>(function UnifiedComposer({
@@ -58,16 +57,11 @@ export const UnifiedComposer = forwardRef<UnifiedComposerHandle, UnifiedComposer
   // Starts at 0 so the scroll/focus effect below never fires on mount — only an explicit tap
   // through the imperative handle increments it.
   const [customerUpdateFocusSignal, setCustomerUpdateFocusSignal] = useState(0);
-  const [internalNoteFocusSignal, setInternalNoteFocusSignal] = useState(0);
 
   useImperativeHandle(ref, () => ({
     activateCustomerUpdate: () => {
       setActiveTab("customerUpdate");
       setCustomerUpdateFocusSignal((n) => n + 1);
-    },
-    activateInternalNote: () => {
-      setActiveTab("internalNote");
-      setInternalNoteFocusSignal((n) => n + 1);
     },
   }));
 
@@ -87,23 +81,6 @@ export const UnifiedComposer = forwardRef<UnifiedComposerHandle, UnifiedComposer
     document.getElementById("business-update-message")?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerUpdateFocusSignal]);
-
-  useEffect(() => {
-    if (internalNoteFocusSignal === 0) return;
-    const container = document.getElementById("focus-panel-update");
-    const canvas = container?.closest<HTMLElement>("[data-request-detail-work-canvas]");
-    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    if (canvas && container) {
-      const canvasRect = canvas.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      canvas.scrollTo({
-        top: Math.max(0, canvas.scrollTop + containerRect.top - canvasRect.top - 24),
-        behavior: reduceMotion ? "auto" : "smooth",
-      });
-    }
-    document.getElementById("internal-note-textarea")?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [internalNoteFocusSignal]);
 
   const [note, setNote] = useState("");
   const [noteSubmitting, setNoteSubmitting] = useState(false);

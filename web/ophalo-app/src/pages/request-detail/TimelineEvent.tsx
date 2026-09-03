@@ -140,6 +140,16 @@ function timelineEventSummary(event: KeepRequestEventItem): string | null {
   return null;
 }
 
+function formatAuditDateTime(isoUtc: string): string {
+  return new Date(isoUtc).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 interface TimelineEventProps {
   event: KeepRequestEventItem;
   isFirst: boolean;
@@ -153,11 +163,20 @@ export function TimelineEvent({ event, isFirst, compact = false }: TimelineEvent
   const isCommunication = isCommunicationEvent(event);
 
   if (compact) {
+    const actor = event.actorDisplayName ?? (event.actorType === "system" ? "System" : event.actorType === "customer" ? "Customer" : "Business team member");
+    // A combined status-change event may carry a customer update. The update belongs in
+    // Communications; this rail keeps only the operational status transition.
+    const content = event.eventType === "status_changed" ? null : event.content;
     return (
       <div className="border-l border-[var(--ophalo-border)] pl-3">
         <p className="truncate text-sm font-medium text-[var(--ophalo-ink)]">{label}</p>
         {summary && <p className="mt-0.5 truncate text-xs text-[var(--ophalo-muted)]">{summary}</p>}
-        <p className="mt-1 text-xs text-[var(--ophalo-muted)]">{formatEventTime(event.occurredAtUtc)}</p>
+        {content && (
+          <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-xs leading-5 text-[var(--ophalo-muted)]">
+            {content}
+          </p>
+        )}
+        <p className="mt-1 text-xs text-[var(--ophalo-muted)]">{actor} · {formatAuditDateTime(event.occurredAtUtc)}</p>
       </div>
     );
   }

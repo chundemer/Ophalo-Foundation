@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { type KeepRequestDetailResult } from "../../lib/apiClient";
 import { type TimelineFilter } from "./TimelineEvent";
 import { ServiceLocationPanel, TriagePanel, type RequestDetailLayoutProps } from "./DetailPanels";
@@ -13,7 +13,7 @@ import { ActualWorkRecoveryDrawer } from "./ActualWorkRecoveryDrawer";
 import { useActualWorkFinancialReview } from "./useActualWorkFinancialReview";
 import { useActualWorkPendingReviews } from "./useActualWorkPendingReviews";
 import { useRequestDetailLayout } from "./useRequestDetailLayout";
-import { RequestDetailWorkCanvas } from "./RequestDetailWorkCanvas";
+import { RequestDetailWorkCanvas, type RequestWorkspaceTab } from "./RequestDetailWorkCanvas";
 import { RequestDetailActualWorkSection } from "./RequestDetailActualWorkSection";
 import { RecordDetailsSection } from "./RecordDetailsSection";
 import { ActualWorkHistoryCard } from "./ActualWorkHistoryCard";
@@ -57,6 +57,16 @@ function requestContactPreferenceLabel(preference: string | null | undefined): s
   return null;
 }
 
+const REQUEST_WORKSPACE_TAB_KEY = "ophalo.request-workspace-tab";
+
+function storedRequestWorkspaceTab(): RequestWorkspaceTab {
+  try {
+    return sessionStorage.getItem(REQUEST_WORKSPACE_TAB_KEY) === "communications" ? "communications" : "work";
+  } catch {
+    return "work";
+  }
+}
+
 // RD-019A: this component is the page-level Request Detail coordinator. It owns authoritative
 // detail state wiring, the Actual Work hooks (capture/history/financial-review), replacement
 // recovery, the anchor slot, the mobile action rail, and the in-page modal/drawer surfaces.
@@ -67,6 +77,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess, onOpenClearAttention } = props;
   const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
   const composerRef = useRef<UnifiedComposerHandle>(null);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<RequestWorkspaceTab>(storedRequestWorkspaceTab);
   const actualWorkCapture = useActualWorkCapture(requestId, props.currentAccountUserId);
   const actualWorkHistory = useActualWorkHistory(requestId);
 
@@ -98,6 +109,28 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const [pendingFocusVisitId, setPendingFocusVisitId] = useState<string | null>(null);
 
   const [recorderDrawerOpen, setRecorderDrawerOpen] = useState(false);
+
+  const selectWorkspaceTab = useCallback((tab: RequestWorkspaceTab) => {
+    setActiveWorkspaceTab(tab);
+    try {
+      sessionStorage.setItem(REQUEST_WORKSPACE_TAB_KEY, tab);
+    } catch {
+      // Storage can be unavailable in privacy-restricted browser contexts; local state still works.
+    }
+  }, []);
+
+  const activateCustomerUpdateComposer = useCallback(() => {
+    selectWorkspaceTab("communications");
+    composerRef.current?.activateCustomerUpdate();
+  }, [selectWorkspaceTab]);
+
+  // A server-authored customer-response action is an explicit operational route into
+  // Communications. Ordinary queue navigation otherwise preserves the team member's last tab.
+  useEffect(() => {
+    if (detail.availableActions.primaryAction?.target === "customer_update_composer") {
+      selectWorkspaceTab("communications");
+    }
+  }, [requestId, detail.availableActions.primaryAction?.target, selectWorkspaceTab]);
 
   // BL136 4e-iii: holds the successor Draft id when a replacement-copy correction succeeded but the
   // Draft could not be auto-opened (e.g. the acting user lacks ActualWorkCapture, or another
@@ -308,10 +341,6 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
     <RequestMemoryRail
       events={visibleEvents}
       details={requestMemoryDetails}
-      canLogExternalContact={detail.availableActions.canLogExternalContact}
-      canAddInternalNote={detail.availableActions.canAddInternalNote}
-      onContactCustomer={() => onContactLaunched("outbound", detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other")}
-      onAddInternalNote={() => composerRef.current?.activateInternalNote()}
     />
   );
 
@@ -322,7 +351,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       needsShare={props.needsShare}
       onOpenShareDrawer={props.onOpenShareDrawer}
       onOpenClearAttention={onOpenClearAttention}
-      onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
+      onActivateCustomerUpdateComposer={activateCustomerUpdateComposer}
       actualWorkShortcut={actualWorkShortcut}
       financialReviewShortcut={financialReviewShortcut}
       businessPageUrl={props.businessPageUrl}
@@ -346,7 +375,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         onCreateFollowUp={onCreateFollowUp}
         onReviewSuccess={onReviewSuccess}
         onOpenClearAttention={onOpenClearAttention}
-        onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
+        onActivateCustomerUpdateComposer={activateCustomerUpdateComposer}
         composerRef={composerRef}
         customerUpdateDraft={props.customerUpdateDraft}
         onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange}
@@ -359,12 +388,14 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         visitHistoryBlock={visitHistoryBlock}
         requestAnchor={isWide ? requestAnchor : undefined}
         requestMemoryRail={isWide ? requestMemoryRail : undefined}
+        activeWorkspaceTab={activeWorkspaceTab}
+        onWorkspaceTabChange={selectWorkspaceTab}
       />
       {!isWide && (
         <MobileActionRail
           {...layoutProps}
           onOpenClearAttention={onOpenClearAttention}
-          onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
+          onActivateCustomerUpdateComposer={activateCustomerUpdateComposer}
           hidden={isTextEditing}
         />
       )}

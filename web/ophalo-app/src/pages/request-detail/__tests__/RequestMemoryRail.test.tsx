@@ -1,24 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RequestMemoryRail } from "../RequestMemoryRail";
 import type { KeepRequestEventItem } from "../../../lib/apiClient";
 
-function event(
-  id: string,
-  eventType: string,
-  occurredAtUtc: string,
-  visibility = "customer",
-): KeepRequestEventItem {
+function event(id: string, eventType: string, actorDisplayName: string, content: string | null = null): KeepRequestEventItem {
   return {
     id,
     eventType,
-    content: null,
-    visibility,
-    occurredAtUtc,
-    actorType: visibility === "internal" ? "account_user" : "customer",
+    content,
+    visibility: "internal",
+    occurredAtUtc: "2026-09-03T11:30:00Z",
+    actorType: "account_user",
     actorAccountUserId: null,
-    actorDisplayName: null,
+    actorDisplayName,
     statusAfter: null,
     messageIntent: null,
     communicationChannel: null,
@@ -42,96 +37,51 @@ function event(
 }
 
 const events = [
-  event("customer-message", "message_added", "2026-09-03T10:00:00Z"),
-  event("internal-note", "internal_note_added", "2026-09-03T11:00:00Z", "internal"),
-  event("status-change", "status_changed", "2026-09-03T12:00:00Z", "internal"),
+  event("priority-change", "business_priority_changed", "Christian Hundemer", "Priority changed from Soon to Urgent"),
+  event("assignment", "participation_changed", "Alex Owner"),
+  event("business-update", "message_added", "Christian Hundemer", "We have ordered the replacement part."),
 ];
 
-function renderRail(overrides: Partial<React.ComponentProps<typeof RequestMemoryRail>> = {}) {
-  const onContactCustomer = vi.fn();
-  const onAddInternalNote = vi.fn();
-  const result = render(
-    <RequestMemoryRail
-      events={events}
-      details={<p>Owner and planning details</p>}
-      canLogExternalContact
-      canAddInternalNote
-      onContactCustomer={onContactCustomer}
-      onAddInternalNote={onAddInternalNote}
-      {...overrides}
-    />,
-  );
-  return { ...result, onContactCustomer, onAddInternalNote };
+function renderRail(eventsOverride = events) {
+  return render(<RequestMemoryRail events={eventsOverride} details={<p>Owner and planning details</p>} />);
 }
 
 describe("RequestMemoryRail", () => {
   beforeEach(() => window.sessionStorage.clear());
   afterEach(() => window.sessionStorage.clear());
 
-  it("defaults to Communications and separates customer communication from internal notes", async () => {
-    const user = userEvent.setup();
+  it("defaults to compact Request history with actor and full timestamp context", () => {
     renderRail();
-
-    expect(screen.getByRole("tab", { name: "Communications" })).toHaveAttribute("aria-selected", "true");
-    const panel = screen.getByRole("tabpanel", { name: "Communications" });
-    expect(within(panel).getByText("Customer message")).toBeInTheDocument();
-    expect(within(panel).getByText("Internal note")).toBeInTheDocument();
-    expect(within(panel).queryByText("Status changed")).not.toBeInTheDocument();
-
-    await user.click(within(screen.getByRole("group", { name: "Communication filter" })).getByRole("button", { name: "internal" }));
-    expect(within(panel).getByText("Internal note")).toBeInTheDocument();
-    expect(within(panel).queryByText("Customer message")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Request history" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText((_, element) => element?.tagName === "P" && element.textContent?.includes("2 events") === true)).toBeInTheDocument();
+    expect(screen.getByText("Priority changed from Soon to Urgent")).toBeInTheDocument();
+    expect(screen.queryByText("We have ordered the replacement part.")).not.toBeInTheDocument();
+    expect(screen.getByText((_, element) => element?.tagName === "P" && element.textContent?.includes("Christian Hundemer · Sep 3, 2026") === true)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Contact customer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add internal note" })).not.toBeInTheDocument();
   });
 
-  it("shows the complete event lineage in Request history", async () => {
-    renderRail();
-    await userEvent.setup().click(screen.getByRole("tab", { name: "Request history" }));
-
-    expect(screen.getByText("3 events")).toBeInTheDocument();
-    expect(screen.getByText("Status changed")).toBeInTheDocument();
-  });
-
-  it("persists the selected tab across request-selection remounts", async () => {
+  it("persists Details across request-selection remounts", async () => {
     const first = renderRail();
     await userEvent.setup().click(screen.getByRole("tab", { name: "Details" }));
     first.unmount();
-
-    renderRail({ events: [] });
+    renderRail([]);
     expect(screen.getByRole("tab", { name: "Details" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Owner and planning details")).toBeInTheDocument();
   });
 
-  it("exposes durable contact logging and internal-note entry", async () => {
-    const user = userEvent.setup();
-    const { onContactCustomer, onAddInternalNote } = renderRail();
-
-    await user.click(screen.getByRole("button", { name: "Contact customer" }));
-    await user.click(screen.getByRole("button", { name: "Add internal note" }));
-    expect(onContactCustomer).toHaveBeenCalledOnce();
-    expect(onAddInternalNote).toHaveBeenCalledOnce();
-  });
-
-  it("keeps communication actions above the filters and event timeline", () => {
-    const { container } = renderRail();
-    const panel = screen.getByRole("tabpanel", { name: "Communications" });
-    const all = Array.from(panel.querySelectorAll("button, [role='group'], p"));
-    const indexOf = (element: Element) => all.indexOf(element);
-
-    expect(indexOf(screen.getByRole("button", { name: "Add internal note" }))).toBeLessThan(
-      indexOf(screen.getByRole("group", { name: "Communication filter" })),
-    );
-    expect(indexOf(screen.getByRole("button", { name: "Contact customer" }))).toBeLessThan(
-      indexOf(within(panel).getByText("Customer message")),
-    );
-    expect(container.querySelector("[data-request-memory-rail]")).not.toBeNull();
+  it("migrates the removed Communications preference to Request history", () => {
+    window.sessionStorage.setItem("ophalo.request-memory-tab", "communications");
+    renderRail();
+    expect(screen.getByRole("tab", { name: "Request history" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("supports arrow-key tab navigation", async () => {
     renderRail();
-    const communications = screen.getByRole("tab", { name: "Communications" });
-    communications.focus();
+    const history = screen.getByRole("tab", { name: "Request history" });
+    history.focus();
     await userEvent.setup().keyboard("{ArrowRight}");
-    expect(screen.getByRole("tab", { name: "Request history" })).toHaveFocus();
-    expect(screen.getByRole("tab", { name: "Request history" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Details" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Details" })).toHaveAttribute("aria-selected", "true");
   });
 });

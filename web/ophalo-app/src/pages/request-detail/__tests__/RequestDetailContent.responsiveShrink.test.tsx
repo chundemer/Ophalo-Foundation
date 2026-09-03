@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, render } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { RequestDetailContent } from "../RequestDetailContent";
 import { mockRequestDetails } from "../../../mocks/fixtures";
 import type { KeepRequestDetailResult } from "../../../lib/apiClient";
@@ -29,7 +30,11 @@ vi.mock("../DetailPanels", () => ({
   SourceMetaPanel: () => null,
   WorkControlsGroup: () => null,
 }));
-vi.mock("../RequestDetailAnchor", () => ({ RequestDetailAnchor: () => <div data-testid="desktop-anchor" /> }));
+vi.mock("../RequestDetailAnchor", () => ({
+  RequestDetailAnchor: ({ onActivateCustomerUpdateComposer }: { onActivateCustomerUpdateComposer: () => void }) => (
+    <div data-testid="desktop-anchor"><button type="button" onClick={onActivateCustomerUpdateComposer}>Respond to customer</button></div>
+  ),
+}));
 vi.mock("../MobileRequestAnchor", () => ({
   MobileRequestAnchor: () => <div data-testid="mobile-anchor" />,
   MobileActionRail: () => <div data-testid="mobile-action-rail" />,
@@ -120,6 +125,7 @@ function renderContent() {
 describe("RequestDetailContent — responsive shrinkability", () => {
   beforeEach(() => {
     roCallback = null;
+    window.sessionStorage.clear();
     vi.stubGlobal("ResizeObserver", StubResizeObserver);
   });
   afterEach(() => {
@@ -152,5 +158,19 @@ describe("RequestDetailContent — responsive shrinkability", () => {
     expect(container.querySelector('[data-testid="desktop-anchor"]')).toBeNull();
     // Mobile-only surfaces mount in the narrow layout.
     expect(container.querySelector('[data-testid="mobile-action-rail"]')).not.toBeNull();
+  });
+
+  it("routes an explicit customer-response action into the wide Communications workspace and remembers it", async () => {
+    const first = renderContent();
+    fireWidth(1200);
+    expect(screen.getByRole("tab", { name: "Work" })).toHaveAttribute("aria-selected", "true");
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Respond to customer" }));
+    expect(screen.getByRole("tab", { name: "Communications" })).toHaveAttribute("aria-selected", "true");
+    first.unmount();
+
+    renderContent();
+    fireWidth(1200);
+    expect(screen.getByRole("tab", { name: "Communications" })).toHaveAttribute("aria-selected", "true");
   });
 });
