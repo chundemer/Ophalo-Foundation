@@ -88,6 +88,19 @@ describe("HeroAttentionBanner — active Customer message (respond_to_customer)"
     await userEvent.setup().click(screen.getByRole("button", { name: "Respond to customer" }));
     expect(onActivateCustomerUpdateComposer).toHaveBeenCalledTimes(1);
   });
+
+  it("renders the supplied customer composer inside the amber attention surface", () => {
+    const detail = detailWith("respond_to_customer", {
+      canSendBusinessUpdate: true,
+      primaryAction: { key: "respond_to_customer", label: "Respond to customer", target: "customer_update_composer", requiresConfirmation: false, confirmationCopy: null },
+    });
+    const { container } = render(
+      <HeroAttentionBanner detail={detail} {...requiredProps()} inlineComposer={<div data-testid="inline-composer" />} />,
+    );
+
+    const banner = container.querySelector("section")!;
+    expect(banner.querySelector('[data-testid="inline-composer"]')).not.toBeNull();
+  });
 });
 
 describe("HeroAttentionBanner — active acknowledgement-only attention", () => {

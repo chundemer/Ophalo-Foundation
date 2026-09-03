@@ -58,7 +58,7 @@ function baseDetail(): KeepRequestDetailResult {
 }
 
 describe("RequestDetailContent — Canvas max-width frame", () => {
-  it("wraps the Canvas content in a centered max-width container inside the sole scroll region", () => {
+  it("wraps the Canvas content in the left-anchored 1000px frame inside the sole scroll region", () => {
     const { container } = render(
       <RequestDetailContent
         detail={baseDetail()}
@@ -90,8 +90,9 @@ describe("RequestDetailContent — Canvas max-width frame", () => {
 
     const scrollRegion = container.querySelector(".overflow-y-auto");
     expect(scrollRegion).not.toBeNull();
-    const maxWidthWrapper = scrollRegion?.querySelector(".max-w-4xl.mx-auto");
-    expect(maxWidthWrapper).not.toBeNull();
+    const frame = scrollRegion?.firstElementChild as HTMLElement | null;
+    expect(frame?.className).toContain("max-w-[1000px]");
+    expect(frame?.className).not.toContain("mx-auto");
   });
 });
 
@@ -126,9 +127,9 @@ function renderContent() {
   );
 }
 
-// Locked mobile canvas order (Slice 3, 2026-08-26, field-operations decision): Attention ->
-// Contact/Service Location -> Customer Need -> Actual Work -> Communication -> Activity ->
-// Record Details. The component only measures `isWide` via ResizeObserver, which jsdom's no-op
+// Communication-first mobile canvas order: Attention -> Communication -> Contact/Service Location
+// -> Customer Need -> Actual Work -> Activity -> Record Details. The component only measures
+// `isWide` via ResizeObserver, which jsdom's no-op
 // stub never fires, so the component renders in its default (mobile, `!isWide`) mode here —
 // exactly the mode this order applies to.
 describe("RequestDetailContent — mobile canvas order (Slice 3)", () => {
@@ -141,10 +142,10 @@ describe("RequestDetailContent — mobile canvas order (Slice 3)", () => {
 
     const testIds = [
       "section-attention",
+      "section-communication",
       "section-contact-location",
       "section-customer-need",
       "section-actual-work",
-      "section-communication",
       "section-activity",
       "section-record-details",
     ];

@@ -72,9 +72,10 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     // Not a bare full-width strip — the Anchor is one rounded, bordered outer card
     const card = container.querySelector(".rounded-xl.border");
     expect(card).not.toBeNull();
-    // Inner content is bounded to the shared Work Canvas reading frame (RD-058B-2).
-    expect(card!.className).toContain("max-w-4xl");
-    expect(card!.className).toContain("mx-auto");
+    // GAP-067: the Anchor shares the Work Canvas's left-anchored 1000px boundary.
+    expect(card!.className).toContain("max-w-[1000px]");
+    expect(card!.className).not.toContain("mx-auto");
+    expect(screen.getByText("Customer need")).toBeInTheDocument();
   });
 
   it("shows the filled primary action for an eligible, non-attention, non-Received request", () => {
@@ -204,7 +205,7 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     renderAnchor(detail);
 
     expect(screen.getByRole("combobox", { name: "Internal priority" })).toBeInTheDocument();
-    expect((screen.getByRole("combobox", { name: "Internal priority" }) as HTMLSelectElement).value).toBe("");
+    expect((screen.getByRole("combobox", { name: "Internal priority" }) as HTMLSelectElement).value).toBe("routine");
     expect(screen.getByText("Set planned date")).toBeInTheDocument();
     expect(screen.getByText("Set follow-up date")).toBeInTheDocument();
     expect(screen.queryByText("Not planned")).not.toBeInTheDocument();
@@ -230,7 +231,7 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     expect(screen.queryByText("Set planned date")).not.toBeInTheDocument();
     expect(screen.queryByText("Set follow-up date")).not.toBeInTheDocument();
 
-    // Still a single outer Anchor card — Row 4 adds a top separator, not a nested bordered box.
+    // Customer Need is deliberately a smaller, distinct inset; the Anchor remains one outer card.
     expect(container.querySelectorAll(".rounded-xl.border").length).toBe(1);
   });
 

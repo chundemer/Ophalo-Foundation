@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useId } from "react";
+import { useState, useEffect, useRef, useId, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Copy, Check, AlertTriangle, Clock, Info, Phone, Mail, X, ChevronDown } from "lucide-react";
 import {
@@ -500,11 +500,11 @@ interface OriginalRequestCardProps {
 export function OriginalRequestCard({ detail }: OriginalRequestCardProps) {
   if (!detail.description) return null;
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--keep-request-surface-muted)] px-4 py-2.5">
+    <div className="rounded-lg border border-slate-200 bg-[var(--keep-request-surface-muted)] px-3.5 py-3.5">
       <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)] mb-0.5">
         Customer need
       </p>
-      <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
+      <p className="text-sm font-semibold leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
         {detail.description}
       </p>
     </div>
@@ -846,19 +846,18 @@ export function TriagePanel({ detail, onDetailUpdated, bare = false, strip = fal
         </label>
         {canEdit ? (
           <div className="relative">
-            {/* Restrained configuration checkmark: internal priority always has an effective
-                value (default Routine), so the mark is persistent. */}
-            <Check className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ophalo-muted)]" aria-hidden="true" />
             <select
               id="internal-priority-strip-select"
-              value={displayPriority ?? ""}
+              // Routine is the effective default for an unset priority. Present one option for
+              // that operational state rather than two indistinguishable "Routine" choices.
+              value={displayPriority ?? "routine"}
               disabled={prioritySubmitting || priorityConflictDisabled}
-              onChange={(e) => void handlePriorityChange(e.target.value || null)}
-              className={`w-full appearance-none rounded-lg border bg-[var(--ophalo-card)] pl-8 pr-7 py-2 text-base min-[1001px]:text-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)] focus:border-[var(--keep-accent)] ${
-                emphasize ? "border-[var(--ophalo-danger)] text-[var(--ophalo-danger)] font-semibold" : "border-[var(--ophalo-border)] text-[var(--ophalo-ink)]"
+              onChange={(e) => void handlePriorityChange(e.target.value)}
+              style={{ colorScheme: "light" }}
+              className={`w-full appearance-none rounded-lg border bg-[var(--ophalo-card)] px-3 pr-7 py-2 text-base min-[1001px]:text-sm shadow-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)] focus:border-[var(--keep-accent)] ${
+                emphasize ? "border-[var(--ophalo-danger)] text-[var(--ophalo-danger)] font-semibold" : "border-slate-300 text-[var(--ophalo-ink)]"
               }`}
             >
-              <option value="">Routine</option>
               <option value="routine">Routine</option>
               <option value="soon">Soon</option>
               <option value="urgent">Urgent</option>
@@ -985,6 +984,9 @@ interface HeroAttentionBannerProps {
   onRecordFollowUp: () => void;
   onContactLaunched: (direction: string, channel: string) => void;
   onActivateCustomerUpdateComposer: () => void;
+  // Only customer-message attention supplies this. Keeping the composer inside the attention
+  // surface lets an office user read the message and respond in one visual context.
+  inlineComposer?: ReactNode;
 }
 
 // Controlled disclosure (RD-058B-2): `HeroAttentionBanner` owns the open state so the
@@ -1094,6 +1096,7 @@ export function HeroAttentionBanner({
   onRecordFollowUp,
   onContactLaunched,
   onActivateCustomerUpdateComposer,
+  inlineComposer,
 }: HeroAttentionBannerProps) {
   const guidance = buildAttentionGuidance(detail);
   const [guidanceOpen, setGuidanceOpen] = useState(false);
@@ -1145,6 +1148,11 @@ export function HeroAttentionBanner({
           />
         </div>
       </div>
+      {inlineComposer && (
+        <div className="mt-3 border-t border-[var(--keep-request-attention-border)]/70 pt-3">
+          {inlineComposer}
+        </div>
+      )}
     </section>
   );
 }

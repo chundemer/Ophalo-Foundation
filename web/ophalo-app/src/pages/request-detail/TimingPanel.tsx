@@ -277,7 +277,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
               aria-controls="timing-followup-editor"
               aria-label={`Internal follow-up (optional): ${hasFollowUp ? formatDateOnly(detail.followUpOnDate!) : "not set"}`}
               onClick={() => expandedEditor === "followUp" ? closeEditor() : openEditor("followUp")}
-              className={`w-full flex items-center justify-between gap-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-left text-sm text-[var(--ophalo-ink)] transition-colors hover:border-[var(--keep-accent)] ${FOCUS_RING}`}
+              className={`w-full flex items-center justify-between gap-2 rounded-lg border border-slate-300 bg-[var(--ophalo-card)] px-3 py-2 text-left text-sm text-[var(--ophalo-ink)] shadow-sm transition-colors hover:border-[var(--keep-accent)] ${FOCUS_RING}`}
             >
               <span className="flex items-center gap-1.5 truncate" aria-hidden="true">
                 {!hasFollowUp && <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />}
@@ -449,7 +449,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
               aria-controls="timing-planned-editor"
               aria-label={`Planned work date: ${hasPlanned ? formatDateOnly(detail.plannedForDate!) : "not set"}`}
               onClick={() => expandedEditor === "planned" ? closeEditor() : openEditor("planned")}
-              className={`w-full flex items-center justify-between gap-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-left text-sm text-[var(--ophalo-ink)] transition-colors hover:border-[var(--keep-accent)] ${FOCUS_RING}`}
+              className={`w-full flex items-center justify-between gap-2 rounded-lg border border-slate-300 bg-[var(--ophalo-card)] px-3 py-2 text-left text-sm text-[var(--ophalo-ink)] shadow-sm transition-colors hover:border-[var(--keep-accent)] ${FOCUS_RING}`}
             >
               <span className="flex items-center gap-1.5 truncate" aria-hidden="true">
                 {hasPlanned

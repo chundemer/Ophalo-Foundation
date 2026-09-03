@@ -636,7 +636,7 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(screen.getByRole("button", { name: "Show less" })).toBeInTheDocument();
   });
 
-  it("backlog item 2: selected prop marks the row aria-selected without disturbing the exception rail", () => {
+  it("uses a teal selection rail only for the selected row", () => {
     const row = buildRow({
       ranking: { rankingGroup: "overdue_business_waiting", rankingOrder: 1, rankingReason: "overdue_business_waiting", severity: "danger", isOverdue: true, elapsedSinceUtc: null, dueAtUtc: "2026-07-13T12:00:00Z", isPostClose: false },
       attention: { attentionLevel: "none", waitingDirection: "none", attentionReason: null, priorityBand: "standard", attentionSinceUtc: null, nextAttentionAtUtc: null, firstResponseDueAtUtc: "2026-07-13T12:00:00Z", firstRespondedAtUtc: null, firstResponsePending: false, firstResponseOverdue: true },
@@ -645,18 +645,18 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     const { rerender } = render(<RequestRow row={row} onSelect={noop} />);
     const rowEl = screen.getByRole("button", { name: /Jane Smith/ });
     expect(rowEl).toHaveAttribute("aria-selected", "false");
-    expect(rowEl.className).toContain("border-l-[var(--ophalo-danger)]");
+    expect(rowEl.className).not.toContain("border-l-4");
     expect(rowEl.className).not.toContain("ring-inset");
 
     rerender(<RequestRow row={row} onSelect={noop} selected />);
     expect(rowEl).toHaveAttribute("aria-selected", "true");
-    expect(rowEl.className).toContain("border-l-[var(--ophalo-danger)]");
+    expect(rowEl.className).toContain("border-l-[var(--keep-request-primary)]");
     expect(rowEl.className).toContain("ring-inset");
   });
 
   // Q-027A: red is reserved for genuine overdue/high-risk work. Non-overdue priority/urgent
   // business-waiting (server severity "priority") renders amber, not red.
-  it("Q-027A: non-overdue priority business-waiting renders an amber exception and rail, never red", () => {
+  it("Q-027A: non-overdue priority business-waiting renders an amber exception without a row rail", () => {
     const row = buildRow({
       status: "in_progress",
       businessPriority: null,
@@ -667,14 +667,14 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     render(<RequestRow row={row} onSelect={noop} />);
 
     const rowEl = screen.getByRole("button", { name: /Jane Smith/ });
-    expect(rowEl.className).toContain("border-l-[var(--ophalo-attention)]");
+    expect(rowEl.className).not.toContain("border-l-4");
     expect(rowEl.className).not.toContain("border-l-[var(--ophalo-danger)]");
     const badge = screen.getByText("Needs response");
     expect(badge.className).toContain("var(--ophalo-attention)");
     expect(badge.className).not.toContain("var(--ophalo-danger)");
   });
 
-  it("Q-027A: genuinely overdue business-waiting keeps the red exception and rail", () => {
+  it("Q-027A: overdue business-waiting is an amber warning without a row rail", () => {
     const row = buildRow({
       status: "in_progress",
       ranking: { rankingGroup: "overdue_business_waiting", rankingOrder: 1, rankingReason: "overdue_business_waiting", severity: "danger", isOverdue: true, elapsedSinceUtc: null, dueAtUtc: "2026-07-13T12:00:00Z", isPostClose: false },
@@ -684,9 +684,9 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     render(<RequestRow row={row} onSelect={noop} />);
 
     const rowEl = screen.getByRole("button", { name: /Jane Smith/ });
-    expect(rowEl.className).toContain("border-l-[var(--ophalo-danger)]");
+    expect(rowEl.className).not.toContain("border-l-4");
     const badge = screen.getByText(/Response overdue/);
-    expect(badge.className).toContain("var(--ophalo-danger)");
+    expect(badge.className).toContain("var(--ophalo-attention)");
   });
 
   it("Q-027A: a complaint (server severity danger) stays red as genuine high-risk work", () => {
@@ -700,7 +700,7 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     render(<RequestRow row={row} onSelect={noop} />);
 
     const rowEl = screen.getByRole("button", { name: /Jane Smith/ });
-    expect(rowEl.className).toContain("border-l-[var(--ophalo-danger)]");
+    expect(rowEl.className).not.toContain("border-l-4");
     const badge = screen.getByText("Complaint");
     expect(badge.className).toContain("var(--ophalo-danger)");
   });

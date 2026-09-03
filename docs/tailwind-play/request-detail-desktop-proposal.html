@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpHalo Keep — Desktop Request Detail Proposal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: '#172033',
+              teal: { 50: '#e5f4f3', 600: '#0f766e', 700: '#115e59' },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="min-h-screen bg-slate-100 font-sans text-slate-800">
+    <header class="h-14 border-b border-slate-200 bg-white px-6">
+      <div class="flex h-full items-center gap-8 text-sm">
+        <div class="font-bold tracking-tight text-slate-900">◉ ophalo <span class="text-teal-600">keep</span></div>
+        <div class="rounded-lg bg-teal-50 px-3 py-2 font-semibold text-slate-800">▣ Requests <span class="ml-1 rounded-full bg-teal-600 px-1.5 py-0.5 text-xs text-white">13</span></div>
+        <span class="text-slate-600">Getting Started</span><span class="text-slate-600">⌑ Price Book</span><span class="text-slate-600">⚙ Settings</span>
+      </div>
+    </header>
+
+    <main class="grid min-h-[calc(100vh-56px)] grid-cols-[356px_minmax(0,1fr)]">
+      <aside class="border-r border-slate-200 bg-slate-50">
+        <div class="border-b border-slate-200 px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Request queue · needs attention · 4</div>
+        <div class="flex gap-2 border-b border-slate-200 px-4 py-2">
+          <button class="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold">Attention 4</button><button class="rounded-lg px-4 py-2 text-sm text-slate-600">All 13</button><button class="rounded-lg px-4 py-2 text-sm text-slate-600">Mine 4</button>
+        </div>
+        <div class="flex gap-3 border-b border-slate-200 px-5 py-4"><div class="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-500">⌕ Search…</div><button class="rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium">Views⌄</button></div>
+        <div class="space-y-3 p-5">
+          <p class="text-xs text-slate-500">Showing 1–4</p>
+          <article class="rounded-xl border border-teal-500 border-l-4 border-l-teal-600 bg-teal-50 p-4 shadow-sm"><div class="flex justify-between"><span class="font-mono text-xs text-slate-500">6ZM GMSFM</span><span>›</span></div><h2 class="mt-1 font-semibold">test name</h2><div class="mt-2 flex gap-2"><span class="rounded bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">Received</span><span class="rounded bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">⚠ Response overdue · Jul 18</span></div><p class="mt-2 text-sm text-slate-600">Next: Contact customer</p></article>
+          <article class="rounded-xl border border-slate-200 bg-white p-4"><div class="flex justify-between"><span class="font-mono text-xs text-slate-500">X9S3RSXW</span><span>›</span></div><h2 class="mt-1 font-semibold">OldMan</h2><div class="mt-2 flex gap-2"><span class="rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Work completed</span></div><p class="mt-2 text-sm text-slate-600">⚠ Response overdue · Jul 18</p></article>
+          <article class="rounded-xl border border-slate-200 bg-white p-4"><h2 class="font-semibold">Post Restart Verify</h2><p class="mt-2 text-sm text-slate-600">Customer replied · Aug 24</p><p class="mt-2 text-sm text-slate-600">• 1 visit needs financial review</p></article>
+        </div>
+      </aside>
+
+      <section class="min-w-0 p-6">
+        <div class="mx-auto max-w-[1180px] space-y-5">
+          <div class="text-sm text-slate-500">Ophalo Demo Business · <span class="font-mono">6ZMGMSFM</span></div>
+
+          <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-start justify-between"><div><div class="flex items-center gap-2"><span class="font-mono text-xs text-slate-500">6ZMGMSFM</span><span class="rounded bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">Received</span></div><h1 class="mt-2 text-xl font-bold text-ink">test name</h1></div><button class="rounded-lg bg-teal-600 px-5 py-3 text-sm font-semibold text-white">Mark work done</button></div>
+            <div class="mt-4 grid grid-cols-3 gap-6 border-t border-slate-200 pt-4 text-sm"><div><p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Customer contact</p><p class="mt-1 font-medium">(877) 777-7777</p><p class="mt-1 text-teal-700">⌕ Call   ▢ Text   ✉ Email</p></div><div><p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Service location</p><p class="mt-1 font-medium">222 Clear Street, Brighton, TN</p><p class="mt-1 text-teal-700">Edit location</p></div><div><p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Owner</p><p class="mt-1 font-medium text-amber-700">Unassigned <span class="ml-1 text-teal-700">Assign</span></p><p class="mt-1 text-teal-700">Watchers · 0</p></div></div>
+            <div class="mt-4 grid grid-cols-3 gap-4 border-t border-slate-200 pt-4"><label><span class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Internal priority</span><span class="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm">Routine <span class="float-right">⌄</span></span></label><label><span class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Planned work date</span><span class="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm">▣ Set planned date <span class="float-right">⌄</span></span></label><label><span class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Internal follow-up</span><span class="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm">▣ Set follow-up date <span class="float-right">⌄</span></span></label></div>
+            <div class="mt-4 rounded-lg border border-slate-200 bg-slate-100/70 p-3.5"><p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Customer need</p><p class="mt-1 font-semibold">Fan broke</p></div>
+          </section>
+
+          <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
+            <div class="space-y-5">
+              <section class="overflow-hidden rounded-xl border border-amber-300 bg-amber-50 shadow-sm"><div class="flex items-center justify-between gap-3 px-5 py-3"><div><p class="text-sm font-bold uppercase tracking-wide text-amber-900">⚠ Needs attention — customer message</p><p class="mt-1 text-sm text-amber-800">Customer is waiting for a response.</p></div><button class="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white">Respond now</button></div><div class="border-t border-amber-300 p-4"><div class="mb-3 flex gap-3 text-sm font-semibold"><span class="rounded bg-slate-900 px-3 py-1.5 text-white">Customer-page update</span><span class="px-3 py-1.5 text-slate-600">Internal note</span></div><textarea class="h-28 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm outline-none ring-teal-600 focus:ring-2" placeholder="Write an update for the customer…"></textarea><div class="mt-3 flex justify-end"><button class="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white">Post customer-page update</button></div></div></section>
+
+              <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div class="flex items-center justify-between"><div><p class="text-sm font-bold uppercase tracking-wide">Pending financial review <span class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">1</span></p><p class="mt-1 text-sm text-slate-500">One submitted visit needs office review before billing.</p></div><button class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">Review financials →</button></div><div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"><b>Visit #1</b> · Submitted Aug 29 · 5 work lines recorded</div></section>
+              <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div class="flex items-center justify-between"><div><p class="text-sm font-bold uppercase tracking-wide">Actual Work field draft <span class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">Draft</span></p><p class="mt-1 text-sm text-slate-500">Draft visit in progress · 4 items added.</p></div><button class="rounded-lg border-2 border-slate-900 px-4 py-2 text-sm font-semibold">Continue draft</button></div></section>
+            </div>
+
+            <aside class="space-y-5">
+              <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Record details</p><dl class="mt-3 space-y-2 text-sm"><div class="flex justify-between"><dt class="text-slate-500">Status</dt><dd class="font-medium">Received</dd></div><div class="flex justify-between"><dt class="text-slate-500">Created</dt><dd>Jul 18</dd></div><div class="flex justify-between"><dt class="text-slate-500">Customer page</dt><dd class="text-teal-700">View page ↗</dd></div></dl></section>
+
+              <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="flex items-center justify-between"><div><p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Activity</p><p class="mt-1 text-sm font-semibold">23 entries</p></div><button class="text-sm font-semibold text-teal-700">View all →</button></div><ol class="mt-4 space-y-3 border-l border-slate-200 pl-4 text-sm"><li><p class="font-medium">Customer message received</p><p class="text-xs text-slate-500">Today · 10:42 AM</p></li><li><p class="font-medium">Actual Work draft updated</p><p class="text-xs text-slate-500">Yesterday · 3:18 PM</p></li><li><p class="font-medium">Owner changed to Unassigned</p><p class="text-xs text-slate-500">Aug 24 · 2:10 PM</p></li></ol><button class="mt-4 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">View all 23 activity entries</button></section>
+
+              <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="flex items-center justify-between"><div><p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Visit history</p><p class="mt-1 text-sm font-semibold">2 submitted visits</p></div><span class="text-slate-500">⌄</span></div></section>
+            </aside>
+          </div>
+
+          <section class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 shadow-sm"><div class="flex flex-wrap items-center justify-between gap-3"><div><p class="text-sm font-semibold">Text notification prepared</p><p class="text-xs text-slate-600">Customer-page update posted · companion text still needs confirmation.</p></div><div class="flex gap-2"><button class="rounded-lg border border-slate-400 bg-white px-3 py-2 text-sm font-semibold">Send from phone</button><button class="rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white">I sent it — Confirm</button></div></div></section>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

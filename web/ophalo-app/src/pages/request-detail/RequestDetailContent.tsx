@@ -16,6 +16,7 @@ import { useRequestDetailLayout } from "./useRequestDetailLayout";
 import { RequestDetailWorkCanvas } from "./RequestDetailWorkCanvas";
 import { RequestDetailActualWorkSection } from "./RequestDetailActualWorkSection";
 import { RecordDetailsSection } from "./RecordDetailsSection";
+import { ActualWorkHistoryCard } from "./ActualWorkHistoryCard";
 
 interface RequestDetailContentProps extends RequestDetailLayoutProps {
   detail: KeepRequestDetailResult;
@@ -217,6 +218,15 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       onFinancialReviewChanged={handleFinancialReviewChanged}
       focusReviewVisitId={pendingFocusVisitId}
       onFocusReviewVisitHandled={handleFocusReviewVisitHandled}
+      showHistory={!isWide}
+    />
+  );
+
+  const visitHistoryBlock = (
+    <ActualWorkHistoryCard
+      state={actualWorkHistory.state}
+      onRetry={() => void actualWorkHistory.retry()}
+      onOpenVisit={useWorkspaceRoute ? (visitId) => props.onNavigateToActualWorkspace!(requestId, visitId) : undefined}
     />
   );
 
@@ -257,6 +267,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         actualWorkSection={actualWorkSection}
         activityBlock={activityBlock}
         recordDetailsBlock={recordDetailsBlock}
+        visitHistoryBlock={visitHistoryBlock}
       />
       {!isWide && (
         <MobileActionRail

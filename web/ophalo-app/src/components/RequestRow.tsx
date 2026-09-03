@@ -146,7 +146,9 @@ function resolveException(row: KeepRequestSummary, isCalmCloseout: boolean): Exc
         const label = reason && ATTENTION_LABELS[reason]
           ? withDeadline(ATTENTION_LABELS[reason], true, row.ranking.dueAtUtc)
           : withDeadline("Response overdue", true, row.ranking.dueAtUtc);
-        return { key: group, label, tone: "danger", icon: reason === "call_requested" ? Phone : AlertTriangle };
+        // An overdue response needs to be visible, but it is not itself a critical incident.
+        // Reserve danger red for genuinely exceptional/critical states.
+        return { key: group, label, tone: "attention", icon: reason === "call_requested" ? Phone : AlertTriangle };
       }
       case "priority_business_waiting":
       case "customer_urgent_active":
@@ -167,7 +169,7 @@ function resolveException(row: KeepRequestSummary, isCalmCloseout: boolean): Exc
         const label = dueToday
           ? `${row.timing?.followUpOnLabel ?? "Follow-up due today"}${date ? ` · ${shortDate(date)}` : ""}`
           : `Follow-up overdue${date ? ` · ${shortDate(date)}` : ""}`;
-        return { key: group, label, tone: dueToday ? "attention" : "danger", icon: Clock };
+        return { key: group, label, tone: "attention", icon: Clock };
       }
       default:
         break;
@@ -418,13 +420,9 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
     </span>
   ) : null;
 
-  const borderAccent = exception
-    ? exception.tone === "danger"
-      ? "border-l-4 border-l-[var(--ophalo-danger)]"
-      : exception.tone === "attention"
-        ? "border-l-4 border-l-[var(--ophalo-attention)]"
-        : ""
-    : "";
+  // Queue accents express selection, not every warning. This avoids a wall of red/amber bars
+  // and gives the operator one unambiguous visual anchor for the request they are working.
+  const borderAccent = selected ? "border-l-4 border-l-[var(--keep-request-primary)]" : "";
 
   function runAction(action: PromotedAction) {
     if (action.code === "share_link") {

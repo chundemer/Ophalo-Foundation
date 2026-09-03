@@ -1,7 +1,7 @@
 import { type RequestDetailLayoutProps } from "./DetailPanels";
 import { DetailHeroBadges, DetailHeroName } from "./DetailHero";
 import { CustomerContactStrip } from "./CustomerContactStrip";
-import { ServiceLocationPanel, TriagePanel } from "./DetailPanels";
+import { OriginalRequestCard, ServiceLocationPanel, TriagePanel } from "./DetailPanels";
 import { TeamSection } from "./TeamSection";
 import { TimingPanel } from "./TimingPanel";
 import { PrimaryActionSlot } from "./PrimaryActionControl";
@@ -15,8 +15,8 @@ import { PrimaryActionSlot } from "./PrimaryActionControl";
 //   Divider, then Row 3: three stable context columns — customer contact, service location, and
 //          owner/share utilities — each chrome-free inline content inside the one outer card.
 //
-// Inner content width (RD-058B-2): the card is wrapped to `max-w-4xl mx-auto` so its content
-// shares one horizontal reading boundary with the Work Canvas, inside the outer page gutter.
+// Inner content width (GAP-067 completion): the card shares the left-anchored 1000px Work Canvas
+// boundary, using the available wide workspace instead of centering a narrow column.
 //
 // Primary-action slot (Session 0A, 2026-08-25; attention/no-attention split 2026-08-25): the
 // Anchor only mounts the shared `PrimaryActionSlot` while `effectiveAttention.level === "none"` —
@@ -52,9 +52,7 @@ export function RequestDetailAnchor({
 
   return (
     <div className="shrink-0 bg-[var(--keep-request-canvas)] px-4 md:px-6 py-3">
-      {/* Inner content aligns to the Work Canvas reading frame (RD-058B-2): one shared
-          `max-w-4xl mx-auto` horizontal boundary, inside the outer gutter. */}
-      <div className="mx-auto w-full max-w-4xl rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm px-4 py-3 md:px-5 md:py-4">
+      <div className="w-full max-w-[1000px] rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm px-4 py-3 md:px-5 md:py-4">
         {/* Row 1: reference/status/attention (left) | no-attention lifecycle primary action
             (right). Contact stays in Customer Contact / a server-routed contact-sheet primary;
             during active attention the primary lives in HeroAttentionBanner and "Mark work done"
@@ -109,6 +107,12 @@ export function RequestDetailAnchor({
         <div className="mt-3 grid grid-cols-1 gap-4 border-t border-[var(--ophalo-border)] pt-3 sm:grid-cols-3">
           <TriagePanel detail={detail} onDetailUpdated={onDetailUpdated} strip />
           <TimingPanel requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} strip />
+        </div>
+
+        {/* GAP-067: Customer Need is part of the request anchor, after the planning row. It stays
+            mounted independently of attention and remains a neutral factual inset. */}
+        <div className="mt-3">
+          <OriginalRequestCard detail={detail} />
         </div>
       </div>
     </div>

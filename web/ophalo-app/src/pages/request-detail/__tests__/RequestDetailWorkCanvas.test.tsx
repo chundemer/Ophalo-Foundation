@@ -14,7 +14,7 @@ import type { UnifiedComposerHandle } from "../UnifiedComposer";
 vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null }));
 vi.mock("../DetailPanels", () => ({
   ProminentFeedbackCard: () => null,
-  HeroAttentionBanner: () => <div data-testid="region-attention" />,
+  HeroAttentionBanner: ({ inlineComposer }: { inlineComposer?: React.ReactNode }) => <div data-testid="region-attention">{inlineComposer}</div>,
   OriginalRequestCard: () => <div data-testid="region-customer-need" />,
   WorkControlsGroup: () => null,
 }));
@@ -70,30 +70,34 @@ function order(container: HTMLElement, ids: string[]): number[] {
 }
 
 describe("RequestDetailWorkCanvas", () => {
-  it("renders one scroll surface with a centered max-width reading frame", () => {
+  it("renders one scroll surface with the left-anchored 1000px Work Canvas frame", () => {
     const { container } = renderCanvas(true);
     const scroll = container.querySelectorAll("[data-request-detail-work-canvas]");
     expect(scroll).toHaveLength(1);
     expect(scroll[0].className).toContain("overflow-y-auto");
     expect(scroll[0].className).toContain("min-w-0");
-    expect(scroll[0].querySelector(".max-w-4xl.mx-auto")).not.toBeNull();
+    const frame = scroll[0].firstElementChild as HTMLElement;
+    expect(frame.className).toContain("max-w-[1000px]");
+    expect(frame.className).not.toContain("mx-auto");
+    const context = scroll[0].querySelector("[data-request-work-canvas-context]");
+    expect(context?.className).toContain("grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]");
   });
 
-  it("desktop: locked region order with Record details above Activity, no mobile contact card", () => {
+  it("desktop: Customer Need moves to the Anchor; passive Record details and Activity occupy the supporting context column", () => {
     const { container } = renderCanvas(true);
     expect(container.querySelector('[data-testid="region-contact-location"]')).toBeNull();
+    expect(container.querySelector('[data-testid="region-customer-need"]')).toBeNull();
     const positions = order(container, [
       "region-attention",
-      "region-customer-need",
-      "region-actual-work",
       "region-communication",
+      "region-actual-work",
       "region-record-details",
       "region-activity",
     ]);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
-  it("places the quiet 'Mark work done' lifecycle block after Actual Work and before the composer only when the server authorizes it", () => {
+  it("places communication immediately after attention and keeps the quiet lifecycle block after Actual Work", () => {
     const base = baseDetail();
     const withoutSecondary = renderCanvas(true);
     expect(withoutSecondary.queryByText("Request lifecycle")).toBeNull();
@@ -116,7 +120,7 @@ describe("RequestDetailWorkCanvas", () => {
     const communication = idx((el) => el.getAttribute("data-testid") === "region-communication");
     expect(actualWork).toBeGreaterThanOrEqual(0);
     expect(lifecycle).toBeGreaterThan(actualWork);
-    expect(communication).toBeGreaterThan(lifecycle);
+    expect(communication).toBeLessThan(actualWork);
     expect(getByText(/does not notify the customer or complete internal financial review/i)).toBeInTheDocument();
   });
 
@@ -134,10 +138,10 @@ describe("RequestDetailWorkCanvas", () => {
     const { container } = renderCanvas(false);
     const positions = order(container, [
       "region-attention",
+      "region-communication",
       "region-contact-location",
       "region-customer-need",
       "region-actual-work",
-      "region-communication",
       "region-activity",
       "region-record-details",
     ]);

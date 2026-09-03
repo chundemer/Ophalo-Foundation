@@ -54,6 +54,9 @@ interface RequestDetailActualWorkSectionProps {
   // clear callback fired once the inline card has resolved the request.
   focusReviewVisitId: string | null;
   onFocusReviewVisitHandled: () => void;
+  // On desktop, visit history moves to the supporting context stream. Narrow keeps the compact
+  // combined Actual Work card so the single-column reading flow remains intact.
+  showHistory?: boolean;
 }
 
 export function RequestDetailActualWorkSection({
@@ -84,6 +87,7 @@ export function RequestDetailActualWorkSection({
   onFinancialReviewChanged,
   focusReviewVisitId,
   onFocusReviewVisitHandled,
+  showHistory = true,
 }: RequestDetailActualWorkSectionProps) {
   // Editable capture states — the recorder's own resume/start affordance.
   const actualWorkCaptureEditable =
@@ -116,7 +120,7 @@ export function RequestDetailActualWorkSection({
           capture and visit history share one enclosing card; visit history renders only when
           visits actually exist, no "no visits submitted" filler). Whole module self-hides when
           neither has content. */}
-      {(actualWorkCardVisible || actualWorkHistoryVisible) && (
+      {(actualWorkCardVisible || (showHistory && actualWorkHistoryVisible)) && (
         <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
           <ActualWorkCard
             state={captureState}
@@ -130,7 +134,7 @@ export function RequestDetailActualWorkSection({
               current capture state is an editable Draft — an active Draft must not hide earlier
               locked visits or their Owner/Admin financial-review route. Non-editable states keep
               rendering the card in their loading/idle phases as before. */}
-          {(!actualWorkCaptureEditable || actualWorkHistoryVisible) && (
+          {showHistory && (!actualWorkCaptureEditable || actualWorkHistoryVisible) && (
             <ActualWorkHistoryCard
               state={historyState}
               onRetry={onRetryHistory}

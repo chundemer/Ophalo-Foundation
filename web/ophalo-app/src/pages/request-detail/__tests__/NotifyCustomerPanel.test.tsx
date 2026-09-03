@@ -160,7 +160,8 @@ describe("NotifyCustomerPanel — prepared phase (mine)", () => {
     });
   }
 
-  it("desktop SMS: mints an opaque QR (never raw phone/message text)", async () => {
+  it("desktop SMS: keeps the QR out of the default task and mints it on explicit phone handoff", async () => {
+    const user = userEvent.setup();
     const detail = preparedDetail("sms");
 
     render(
@@ -173,6 +174,9 @@ describe("NotifyCustomerPanel — prepared phase (mine)", () => {
       />
     );
 
+    expect(screen.queryByTestId("qr")).not.toBeInTheDocument();
+    expect(mockCreateSmsHandoff).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Send text from phone" }));
     await waitFor(() => expect(mockCreateSmsHandoff).toHaveBeenCalledWith("req-77", expect.any(String)));
     const qr = await screen.findByTestId("qr");
     expect(qr.getAttribute("data-value")).toBe("https://app.ophalo.com/keep/share-sms/mock-token");
@@ -199,6 +203,7 @@ describe("NotifyCustomerPanel — prepared phase (mine)", () => {
       />
     );
 
+    await user.click(screen.getByRole("button", { name: "Send text from phone" }));
     expect(await screen.findByText("Could not create text link. Try again.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Try again" }));
@@ -209,6 +214,7 @@ describe("NotifyCustomerPanel — prepared phase (mine)", () => {
   });
 
   it("formats the phone number in the desktop SMS QR caption (GAP-051 close-out)", async () => {
+    const user = userEvent.setup();
     const detail = preparedDetail("sms");
 
     render(
@@ -221,6 +227,7 @@ describe("NotifyCustomerPanel — prepared phase (mine)", () => {
       />
     );
 
+    await user.click(screen.getByRole("button", { name: "Send text from phone" }));
     expect(
       await screen.findByText("Scan with your phone to open the text draft to (555) 555-0101.")
     ).toBeInTheDocument();
@@ -298,7 +305,8 @@ describe("NotifyCustomerPanel — reload recovery / cross-actor", () => {
       />
     );
 
-    expect(screen.getByText(/Notify customer — text message/)).toBeInTheDocument();
+    expect(screen.getByText("Text notification prepared")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send text from phone" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "I sent it — Confirm" })).toBeInTheDocument();
   });
 

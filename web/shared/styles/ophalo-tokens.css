@@ -31,8 +31,9 @@
 
   /* GAP-067 — Request workspace presentation aliases (Request List + Request Detail only).
      Do not reuse for other surfaces; do not alter --ophalo-* or Price Book tokens. */
-  --keep-request-canvas: #f8fafc;
-  --keep-request-surface-muted: #f8fafc;
+  /* A true slate canvas keeps white operational cards distinct in office lighting. */
+  --keep-request-canvas: #f1f5f9;
+  --keep-request-surface-muted: #f1f5f9;
   --keep-request-eyebrow: #64748b;
   --keep-request-primary: #0f766e;
   --keep-request-primary-hover: #115e59;

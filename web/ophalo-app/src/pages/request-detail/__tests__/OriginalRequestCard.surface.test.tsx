@@ -13,7 +13,8 @@ describe("OriginalRequestCard — Customer Need surface (GAP-067 Slice 3)", () =
     const card = label.parentElement as HTMLElement;
 
     expect(card.className).toContain("bg-[var(--keep-request-surface-muted)]");
-    expect(card.className).toContain("border-[var(--ophalo-border)]");
+    expect(card.className).toContain("border-slate-200");
+    expect(card.className).toContain("px-3.5");
     expect(card.className).not.toContain("attention");
   });
 });

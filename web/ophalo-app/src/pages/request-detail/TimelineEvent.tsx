@@ -143,13 +143,24 @@ function timelineEventSummary(event: KeepRequestEventItem): string | null {
 interface TimelineEventProps {
   event: KeepRequestEventItem;
   isFirst: boolean;
+  compact?: boolean;
 }
 
-export function TimelineEvent({ event, isFirst }: TimelineEventProps) {
+export function TimelineEvent({ event, isFirst, compact = false }: TimelineEventProps) {
   const { label, iconConfig, badgeVariant } = resolveEventDisplay(event);
   const { Icon, bgClass, iconClass } = iconConfig;
   const summary = timelineEventSummary(event);
   const isCommunication = isCommunicationEvent(event);
+
+  if (compact) {
+    return (
+      <div className="border-l border-[var(--ophalo-border)] pl-3">
+        <p className="truncate text-sm font-medium text-[var(--ophalo-ink)]">{label}</p>
+        {summary && <p className="mt-0.5 truncate text-xs text-[var(--ophalo-muted)]">{summary}</p>}
+        <p className="mt-1 text-xs text-[var(--ophalo-muted)]">{formatEventTime(event.occurredAtUtc)}</p>
+      </div>
+    );
+  }
 
   return (
     <div

@@ -47,6 +47,9 @@ export function NotifyCustomerPanel({
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
   const [conflictDisabled, setConflictDisabled] = useState(false);
+  // The desktop QR is a handoff tool, not the task itself. Keep it out of the default request
+  // canvas until the operator explicitly chooses to send the prepared text from their phone.
+  const [smsHandoffOpen, setSmsHandoffOpen] = useState(false);
 
   const publicBaseUrl = (import.meta.env.VITE_PUBLIC_BASE_URL as string).replace(/\/$/, "");
   const customerPageUrl = `${publicBaseUrl}/keep/r/${detail.pageToken}`;
@@ -68,7 +71,7 @@ export function NotifyCustomerPanel({
     error: smsHandoffError,
     retry: retrySmsHandoff,
   } = useHandoffMint(
-    pending?.channel === "sms",
+    pending?.channel === "sms" && smsHandoffOpen,
     mintSmsHandoff,
     "Could not create text link. Try again.",
   );
@@ -140,10 +143,10 @@ export function NotifyCustomerPanel({
   if (pending) {
     const preparedByCurrentUser = pending.canConfirmAsCurrentUser;
     return (
-      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-4">
+      <div className="rounded-xl border border-[var(--keep-request-attention-border)] bg-[var(--keep-request-attention-bg)] px-4 py-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-semibold text-[var(--ophalo-ink)]">
-            Notify customer — {pending.channel === "sms" ? "text message" : "email"}
+            {pending.channel === "sms" ? "Text notification prepared" : "Email notification prepared"}
           </p>
           <KeepBadge variant="attention">Prepared {formatEventTime(pending.preparedAtUtc)}</KeepBadge>
         </div>
@@ -168,36 +171,54 @@ export function NotifyCustomerPanel({
           <>
             {pending.channel === "sms" ? (
               <div className="mb-4">
-                {/* Desktop: opaque QR handoff — never encodes raw phone/message text (ADR-448 pattern) */}
-                <div className="hidden md:flex flex-col items-center gap-2">
-                  {isSmsHandoffLoading ? (
-                    <div
-                      className="flex items-center justify-center"
-                      style={{ height: 160, width: 160 }}
-                      role="status"
-                      aria-label="Preparing text link"
-                    >
-                      <RefreshCw className="h-5 w-5 animate-spin text-[var(--ophalo-muted)]" />
+                <p className="mb-3 text-xs text-[var(--ophalo-muted)]">
+                  The customer-page update is posted. Send the companion text, then confirm it here.
+                </p>
+                {/* Desktop: an opaque QR handoff is explicitly opened on demand. It never encodes
+                    raw phone/message text (ADR-448 pattern). */}
+                <div className="hidden md:block">
+                  <KeepButton
+                    type="button"
+                    variant="secondary"
+                    aria-expanded={smsHandoffOpen}
+                    aria-controls="prepared-sms-handoff"
+                    onClick={() => setSmsHandoffOpen((open) => !open)}
+                    className="w-full"
+                  >
+                    {smsHandoffOpen ? "Hide phone handoff" : "Send text from phone"}
+                  </KeepButton>
+                  {smsHandoffOpen && (
+                    <div id="prepared-sms-handoff" className="mt-3 flex flex-col items-center gap-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-4">
+                      {isSmsHandoffLoading ? (
+                        <div
+                          className="flex items-center justify-center"
+                          style={{ height: 160, width: 160 }}
+                          role="status"
+                          aria-label="Preparing text link"
+                        >
+                          <RefreshCw className="h-5 w-5 animate-spin text-[var(--ophalo-muted)]" />
+                        </div>
+                      ) : smsHandoffUrl ? (
+                        <div className="bg-white p-2 rounded-lg">
+                          <QRCode value={smsHandoffUrl} size={160} />
+                        </div>
+                      ) : smsHandoffError ? (
+                        <div className="flex flex-col items-center gap-2 text-center">
+                          <p className="text-xs text-[var(--ophalo-danger)]">{smsHandoffError}</p>
+                          <button
+                            type="button"
+                            onClick={() => void retrySmsHandoff()}
+                            className="text-xs font-medium text-[var(--keep-accent)] hover:underline"
+                          >
+                            Try again
+                          </button>
+                        </div>
+                      ) : null}
+                      <p className="text-xs text-[var(--ophalo-muted)] text-center">
+                        Scan with your phone to open the text draft to {formatNaPhone(detail.customerPhone)}.
+                      </p>
                     </div>
-                  ) : smsHandoffUrl ? (
-                    <div className="bg-white p-2 rounded-lg">
-                      <QRCode value={smsHandoffUrl} size={160} />
-                    </div>
-                  ) : smsHandoffError ? (
-                    <div className="flex flex-col items-center gap-2 text-center">
-                      <p className="text-xs text-[var(--ophalo-danger)]">{smsHandoffError}</p>
-                      <button
-                        type="button"
-                        onClick={() => void retrySmsHandoff()}
-                        className="text-xs font-medium text-[var(--keep-accent)] hover:underline"
-                      >
-                        Try again
-                      </button>
-                    </div>
-                  ) : null}
-                  <p className="text-xs text-[var(--ophalo-muted)] text-center">
-                    Scan with your phone to open the text draft to {formatNaPhone(detail.customerPhone)}.
-                  </p>
+                  )}
                 </div>
                 {/* Mobile: direct sms: launch */}
                 <a
@@ -216,8 +237,7 @@ export function NotifyCustomerPanel({
               </a>
             )}
             <p className="mb-3 text-xs text-[var(--ophalo-muted)]">
-              Opening the draft does not notify the customer by itself. Confirm only after you've
-              actually sent it.
+              Confirm only after you have actually sent the notification.
             </p>
             <KeepButton
               type="button"

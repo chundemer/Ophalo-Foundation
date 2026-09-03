@@ -88,11 +88,14 @@ describe("TriagePanel strip — internal priority presentation (RD-059A)", () =>
     return { ...mockRequestDetails["mock-req-001"], businessPriority: null, ...overrides };
   }
 
-  it("shows a persistent configuration checkmark for the current value, including default Routine", () => {
+  it("shows one clean Routine default without a duplicate option or decorative checkmark", () => {
     render(<TriagePanel detail={stripDetail()} onDetailUpdated={vi.fn()} strip />);
     const control = screen.getByRole("combobox").parentElement as HTMLElement;
-    expect(control.querySelector("svg.lucide-check")).not.toBeNull();
-    expect(screen.getByRole("combobox")).toHaveValue("");
+    expect(control.querySelector("svg.lucide-check")).toBeNull();
+    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    expect(select).toHaveValue("routine");
+    expect(Array.from(select.options).filter((option) => option.text === "Routine")).toHaveLength(1);
+    expect(select.style.colorScheme).toBe("light");
   });
 
   it("renders a read-only priority as a muted 'Read only' caption with no editable control", () => {
