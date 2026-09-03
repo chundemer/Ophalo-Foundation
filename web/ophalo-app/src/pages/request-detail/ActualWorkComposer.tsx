@@ -105,7 +105,7 @@ interface ActualWorkComposerProps {
   // Slice 4d: the current recorder hands their own unsubmitted Draft to a chosen office member
   // (the `transfer-recorder` endpoint with the reason omitted). On `"handed-off"` / `"stale"` the
   // composer is already closing; `"ineligible"` / `"failed"` keep the picker open for a retry.
-  onHandOffToOffice: (newRecorderAccountUserId: string) => Promise<ActualWorkHandoffOutcome>;
+  onHandOffToOffice?: (newRecorderAccountUserId: string) => Promise<ActualWorkHandoffOutcome>;
 }
 
 /**
@@ -136,7 +136,6 @@ export function ActualWorkComposer({
   onSetDefaultPerformer,
   onSetVisitNote,
   onSetZeroLineDisposition,
-  onHandOffToOffice,
 }: ActualWorkComposerProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -303,9 +302,9 @@ export function ActualWorkComposer({
       <div
         className={`px-4 py-4 border-b border-[var(--ophalo-border)] shrink-0 ${
           isWide || presentation === "inline" ? "" : "pt-[max(1rem,env(safe-area-inset-top))]"
-        }`}
+        } ${inline ? "sr-only" : ""}`}
       >
-       <div className="min-[1001px]:mx-auto min-[1001px]:max-w-3xl">
+       <div className="min-[1001px]:mx-auto min-[1001px]:max-w-[1000px]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ophalo-muted)]">Work execution manager</p>
@@ -342,7 +341,7 @@ export function ActualWorkComposer({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
-       <div className="space-y-4 min-[1001px]:mx-auto min-[1001px]:max-w-3xl">
+       <div className={`space-y-4 min-[1001px]:mx-auto ${inline ? "min-[1001px]:max-w-[1440px]" : "min-[1001px]:max-w-[1000px]"}`}>
         {replacementCorrection && (
           <div
             role="status"
@@ -388,7 +387,7 @@ export function ActualWorkComposer({
           />
         )}
 
-        <section className="rounded-xl border border-sky-200 bg-sky-50/55 p-3 space-y-3">
+        <section className={`space-y-3 ${inline ? "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-4 shadow-sm" : "rounded-xl border border-sky-200 bg-sky-50/55 p-3"}`}>
           <div className="flex items-center justify-between gap-2">
             <div><h3 className="text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]">Active visit draft</h3><p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">Editable work for this visit</p></div>
             <span className="rounded border border-sky-300 bg-white px-2 py-0.5 text-xs font-semibold text-sky-800">Editable</span>
@@ -537,28 +536,23 @@ export function ActualWorkComposer({
         )}
 
         {!readOnly && (
-          <ActualWorkHandoffControl
-            currentAccountUserId={currentAccountUserId}
-            onHandOffToOffice={onHandOffToOffice}
-          />
-        )}
-
-        {!readOnly && (
-          <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--ophalo-border)] pt-3">
-            <span className="text-[11px] text-[var(--ophalo-muted)]">Removes this unfinished visit and its recorded work.</span>
+          <div className="mt-3 flex justify-end border-t border-[var(--ophalo-border)] pt-3">
             <button
               ref={discardTriggerRef}
               type="button"
               disabled={discardMutation.isPending}
               onClick={() => setShowDiscardConfirm(true)}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--ophalo-danger)] px-3 py-1.5 text-xs font-semibold text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger-bg)] disabled:opacity-50 ${FOCUS_RING}`}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger-bg)] disabled:opacity-50 ${FOCUS_RING}`}
             >
               <X className="h-3.5 w-3.5" />
-              Discard this visit
+              Discard draft
             </button>
           </div>
         )}</section>
-        <SubmittedVisits visits={submittedVisits} />
+        {/* Prior visits are an audit trail, not part of the visit currently being recorded. Keep
+            them available in the Request Detail/modal path, but omit them from the dedicated
+            recording workspace so their lines cannot be mistaken for draft duplicates. */}
+        {!inline && <SubmittedVisits visits={submittedVisits} />}
        </div>
       </div>
 
@@ -630,7 +624,7 @@ export function ActualWorkComposer({
     return (
       <section
         aria-labelledby="actual-work-composer-heading"
-        className="relative flex min-h-0 flex-1 flex-col bg-[var(--ophalo-card)]"
+        className="relative flex min-h-0 flex-1 flex-col bg-[var(--keep-workspace-canvas)]"
       >
         {composerBody}
       </section>
@@ -668,7 +662,7 @@ function SubmittedVisits({ visits }: { visits: ActualWorkSubmittedVisitEntry[] }
  * `performer-candidates` read the office-transcription gate uses (recorder-callable; identical
  * eligibility predicate to a recorder), minus the caller. `"handed-off"` / `"stale"` close the
  * composer from the parent, so only the recoverable outcomes update local state. */
-function ActualWorkHandoffControl({
+export function ActualWorkHandoffControl({
   currentAccountUserId,
   onHandOffToOffice,
 }: {
@@ -1809,15 +1803,14 @@ function ActualWorkDraftLine({
     </>
   );
 
-  // BL136 large-ticket density: the inline workspace uses a dense single-line collapsed row
-  // (name · qty/unit · performer · compact edit/remove) with note + editing behind a per-row
-  // disclosure. Modal presentation keeps the original stacked card below.
+  // The inline workspace keeps a compact list, but each entry still reads as a real record at a
+  // glance: quantity, item name, unit, and performer have deliberate visual hierarchy.
   if (presentation === "inline" && !readOnly) {
     const detailId = `aw-line-detail-${line.id}`;
     const open = expanded || isEditing;
     return (
-      <div className="rounded-lg border border-[var(--ophalo-border)]">
-        <div className="flex items-center gap-2 px-2.5 py-1.5">
+      <div className="overflow-hidden rounded-lg border border-[var(--ophalo-border)] bg-white">
+        <div className="flex items-center gap-3 px-3 py-3">
           <button
             type="button"
             aria-expanded={open}
@@ -1830,22 +1823,22 @@ function ActualWorkDraftLine({
                 setIsEditing(false);
               }
             }}
-            className={`shrink-0 rounded p-0.5 text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] ${FOCUS_RING}`}
+            className={`shrink-0 rounded p-1 text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] ${FOCUS_RING}`}
           >
             <ChevronRight className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-90" : ""}`} />
             <span className="sr-only">
               {open ? "Hide" : "Show"} details for {line.displayNameSnapshot}
             </span>
           </button>
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 text-xs text-[var(--ophalo-muted)]">
-            <span className="truncate text-sm text-[var(--ophalo-ink)]">{line.displayNameSnapshot}</span>
-            <span>· {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""}</span>
-            <span>· {line.performerDisplayName ?? "Unknown performer"}</span>
-            {line.note ? (
-              <span title="Has a line note" aria-label="Has a line note">
-                ✎
-              </span>
-            ) : null}
+          <span className="shrink-0 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold tabular-nums text-slate-700">
+            {line.actualQuantity}×
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-[var(--ophalo-ink)]">{line.displayNameSnapshot}</p>
+            <p className="mt-0.5 truncate text-xs text-[var(--ophalo-muted)]">
+              Unit of measure: {line.unitOfMeasureSnapshot ?? "—"} · Performed by {line.performerDisplayName ?? "Unknown performer"}
+              {line.note ? " · Note added" : ""}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
@@ -1871,7 +1864,7 @@ function ActualWorkDraftLine({
           </div>
         </div>
         {open && (
-          <div id={detailId} className="space-y-2 border-t border-[var(--ophalo-border)] px-2.5 py-2">
+          <div id={detailId} className="space-y-2 border-t border-[var(--ophalo-border)] bg-slate-50/70 px-3 py-3">
             {isEditing ? (
               editFields
             ) : (
@@ -2050,7 +2043,7 @@ function ActualWorkSubmitFooter({
         isWide ? "" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
       }`}
     >
-     <div className="space-y-2 min-[1001px]:mx-auto min-[1001px]:max-w-3xl">
+     <div className="space-y-2 min-[1001px]:mx-auto min-[1001px]:max-w-[1000px]">
       {showZeroLineForm && (
         <div className="space-y-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-3">
           <p className="text-xs text-[var(--ophalo-muted)]">

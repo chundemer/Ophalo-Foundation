@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
@@ -557,23 +557,23 @@ describe("ActualWorkComposer", () => {
   });
 
   describe("discard visit", () => {
-    it("renders discard as a visible button in the normal composer and the performer-gated state", () => {
+    it("keeps the discard action visible for every editable draft", () => {
       const { unmount } = renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
-      expect(screen.getByRole("button", { name: "Discard this visit" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Discard draft" })).toBeVisible();
       unmount();
 
       renderComposer({
         draft: emptyDraft({ defaultPerformedByAccountUserId: null, defaultPerformerDisplayName: null }),
       });
       expect(screen.getByText("Whose work is this?")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Discard this visit" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Discard draft" })).toBeVisible();
     });
 
     it("first click opens the confirmation dialog and does not call discard", async () => {
       const user = userEvent.setup();
       const { onDiscarded } = renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
 
-      await user.click(screen.getByRole("button", { name: "Discard this visit" }));
+      await user.click(screen.getByRole("button", { name: "Discard draft" }));
 
       const dialog = screen.getByRole("alertdialog");
       expect(dialog).toHaveTextContent("Discard this visit?");
@@ -586,7 +586,7 @@ describe("ActualWorkComposer", () => {
       const user = userEvent.setup();
       const { onDiscarded } = renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
 
-      await user.click(screen.getByRole("button", { name: "Discard this visit" }));
+      await user.click(screen.getByRole("button", { name: "Discard draft" }));
       await user.click(screen.getByRole("button", { name: "Keep editing" }));
 
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
@@ -600,7 +600,7 @@ describe("ActualWorkComposer", () => {
       mockDiscardActualWork.mockResolvedValueOnce(undefined);
       const { onDiscarded } = renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
 
-      await user.click(screen.getByRole("button", { name: "Discard this visit" }));
+      await user.click(screen.getByRole("button", { name: "Discard draft" }));
       await user.click(screen.getByRole("button", { name: "Discard visit" }));
 
       await waitFor(() => expect(mockDiscardActualWork).toHaveBeenCalledWith("draft-1", "v1"));
@@ -614,7 +614,7 @@ describe("ActualWorkComposer", () => {
       mockDiscardActualWork.mockReturnValueOnce(new Promise<void>((resolve) => (resolveDiscard = resolve)));
       renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
 
-      await user.click(screen.getByRole("button", { name: "Discard this visit" }));
+      await user.click(screen.getByRole("button", { name: "Discard draft" }));
       const confirm = screen.getByRole("button", { name: "Discard visit" });
       await user.click(confirm);
       await waitFor(() => expect(confirm).toBeDisabled());
@@ -1021,15 +1021,16 @@ describe("ActualWorkComposer", () => {
       mockGetFieldScopeSearch.mockImplementation(
         () => new Promise((resolve) => { resolveSearch = resolve; }),
       );
-      const { container } = renderComposer({ presentation: "inline", isWide: false });
+      renderComposer({ presentation: "inline", isWide: false });
 
       await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
       await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "filter");
 
-      await waitFor(() => expect(container.querySelector(".animate-spin")).toBeInTheDocument());
+      const drawer = screen.getByRole("dialog", { name: "Add work & materials" });
+      await waitFor(() => expect(drawer.querySelector(".animate-spin")).toBeInTheDocument());
 
       resolveSearch({ items: [], limit: 20, hasMore: false, nextCursor: null });
-      await waitFor(() => expect(container.querySelector(".animate-spin")).not.toBeInTheDocument());
+      await waitFor(() => expect(drawer.querySelector(".animate-spin")).not.toBeInTheDocument());
     });
 
     it("clears the search text and refocuses the input via the clear button", async () => {
@@ -1543,49 +1544,8 @@ describe("ActualWorkComposer", () => {
     });
   });
 
-  describe("hand off to office (Slice 4d)", () => {
-    it("hands the visit to a chosen office member and does not send a reason", async () => {
-      const user = userEvent.setup();
-      const onHandOffToOffice = vi.fn().mockResolvedValue("handed-off");
-      renderComposer({ currentAccountUserId: "au-self", onHandOffToOffice });
-
-      await user.click(screen.getByRole("button", { name: "Hand off to office" }));
-      const dialog = await screen.findByRole("alertdialog");
-      await user.selectOptions(screen.getByLabelText("Hand off to"), "au-tech");
-      await user.click(within(dialog).getByRole("button", { name: "Hand off" }));
-
-      expect(onHandOffToOffice).toHaveBeenCalledWith("au-tech");
-      expect(onHandOffToOffice).toHaveBeenCalledTimes(1);
-    });
-
-    it("keeps the dialog open with an error when the target is ineligible", async () => {
-      const user = userEvent.setup();
-      const onHandOffToOffice = vi.fn().mockResolvedValue("ineligible");
-      renderComposer({ currentAccountUserId: "au-self", onHandOffToOffice });
-
-      await user.click(screen.getByRole("button", { name: "Hand off to office" }));
-      await user.selectOptions(await screen.findByLabelText("Hand off to"), "au-tech");
-      await user.click(screen.getByRole("button", { name: "Hand off" }));
-
-      expect(await screen.findByText(/can't take over this visit/i)).toBeInTheDocument();
-      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
-    });
-
-    it("excludes the current recorder from the candidate list", async () => {
-      const user = userEvent.setup();
-      mockGetActualWorkPerformerCandidates.mockResolvedValue({
-        candidates: [
-          { accountUserId: "au-self", displayName: "Sam Field", role: "operator" },
-          { accountUserId: "au-tech", displayName: "Dana Tech", role: "operator" },
-        ],
-      });
-      renderComposer({ currentAccountUserId: "au-self", onHandOffToOffice: vi.fn() });
-
-      await user.click(screen.getByRole("button", { name: "Hand off to office" }));
-      await screen.findByLabelText("Hand off to");
-
-      expect(screen.getByRole("option", { name: "Dana Tech" })).toBeInTheDocument();
-      expect(screen.queryByRole("option", { name: "Sam Field" })).not.toBeInTheDocument();
-    });
+  it("does not duplicate the footer submission action with a handoff control", () => {
+    renderComposer();
+    expect(screen.queryByRole("button", { name: "Hand off to office" })).not.toBeInTheDocument();
   });
 });

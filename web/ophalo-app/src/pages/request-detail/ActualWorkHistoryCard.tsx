@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Lock } from "lucide-react";
 import { KeepButton } from "../../components/keep/KeepButton";
+import { ResponsiveSheet } from "../../components/keep/ResponsiveSheet";
 import type { ActualWorkSubmittedVisitEntry } from "../../lib/apiClient";
 import { type ActualWorkHistoryState } from "./useActualWorkHistory";
 
@@ -13,6 +15,9 @@ interface ActualWorkHistoryCardProps {
   // link to the dedicated Actual Work Ticket Workspace route for that visit, where the Owner/Admin
   // office financial-review region lives. Undefined below 1001px — review stays inline on the page.
   onOpenVisit?: (visitId: string) => void;
+  // Desktop's supporting-context rail keeps this read-only audit history concise. The full visit
+  // records open in a dedicated drawer; the mobile/main-work presentation stays expanded.
+  presentation?: "full" | "summary";
 }
 
 function formatSubmittedAt(iso: string | null): string {
@@ -111,7 +116,8 @@ function SubmittedVisitDetails({
  * (no visibility) never blocks the rest of request-detail; a transport/other failure renders a
  * compact retry affordance instead of a generic error card.
  */
-export function ActualWorkHistoryCard({ state, onRetry, bare = false, onOpenVisit }: ActualWorkHistoryCardProps) {
+export function ActualWorkHistoryCard({ state, onRetry, bare = false, onOpenVisit, presentation = "full" }: ActualWorkHistoryCardProps) {
+  const [historyOpen, setHistoryOpen] = useState(false);
   if (state.status === "loading" || state.status === "hidden") {
     return null;
   }
@@ -134,6 +140,46 @@ export function ActualWorkHistoryCard({ state, onRetry, bare = false, onOpenVisi
   // nothing to disclose here; ActualWorkCard already covers that state.
   if (state.submittedVisits.length === 0) {
     return null;
+  }
+
+  if (presentation === "summary") {
+    const latestVisit = state.submittedVisits[0];
+    return (
+      <>
+        <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--keep-request-eyebrow)]">Visit history</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--ophalo-ink)]">
+                {state.submittedVisits.length} submitted visit{state.submittedVisits.length === 1 ? "" : "s"}
+              </p>
+            </div>
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ophalo-muted)]" aria-hidden="true" />
+          </div>
+          <div className="mt-3 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-xs text-[var(--ophalo-muted)]">
+            <p className="font-medium text-[var(--ophalo-ink)]">Latest · {formatSubmittedAt(latestVisit.submittedAtUtc)}</p>
+            <p className="mt-0.5">{latestVisit.lines.length} line{latestVisit.lines.length === 1 ? "" : "s"} · locked record</p>
+          </div>
+          <button type="button" onClick={() => setHistoryOpen(true)} className="mt-3 w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm font-semibold text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2">
+            View all visit history
+          </button>
+        </div>
+
+        {historyOpen && (
+          <ResponsiveSheet
+            label="Visit history"
+            onClose={() => setHistoryOpen(false)}
+            header={<div className="flex items-center justify-between gap-3"><div><p className="text-base font-semibold text-[var(--ophalo-ink)]">Visit history</p><p className="text-xs text-[var(--ophalo-muted)]">{state.submittedVisits.length} submitted visit{state.submittedVisits.length === 1 ? "" : "s"} · locked records</p></div><button type="button" onClick={() => setHistoryOpen(false)} className="rounded-lg px-2 py-1 text-sm font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]">Close</button></div>}
+          >
+            <div className="space-y-3">
+              {state.submittedVisits.map((visit) => (
+                <SubmittedVisitDetails key={visit.id} visit={visit} onOpenVisit={onOpenVisit} />
+              ))}
+            </div>
+          </ResponsiveSheet>
+        )}
+      </>
+    );
   }
 
   return (

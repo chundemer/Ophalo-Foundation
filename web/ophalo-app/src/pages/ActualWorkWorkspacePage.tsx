@@ -8,7 +8,7 @@ import {
   type RefObject,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import { api, type KeepRequestDetailResult } from "../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../lib/requestStatus";
 import { KeepBadge } from "../components/keep/KeepBadge";
@@ -175,7 +175,15 @@ export function ActualWorkWorkspacePage({
   if (!isWide) return null;
 
   const request = requestQuery.data;
-  const contextBand = <TicketContextBand request={request} onExit={onExit} headingRef={headingRef} />;
+  const contextBand = (
+    <TicketContextBand
+      request={request}
+      onExit={onExit}
+      headingRef={headingRef}
+      workspaceTitle={visit === "draft" || visit === "new" ? "Record completed work" : "Submitted visit"}
+      showAutosave={visit === "draft" || visit === "new"}
+    />
+  );
 
   // BL136 4f-ii successor layout: on a wide viewport an Owner/Admin reviewing a live (non-superseded)
   // submitted visit whose financial detail has loaded gets the dedicated two-column financial-review
@@ -250,7 +258,7 @@ export function ActualWorkWorkspacePage({
   // ticket-context band, so the operator always sees which request they are recording against.
   if (visit === "draft" || visit === "new") {
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col bg-[var(--keep-workspace-canvas)]">
         {contextBand}
         {capture.state.status === "draft" ? (
           <ActualWorkComposer
@@ -271,16 +279,14 @@ export function ActualWorkWorkspacePage({
               void history.retry();
             }}
             onDiscarded={onExit}
-            submittedVisits={history.state.status === "loaded" ? history.state.submittedVisits : []}
             currentAccountUserId={meQuery.data?.accountUserId}
             onSetDefaultPerformer={capture.setDefaultPerformer}
             onSetVisitNote={capture.setVisitNote}
             onSetZeroLineDisposition={capture.setZeroLineDisposition}
-            onHandOffToOffice={capture.handOffToOffice}
           />
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-6">
+            <div className="mx-auto w-full max-w-[1000px] px-4 py-6 md:px-6">
               {capture.state.status === "loading" || visit === "new" ? (
                 <p className="text-sm text-[var(--ophalo-muted)]">Loading…</p>
               ) : (
@@ -352,10 +358,14 @@ function TicketContextBand({
   request,
   onExit,
   headingRef,
+  workspaceTitle,
+  showAutosave = false,
 }: {
   request: KeepRequestDetailResult | undefined;
   onExit: () => void;
   headingRef?: RefObject<HTMLHeadingElement | null>;
+  workspaceTitle: string;
+  showAutosave?: boolean;
 }) {
   const [needExpanded, setNeedExpanded] = useState(false);
   const [needClipped, setNeedClipped] = useState(false);
@@ -387,48 +397,48 @@ function TicketContextBand({
     : "";
 
   return (
-    <div className="shrink-0 border-b border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 md:px-6">
-      <div className="mx-auto w-full max-w-4xl">
+    <div className="shrink-0 bg-[var(--keep-workspace-canvas)]">
+      <div className="mx-auto w-full max-w-[1440px] px-4 pb-5 pt-6 sm:px-6 sm:pt-8">
         <button
           type="button"
           onClick={onExit}
           className="text-sm font-medium text-[var(--keep-accent)] hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
         >
-          ← Back to Request
+          ← Back to Request{request ? ` ${request.referenceCode}` : ""}
         </button>
-        <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ophalo-muted)]">
-          Actual Work visit
-        </p>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <h1
             ref={headingRef}
             tabIndex={-1}
-            className="max-w-full truncate font-serif text-lg font-semibold text-[var(--ophalo-ink)] focus:outline-none"
+            className="keep-page-title max-w-full truncate tracking-tight focus:outline-none"
           >
-            {request?.customerName ?? "Actual Work"}
+            {workspaceTitle}
           </h1>
           {request && (
             <KeepBadge variant={statusBadgeVariant(request.status)}>{statusLabel(request.status)}</KeepBadge>
           )}
-        </div>
-        {request && (
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--ophalo-muted)]">
-            <span className="font-medium text-[var(--ophalo-ink)]">{request.referenceCode}</span>
-            {address ? (
-              <span className="truncate">· {address}</span>
-            ) : (
-              <span>· Service location not on file</span>
+            </div>
+            {request && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-[var(--ophalo-muted)]">
+                <span className="font-medium text-[var(--ophalo-ink)]">{request.customerName}</span>
+                {address ? <span>· {address}</span> : <span>· Service location not on file</span>}
+              </div>
             )}
           </div>
-        )}
+          {showAutosave && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ophalo-success)]"><Check className="h-3 w-3" /> Auto-saved</span>
+          )}
+        </div>
         {request?.description && (
-          <div className="mt-1.5">
+          <div className="mt-3 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3.5 py-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
               Customer need
             </p>
             <p
               ref={needRef}
-              className={`whitespace-pre-wrap text-sm leading-6 text-[var(--ophalo-ink)] ${
+              className={`mt-0.5 whitespace-pre-wrap text-sm font-semibold leading-6 text-[var(--ophalo-ink)] ${
                 needExpanded ? "" : "line-clamp-2"
               }`}
             >

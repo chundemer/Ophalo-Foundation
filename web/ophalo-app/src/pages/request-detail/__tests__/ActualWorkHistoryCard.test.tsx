@@ -75,6 +75,23 @@ describe("ActualWorkHistoryCard", () => {
     expect(screen.getByText("3 submitted visits · locked record")).toBeInTheDocument();
   });
 
+  it("uses a concise sidebar summary and opens full locked records in a visit-history drawer", async () => {
+    const state: ActualWorkHistoryState = {
+      status: "loaded",
+      submittedVisits: [
+        { id: "v2", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-03-01T12:00:00Z", visitNote: null, lines: [line({ id: "l2" })] },
+        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-02-01T12:00:00Z", visitNote: "Older visit", lines: [line({ id: "l1" })] },
+      ],
+    };
+    render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} presentation="summary" />);
+
+    expect(screen.getByText("2 submitted visits")).toBeInTheDocument();
+    expect(screen.queryByText("Older visit")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "View all visit history" }));
+    expect(screen.getByRole("dialog", { name: "Visit history" })).toBeInTheDocument();
+    expect(screen.getByText("Older visit")).toBeInTheDocument();
+  });
+
   it("badges a superseded source and the successor that corrected an earlier visit", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",

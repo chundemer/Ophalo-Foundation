@@ -5,6 +5,7 @@ import { OriginalRequestCard, ServiceLocationPanel, TriagePanel } from "./Detail
 import { TeamSection } from "./TeamSection";
 import { TimingPanel } from "./TimingPanel";
 import { PrimaryActionSlot } from "./PrimaryActionControl";
+import { ClipboardPenLine, MessageSquare, ReceiptText } from "lucide-react";
 
 // Sticky Request Anchor (three-row correction, 2026-08-22): one outer bordered/rounded card with
 // a deliberate three-row desktop hierarchy — not a single flattened horizontal strip and not a
@@ -31,6 +32,8 @@ interface RequestDetailAnchorProps extends RequestDetailLayoutProps {
   onOpenShareDrawer: () => void;
   onOpenClearAttention: () => void;
   onActivateCustomerUpdateComposer: () => void;
+  actualWorkShortcut?: { label: string; onClick: () => void };
+  financialReviewShortcut?: { label: string; onClick: () => void };
 }
 
 export function RequestDetailAnchor({
@@ -44,11 +47,16 @@ export function RequestDetailAnchor({
   onRecordFollowUp,
   onOpenClearAttention,
   onActivateCustomerUpdateComposer,
+  actualWorkShortcut,
+  financialReviewShortcut,
   canRecordShareIntent,
   needsShare,
   onOpenShareDrawer,
 }: RequestDetailAnchorProps) {
   const hasActiveAttention = detail.effectiveAttention.level !== "none";
+  const customerResponseOwnsPrimary =
+    hasActiveAttention && detail.availableActions.primaryAction?.target === "customer_update_composer";
+  const showMessageShortcut = detail.availableActions.canSendBusinessUpdate && !customerResponseOwnsPrimary;
 
   return (
     <div className="shrink-0 bg-[var(--keep-request-canvas)] px-4 md:px-6 py-3">
@@ -78,6 +86,34 @@ export function RequestDetailAnchor({
         <div className="mt-2">
           <DetailHeroName detail={detail} />
         </div>
+
+        {/* Request shortcuts are navigation accelerators, not duplicate completion controls. They
+            take an operator straight to the existing authoritative work surface; the cards below
+            retain their own actions. A customer-message Attention Rail already owns its response
+            CTA, so it intentionally suppresses the duplicate message shortcut here. */}
+        {(actualWorkShortcut || showMessageShortcut || financialReviewShortcut) && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--ophalo-border)] pt-3">
+            <p className="mr-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)]">Request shortcuts</p>
+            {actualWorkShortcut && (
+              <button type="button" onClick={actualWorkShortcut.onClick} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--keep-request-primary)] bg-[var(--keep-request-primary)] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--keep-request-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-request-primary)] focus-visible:ring-offset-2">
+                <ClipboardPenLine className="h-4 w-4" aria-hidden="true" />
+                {actualWorkShortcut.label}
+              </button>
+            )}
+            {showMessageShortcut && (
+              <button type="button" onClick={onActivateCustomerUpdateComposer} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[var(--ophalo-ink)] shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2">
+                <MessageSquare className="h-4 w-4 text-[var(--keep-accent)]" aria-hidden="true" />
+                Message customer
+              </button>
+            )}
+            {financialReviewShortcut && (
+              <button type="button" onClick={financialReviewShortcut.onClick} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[var(--ophalo-ink)] shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2">
+                <ReceiptText className="h-4 w-4 text-[var(--ophalo-attention)]" aria-hidden="true" />
+                {financialReviewShortcut.label}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Divider, then Row 3: three stable context columns — chrome-free inline content inside
             the one outer Anchor card. */}

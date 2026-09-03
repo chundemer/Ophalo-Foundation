@@ -165,8 +165,9 @@ describe("ActualWorkWorkspacePage", () => {
     renderPage({ visit: "draft" });
 
     expect(await screen.findByText("MOCK COMPOSER")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1, name: "Jane Doe" })).toBeInTheDocument();
-    expect(screen.getByText("R-100")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Record completed work" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Back to Request R-100/ })).toBeInTheDocument();
+    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
     expect(screen.getByText(/42 Elm Street/)).toBeInTheDocument();
     expect(screen.getByText(/Springfield, OR 97403/)).toBeInTheDocument();
     expect(screen.getByText("Customer need")).toBeInTheDocument();
@@ -185,7 +186,7 @@ describe("ActualWorkWorkspacePage", () => {
       await userEvent.click(toggle);
       expect(screen.getByRole("button", { name: /Show less/ })).toHaveAttribute("aria-expanded", "true");
 
-      await userEvent.click(screen.getByRole("button", { name: "← Back to Request" }));
+      await userEvent.click(screen.getByRole("button", { name: /← Back to Request R-100/ }));
       expect(onExit).toHaveBeenCalled();
     } finally {
       restore();
@@ -211,8 +212,9 @@ describe("ActualWorkWorkspacePage", () => {
     });
     renderPage({ visit: "aw-42" });
 
-    expect(await screen.findByText("R-100")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1, name: "Jane Doe" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Back to Request R-100/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Submitted visit" })).toBeInTheDocument();
+    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
     expect(screen.getByText(/Furnace not igniting/)).toBeInTheDocument();
     expect(screen.queryByText("MOCK COMPOSER")).not.toBeInTheDocument();
   });

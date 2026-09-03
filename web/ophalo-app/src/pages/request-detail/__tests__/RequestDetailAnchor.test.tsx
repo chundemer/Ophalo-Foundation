@@ -23,7 +23,10 @@ function baseDetail(): KeepRequestDetailResult {
   };
 }
 
-function renderAnchor(detail: KeepRequestDetailResult) {
+function renderAnchor(
+  detail: KeepRequestDetailResult,
+  shortcuts: Partial<Pick<React.ComponentProps<typeof RequestDetailAnchor>, "actualWorkShortcut" | "financialReviewShortcut" | "onActivateCustomerUpdateComposer">> = {},
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
@@ -45,12 +48,50 @@ function renderAnchor(detail: KeepRequestDetailResult) {
         onOpenShareDrawer={vi.fn()}
         onOpenClearAttention={vi.fn()}
         onActivateCustomerUpdateComposer={vi.fn()}
+        {...shortcuts}
       />
     </QueryClientProvider>,
   );
 }
 
 describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
+  it("offers only navigation shortcuts and suppresses the duplicate message shortcut during active customer-message attention", async () => {
+    const user = userEvent.setup();
+    const onActualWork = vi.fn();
+    const onFinancialReview = vi.fn();
+    const onMessageCustomer = vi.fn();
+    const detail = {
+      ...baseDetail(),
+      effectiveAttention: { level: "none" as const, reason: null, dueAtUtc: null, dueOnDate: null, guidanceKey: null },
+      availableActions: { ...baseDetail().availableActions, canSendBusinessUpdate: true },
+    };
+    const { rerender } = renderAnchor(detail, {
+      actualWorkShortcut: { label: "Continue Actual Work", onClick: onActualWork },
+      financialReviewShortcut: { label: "Review financials (1)", onClick: onFinancialReview },
+      onActivateCustomerUpdateComposer: onMessageCustomer,
+    });
+
+    expect(screen.getByText("Request shortcuts")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continue Actual Work" }));
+    await user.click(screen.getByRole("button", { name: "Message customer" }));
+    await user.click(screen.getByRole("button", { name: "Review financials (1)" }));
+    expect(onActualWork).toHaveBeenCalledTimes(1);
+    expect(onMessageCustomer).toHaveBeenCalledTimes(1);
+    expect(onFinancialReview).toHaveBeenCalledTimes(1);
+
+    const customerMessageAttention = {
+      ...detail,
+      effectiveAttention: { level: "overdue" as const, reason: "customer_message" as const, dueAtUtc: null, dueOnDate: null, guidanceKey: "respond_to_customer" },
+      availableActions: { ...detail.availableActions, primaryAction: { key: "respond_to_customer" as const, label: "Respond to customer", target: "customer_update_composer" as const, requiresConfirmation: false, confirmationCopy: null } },
+    };
+    rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RequestDetailAnchor requestId="req-1" detail={customerMessageAttention} highlights={{}} showProminentFeedbackCard={false} onDetailUpdated={vi.fn()} onContactLaunched={vi.fn()} onEditLocation={vi.fn()} onOpenReassignOwner={vi.fn()} onOpenWatchers={vi.fn()} onRecordFollowUp={vi.fn()} onCreateFollowUp={vi.fn()} onReviewSuccess={vi.fn()} canRecordShareIntent={false} needsShare={false} onOpenShareDrawer={vi.fn()} onOpenClearAttention={vi.fn()} onActivateCustomerUpdateComposer={onMessageCustomer} actualWorkShortcut={{ label: "Continue Actual Work", onClick: onActualWork }} />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByRole("button", { name: "Message customer" })).not.toBeInTheDocument();
+  });
+
   it("renders one outer bordered card with row 1 badges, row 2 full-width identity, a divider, and three row-3 context columns", () => {
     const detail = baseDetail();
     const { container } = renderAnchor(detail);

@@ -227,8 +227,25 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       state={actualWorkHistory.state}
       onRetry={() => void actualWorkHistory.retry()}
       onOpenVisit={useWorkspaceRoute ? (visitId) => props.onNavigateToActualWorkspace!(requestId, visitId) : undefined}
+      presentation="summary"
     />
   );
+
+  const actualWorkShortcut =
+    actualWorkCapture.state.status === "draft"
+      ? { label: "Continue Actual Work", onClick: () => handleStartCapture() }
+      : actualWorkCapture.state.status === "no-draft"
+        ? { label: "Record Actual Work", onClick: () => handleStartCapture() }
+        : undefined;
+  const financialReviewShortcut = (() => {
+    if (pendingReviews.state.status !== "loaded" || pendingReviews.state.count === 0) return undefined;
+    const firstPendingVisit = pendingReviews.state.items[0];
+    if (!firstPendingVisit) return undefined;
+    return {
+      label: `Review financials (${pendingReviews.state.count})`,
+      onClick: () => handleReviewPendingVisit(firstPendingVisit.actualWorkId),
+    };
+  })();
 
   return (
     <div ref={rootRef} onFocus={handleCanvasFocus} onBlur={handleCanvasBlur} className="flex flex-1 min-h-0 min-w-0 flex-col">
@@ -240,6 +257,8 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           onOpenShareDrawer={props.onOpenShareDrawer}
           onOpenClearAttention={onOpenClearAttention}
           onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
+          actualWorkShortcut={actualWorkShortcut}
+          financialReviewShortcut={financialReviewShortcut}
         />
       ) : (
         <MobileRequestAnchor detail={detail} />
