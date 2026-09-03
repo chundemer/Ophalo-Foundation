@@ -1,9 +1,10 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-09-03 — **GAP-039 Batches 1, 2a, 2b, and 2c are implemented and accepted.
-All GAP-039 code slices are done; the remainder (BL140 Batch 3 console/runbook config and Batch 4
-production-candidate verification) is founder-owned. Next Claude implementation batch is GAP-033 —
-public-intake trust and tracker access truthfulness.** Request
+All GAP-039 code slices and the BL140 Batch 3 production console configuration are complete;
+Batch 4 production-candidate verification is founder-owned and currently paused before controlled
+error generation. Next Claude implementation batch is GAP-033 — public-intake trust and tracker
+access truthfulness.** Request
 UI Upgrade 1.1 implementation is complete (locked contract
 [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), delivery evidence
 [BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)); its product-owner visual
@@ -57,6 +58,16 @@ relevant build log.
   (`build.sourcemap: "hidden"` + `filesToDeleteAfterUpload: ["./dist/**/*.map"]`, no
   `errorHandler`); a local build generates no maps. Local build verified: `dist` has zero `.map`
   files and no `sourceMappingURL` comments. Full app suite 1064 passed.
+- GAP-039 BL140 Batch 3 founder console configuration is complete (credentials are recorded only
+  in provider consoles): separate `ophalo-api` and `workbench-pwa` Sentry projects exist; Railway
+  Production has `Sentry__Dsn` and healthcheck path `/health/ready`; Vercel Production has the
+  Workbench DSN, organization CI token, organization/project identifiers, explicit
+  `OPHALO_DEPLOY_ENV=production`, and System Environment Variables enabled. The first classified
+  Workbench deployment succeeded and its Vercel log confirmed upload of two source-map artifacts
+  to Sentry release `c37542adb4a8875fc209edd17ce2896757dfb73b`; Sentry shows that release.
+  New-issue and resolved-issue-regression founder-email alert rules are live for both projects, and
+  each alert's test notification reached the founder inbox. The non-secret configuration/rotation
+  record is [Sentry Configuration Runbook](runbook/sentry-configuration.md).
 
 ## Next implementation sequence
 
@@ -87,10 +98,15 @@ three independently-compiling slices, all now delivered against
   build output after upload — proven locally by `dist` containing zero `.map` files.
 
 Remaining in GAP-039 — **founder-owned, release-safety gate, required before any customer-facing
-production pilot:** BL140 Batch 3 (Vercel System Environment Variables + `OPHALO_DEPLOY_ENV` +
-`VITE_SENTRY_DSN`/`SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT`; Railway health-check; Sentry
-alert rules; runbook) and Batch 4 (production-candidate verification, incl. proof that a real
-production upload leaves zero `.map` in the deployed artifact). This gate precedes GAP-033.
+production pilot:** BL140 Batch 4 production-candidate verification. It is paused at the safe
+smoke-login provision step: `support@ophalo.com` is available as the dedicated alias, but must be
+explicitly invited as a lowest-permission member of the founder's internal-only account before use.
+After that, verify a controlled browser error and a deliberately safe authenticated API error;
+inspect release/environment/correlation/redaction and founder-email delivery; prove deployed
+source maps are absent; exercise the invalid-public-base-URL fail-safe; test preview separation if
+preview capture is enabled; and record the evidence plus named incident roles in the runbook. The
+API controlled-error route remains an explicit implementation/operational decision: there is no
+permanent production failure endpoint. This gate precedes GAP-033.
 
 **GAP-033 — public-intake trust and tracker access truthfulness — follows GAP-039.**
 Full scope is [GAP-033](pilot-readiness-bug-tracker.md#gap-033--public-intake-does-not-establish-sufficient-customer-trust-or-return-continuity)
@@ -128,6 +144,31 @@ authenticated `/me` endpoint and belongs in shell chrome, outside Request Anchor
   integrity (GAP-016/021/051), then the remaining tracker order.
 - **Minimum Office Closeout:** Billing Revision, handoff, and correction/adjustment design resume
   only after the controlled-pilot and rehearsal gates; see [BL135](build-log/135-minimum-office-closeout-mechanical-preflight.md).
+- **Settings & Getting Started V2 UI upgrade:** pure visual restyle of the Owner/Admin Getting
+  Started + Settings surfaces to V2 doctrine, plus a lightweight (non-checklist) first-run readiness
+  moment on Getting Started. Preserves ADR-428 IA, defaults, and day-zero model. Locked contract:
+  [settings-and-getting-started-ui-upgrade.md](ux-design/v2/settings-and-getting-started-ui-upgrade.md).
+  Three frontend-only slices (A: Getting Started + Settings shell +
+  Response Policy; B: Public Link & Profile; C: Team). Sequenced **after** GAP-039 → GAP-033.
+  **Slice A delivered** (not yet product-owner visual-accepted): `keep-settings-frame` +
+  `keep-field` shared recipes in `app.css`; `Home.tsx` `OwnerHome` rebuilt as the readiness panel
+  + subordinate optional rows (reads the shared `["intake"]` query, no new fetch/mutation);
+  `Settings.tsx` shell on the 880px frame with section-shaped loading/error placeholders;
+  `PolicySection.tsx` inputs on `keep-field`. New `Home.readiness.test.tsx` (7 cases, pins the
+  no-checklist/no-meter contract); `Settings.v2Shell.test.tsx` updated. Full app suite 1071
+  passed; production build passes. Slices B and C still pending, plus the §5 screenshot-acceptance
+  pass across all three.
+- **Price Book direct-cost visibility:** next after the Settings & Getting Started V2 UI upgrade.
+  The Catalog Items workspace currently exposes current sell price but not current direct cost, so
+  an Owner/Admin must open an item to determine whether the price book has a cost. Extend the
+  authorized Catalog Items **list read contract** with the current published price-line direct
+  cost (the same internal standard/direct cost already shown on Catalog Item Detail); update the
+  frontend list type and render a **Direct cost** column adjacent to Sell price on desktop plus a
+  clearly labeled secondary value in the narrow card layout. Show `—` when no current cost exists.
+  Preserve existing Owner/Admin Price Book authorization and entitlement checks; do not expose
+  cost in field workflows, change mutation/version/snapshot semantics, imply supplier "last paid"
+  cost, or introduce inventory/accounting behavior. Add focused API/persistence serialization and
+  frontend table/card coverage, including missing-cost behavior.
 - **Workbench background brand alignment:** `ophalo-app` uses an off-spec cool gray page
   background. Align it to Canvas `#F8F6F1` (`--ophalo-canvas`) per
   [BRAND.md](brand-kit/BRAND.md), with a token audit for other hardcoded grays. Internal staff

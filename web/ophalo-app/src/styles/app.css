@@ -114,4 +114,28 @@ html.workbench-scroll-lock body {
   .keep-control-text {
     @apply text-sm;
   }
+
+  /* Owner/Admin Settings + Getting Started V2 restyle
+     (docs/ux-design/v2/settings-and-getting-started-ui-upgrade.md).
+     Single-task reading/editing surfaces: a centered, honestly-bounded content
+     frame — not the Requests three-column workbench. */
+  .keep-settings-frame {
+    @apply mx-auto w-full max-w-[880px] px-4 sm:px-6;
+  }
+
+  /* Shared form-control recipe for the Settings sections: token border/surface,
+     Keep-accent focus ring, and a 44px minimum target. Width is the caller's
+     choice (full-width text fields, intrinsic-width numeric inputs). */
+  .keep-field {
+    @apply rounded-lg border px-3 py-2 text-sm;
+    border-color: var(--ophalo-border);
+    background-color: var(--ophalo-card);
+    color: var(--ophalo-ink);
+    min-height: 44px;
+  }
+
+  .keep-field:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--keep-accent);
+  }
 }

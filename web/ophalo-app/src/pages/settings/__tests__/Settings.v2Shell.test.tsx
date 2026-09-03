@@ -123,7 +123,7 @@ describe("Settings — V2 shell", () => {
     mockGetSetup.mockReturnValue(new Promise<KeepSetupResult>((r) => { resolveSetup = r; }));
     renderSettings();
 
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: /loading settings/i })).toBeInTheDocument();
     resolveSetup(baseSetup);
     expect(await screen.findByRole("heading", { name: "Company" })).toBeInTheDocument();
   });
@@ -132,7 +132,18 @@ describe("Settings — V2 shell", () => {
     mockGetSetup.mockRejectedValue(new Error("boom"));
     renderSettings();
 
-    expect(await screen.findByText("Could not load settings.")).toBeInTheDocument();
+    expect(await screen.findByText(/couldn't load your settings/i)).toBeInTheDocument();
+  });
+
+  it("gives Response Policy inputs the shared keep-field recipe", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole("tab", { name: "Response Policy" }));
+    await screen.findByRole("heading", { name: "Response Policy" });
+    for (const input of screen.getAllByRole("spinbutton")) {
+      expect(input).toHaveClass("keep-field");
+    }
   });
 
   it("renders the same shell at phone width", async () => {

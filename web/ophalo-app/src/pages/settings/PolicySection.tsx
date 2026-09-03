@@ -70,7 +70,7 @@ export function PolicySection({ setup }: PolicySectionProps) {
             value={firstResponse}
             onChange={(e) => { setFirstResponse(e.target.value); setSaved(false); }}
             required
-            className="w-36 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            className="keep-field w-36"
           />
         </div>
         <div>
@@ -84,7 +84,7 @@ export function PolicySection({ setup }: PolicySectionProps) {
             value={standardResponse}
             onChange={(e) => { setStandardResponse(e.target.value); setSaved(false); }}
             required
-            className="w-36 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            className="keep-field w-36"
           />
         </div>
         <div>
@@ -98,7 +98,7 @@ export function PolicySection({ setup }: PolicySectionProps) {
             value={priorityResponse}
             onChange={(e) => { setPriorityResponse(e.target.value); setSaved(false); }}
             required
-            className="w-36 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            className="keep-field w-36"
           />
         </div>
         <div>
@@ -112,7 +112,7 @@ export function PolicySection({ setup }: PolicySectionProps) {
             value={statusCheck}
             onChange={(e) => { setStatusCheck(e.target.value); setSaved(false); }}
             required
-            className="w-36 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            className="keep-field w-36"
           />
         </div>
 

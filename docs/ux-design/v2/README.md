@@ -13,6 +13,8 @@ production UI upgrade. V2 does not silently erase or rewrite prior records.
 | [Component Spec V2](keep-component-spec-v2.md) | Exact reusable component recipes under locked V2 decisions |
 | [Review Rubric V2](keep-review-rubric-v2.md) | Production-review and release criteria for V2 surfaces |
 | [PWA Mobile Workflow Specification](pwa-mobile-workflow-spec.md) | Cross-app mobile navigation, workflow, authorization, and recovery contract |
+| [Request UI Upgrade 1.1](request-ui-upgrade-1.1.md) | Locked three-column desktop Request Queue + Workbench composition |
+| [Settings & Getting Started UI Upgrade](settings-and-getting-started-ui-upgrade.md) | Locked V2 restyle contract for the Owner/Admin Getting Started + Settings surfaces (preserves ADR-428) |
 
 ## Migration posture
 
