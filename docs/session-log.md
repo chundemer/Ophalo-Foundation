@@ -1,9 +1,9 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-02 — **GAP-067 remains open: Slices 1–4 established tokens and partial
-presentation treatment, but did not complete the retained reference-page port.** GAP-065 Owner/Admin
-financial-review discovery is complete through Slice 3b (`f231126`, `606203d`); its detailed record
-is in [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
+**Last updated:** 2026-09-03 — **Request UI Upgrade 1.1 production implementation is complete and
+mechanically verified; product-owner visual acceptance remains.** The locked contract is
+[Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), and delivery evidence is in
+[BL139](build-log/139-request-ui-upgrade-1.1-implementation.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
@@ -13,7 +13,7 @@ relevant build log.
 - Release priority and acceptance status: [pilot-readiness-bug-tracker.md](pilot-readiness-bug-tracker.md)
 - Product decisions: [decision index](decisions/README.md) and individual ADRs
 - Request Detail / queue execution sequence: [BL137](build-log/137-request-detail-and-queue-usability-handoff.md)
-- Request Detail interaction contract: [Workbench signoff specification](ux-design/v2/request-detail-workbench-signoff-spec.md)
+- Current Request Detail interaction contract: [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md)
 - Actual Work closeout/replacement contract: [ADR-494](decisions/ADR-494-actual-work-paper-compatible-pilot-upgrade.md), [ADR-493](decisions/ADR-493-actual-work-office-financial-resolution-and-billing-revisions.md), and [BL136 P](build-log/136-P-preflight.md)
 
 ## Current repository state
@@ -22,25 +22,21 @@ relevant build log.
   continuation flow, server-authoritative request-row counts, the Owner/Admin row cue, and the
   persistent Actual Work Review destination. Detailed implementation and commit history are in
   [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
-- GAP-067's revised Request page mockup is the retained desktop visual reference. Its exact
-  presentation contract is in [GAP-067](pilot-readiness-bug-tracker.md#gap-067--request-workspace-presentation-lacks-a-coherent-operational-visual-system).
+- Request UI Upgrade 1.1 now supplies the three-column desktop composition, compact sticky Request
+  strip, frequent communication/share/work actions, and persistent Request Memory rail. Full
+  frontend tests and the production build pass; visual acceptance remains.
 - The controlled pilot keeps the contractor's existing system authoritative for estimates,
   invoices, payments, and accounting. Keep is the factual field record; the existing-ticket
   workflow remains the outage fallback.
 
 ## Next implementation sequence
 
-**Next session: finish GAP-067 against the retained desktop reference.** Slices 1–4 landed
-(`80b853b`, `022bc89`, `63e9906`, `4877c4c`) and established the Request tokens, Slate-50 page
-shell, queue refinements, Anchor label treatment, attention panel, and action hierarchy. They are
-not acceptance evidence for the full port.
-
-The remaining GAP-067 work is the visible workspace composition: anchor the work canvas 24 px from
-the queue divider at its locked `min(100%, 1000px)` width; bring Customer Need into the Request
-Anchor beneath the planning row; finish the consistent card/module spacing and white-surface
-treatment across the Work Canvas; and compare the complete wide and narrow screens directly with
-the retained reference. Preserve all locked GAP-027/GAP-065 queue signals, planning controls,
-financial-review clarifier, composer behavior, authority, and responsive/keyboard behavior.
+**Next session: perform the product-owner visual acceptance pass for Request UI Upgrade 1.1.** Use
+representative dense Requests at 1366×768, 1440×900, and 1920×1080 and verify 100%, 125%, and 150%
+zoom. Confirm the Queue remains fully operational, Customer Need and every authorized frequent
+action remain reachable, the center work column is dominant, and Request Memory is readable
+without horizontal page scroll. Treat findings as bounded refinement unless they change the locked
+interaction or authority model.
 
 Do not begin GAP-042 implementation until GAP-067 passes that screenshot/acceptance review. Its
 read-only placement preflight remains valid: business name is `meQuery.data?.businessName` from the

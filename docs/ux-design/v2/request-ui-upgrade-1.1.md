@@ -2,7 +2,7 @@
 
 **Status:** Locked — product-owner approved 2026-09-03  
 **Scope:** Authenticated Keep Request Queue + selected Request experience  
-**Implementation state:** Approved for implementation; production code not yet migrated  
+**Implementation state:** Production implementation completed 2026-09-03; product-owner visual acceptance pending
 **Primary outcome:** An office user can find a Request, perform the next customer or work action, and understand the complete communication and operational history without losing usable vertical workspace.
 
 ## 1. Decision summary

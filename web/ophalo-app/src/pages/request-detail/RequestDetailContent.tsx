@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from "react";
 import { type KeepRequestDetailResult } from "../../lib/apiClient";
 import { type TimelineFilter } from "./TimelineEvent";
-import { type RequestDetailLayoutProps } from "./DetailPanels";
+import { ServiceLocationPanel, TriagePanel, type RequestDetailLayoutProps } from "./DetailPanels";
 import { RequestDetailAnchor } from "./RequestDetailAnchor";
 import { MobileRequestAnchor, MobileActionRail } from "./MobileRequestAnchor";
 import { type UnifiedComposerHandle } from "./UnifiedComposer";
@@ -17,6 +17,11 @@ import { RequestDetailWorkCanvas } from "./RequestDetailWorkCanvas";
 import { RequestDetailActualWorkSection } from "./RequestDetailActualWorkSection";
 import { RecordDetailsSection } from "./RecordDetailsSection";
 import { ActualWorkHistoryCard } from "./ActualWorkHistoryCard";
+import { TimingPanel } from "./TimingPanel";
+import { TeamSection } from "./TeamSection";
+import { RequestMemoryRail } from "./RequestMemoryRail";
+import { ALWAYS_HIDDEN_EVENT_TYPES } from "./helpers";
+import { formatNaPhone } from "../../components/quick-capture/utils";
 
 interface RequestDetailContentProps extends RequestDetailLayoutProps {
   detail: KeepRequestDetailResult;
@@ -42,6 +47,14 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
   currentAccountUserId?: string;
   focusPanel?: string;
   onActualWorkReviewSuccess?: () => void;
+  businessPageUrl?: string | null;
+}
+
+function requestContactPreferenceLabel(preference: string | null | undefined): string | null {
+  if (preference === "phone_call") return "Prefers call";
+  if (preference === "text_message") return "Prefers text";
+  if (preference === "email") return "Prefers email";
+  return null;
 }
 
 // RD-019A: this component is the page-level Request Detail coordinator. It owns authoritative
@@ -247,22 +260,67 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
     };
   })();
 
+  const requestMemoryDetails = (
+    <div className="space-y-4">
+      <section className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)]">Customer contact</p>
+        <div className="mt-2 space-y-1 text-sm text-[var(--ophalo-ink)]">
+          {detail.customerPhone && <p>{formatNaPhone(detail.customerPhone)}</p>}
+          {detail.customerEmail && <p className="break-all">{detail.customerEmail}</p>}
+          {requestContactPreferenceLabel(detail.contactPreference) && (
+            <p className="text-xs font-semibold text-[var(--keep-accent)]">{requestContactPreferenceLabel(detail.contactPreference)}</p>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-[var(--ophalo-border)] p-3">
+        <ServiceLocationPanel detail={detail} onEditLocation={onEditLocation} />
+      </section>
+
+      <section className="rounded-lg border border-[var(--ophalo-border)] p-3">
+        <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact onOpenReassign={props.onOpenReassignOwner} onOpenWatchers={props.onOpenWatchers} />
+      </section>
+
+      <section className="space-y-3 rounded-lg border border-[var(--ophalo-border)] p-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--keep-request-eyebrow)]">Planning</p>
+        <TriagePanel detail={detail} onDetailUpdated={onDetailUpdated} strip />
+        <TimingPanel requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} strip />
+      </section>
+
+      {visitHistoryBlock}
+      {recordDetailsBlock}
+    </div>
+  );
+
+  const visibleEvents = detail.events.filter((event) => !ALWAYS_HIDDEN_EVENT_TYPES.has(event.eventType));
+  const requestMemoryRail = (
+    <RequestMemoryRail
+      events={visibleEvents}
+      details={requestMemoryDetails}
+      canLogExternalContact={detail.availableActions.canLogExternalContact}
+      canAddInternalNote={detail.availableActions.canAddInternalNote}
+      onContactCustomer={() => onContactLaunched("outbound", detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other")}
+      onAddInternalNote={() => composerRef.current?.activateInternalNote()}
+    />
+  );
+
+  const requestAnchor = (
+    <RequestDetailAnchor
+      {...layoutProps}
+      canRecordShareIntent={props.canRecordShareIntent}
+      needsShare={props.needsShare}
+      onOpenShareDrawer={props.onOpenShareDrawer}
+      onOpenClearAttention={onOpenClearAttention}
+      onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
+      actualWorkShortcut={actualWorkShortcut}
+      financialReviewShortcut={financialReviewShortcut}
+      businessPageUrl={props.businessPageUrl}
+    />
+  );
+
   return (
     <div ref={rootRef} onFocus={handleCanvasFocus} onBlur={handleCanvasBlur} className="flex flex-1 min-h-0 min-w-0 flex-col">
-      {isWide ? (
-        <RequestDetailAnchor
-          {...layoutProps}
-          canRecordShareIntent={props.canRecordShareIntent}
-          needsShare={props.needsShare}
-          onOpenShareDrawer={props.onOpenShareDrawer}
-          onOpenClearAttention={onOpenClearAttention}
-          onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
-          actualWorkShortcut={actualWorkShortcut}
-          financialReviewShortcut={financialReviewShortcut}
-        />
-      ) : (
-        <MobileRequestAnchor detail={detail} />
-      )}
+      {!isWide && <MobileRequestAnchor detail={detail} />}
       <RequestDetailWorkCanvas
         isWide={isWide}
         requestId={requestId}
@@ -287,6 +345,8 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         activityBlock={activityBlock}
         recordDetailsBlock={recordDetailsBlock}
         visitHistoryBlock={visitHistoryBlock}
+        requestAnchor={isWide ? requestAnchor : undefined}
+        requestMemoryRail={isWide ? requestMemoryRail : undefined}
       />
       {!isWide && (
         <MobileActionRail

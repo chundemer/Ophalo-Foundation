@@ -70,17 +70,17 @@ function order(container: HTMLElement, ids: string[]): number[] {
 }
 
 describe("RequestDetailWorkCanvas", () => {
-  it("renders one scroll surface with the left-anchored 1000px Work Canvas frame", () => {
+  it("renders one shared scroll surface with the centered 1440px three-column frame", () => {
     const { container } = renderCanvas(true);
     const scroll = container.querySelectorAll("[data-request-detail-work-canvas]");
     expect(scroll).toHaveLength(1);
     expect(scroll[0].className).toContain("overflow-y-auto");
     expect(scroll[0].className).toContain("min-w-0");
     const frame = scroll[0].firstElementChild as HTMLElement;
-    expect(frame.className).toContain("max-w-[1000px]");
-    expect(frame.className).not.toContain("mx-auto");
-    const context = scroll[0].querySelector("[data-request-work-canvas-context]");
-    expect(context?.className).toContain("grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]");
+    expect(frame.className).toContain("max-w-[1440px]");
+    expect(frame.className).toContain("mx-auto");
+    const context = scroll[0].querySelector("[data-request-three-column-workbench]");
+    expect(context?.className).toContain("grid-cols-[minmax(0,1fr)_300px]");
   });
 
   it("desktop: Customer Need moves to the Anchor; passive Record details and Activity occupy the supporting context column", () => {

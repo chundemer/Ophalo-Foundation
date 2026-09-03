@@ -47,7 +47,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("UnifiedComposer — activateCustomerUpdate imperative handle", () => {
+describe("UnifiedComposer — imperative activation handles", () => {
   it("does not switch tabs or focus the message textarea merely because the request loaded", () => {
     const ref = createRef<UnifiedComposerHandle>();
     renderComposer(ref);
@@ -85,5 +85,17 @@ describe("UnifiedComposer — activateCustomerUpdate imperative handle", () => {
     });
 
     expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: "auto" }));
+  });
+
+  it("switches to and focuses Internal note when activated from Request Memory", () => {
+    const ref = createRef<UnifiedComposerHandle>();
+    renderComposer(ref);
+
+    act(() => {
+      ref.current?.activateInternalNote();
+    });
+
+    expect(screen.getByRole("tab", { name: "Internal note" })).toHaveAttribute("aria-selected", "true");
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Internal note — not visible to customer" }));
   });
 });

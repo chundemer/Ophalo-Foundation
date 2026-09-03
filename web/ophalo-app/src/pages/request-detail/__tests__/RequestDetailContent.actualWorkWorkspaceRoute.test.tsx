@@ -18,6 +18,8 @@ vi.mock("../DetailPanels", () => ({
   HeroAttentionBanner: () => null,
   OriginalRequestCard: () => null,
   RelatedWorkPanel: () => null,
+  ServiceLocationPanel: () => null,
+  TriagePanel: () => null,
   CustomerSignalPanel: () => null,
   FeedbackSummaryCard: () => null,
   SourceMetaPanel: () => null,
@@ -30,6 +32,7 @@ vi.mock("../UnifiedComposer", () => ({ UnifiedComposer: () => null }));
 vi.mock("../RequestDetailActivity", () => ({ RequestDetailActivity: () => null }));
 vi.mock("../ActualWorkHistoryCard", () => ({ ActualWorkHistoryCard: () => null }));
 vi.mock("../TeamSection", () => ({ TeamSection: () => null }));
+vi.mock("../TimingPanel", () => ({ TimingPanel: () => null }));
 vi.mock("../ActualWorkCard", () => ({
   ActualWorkCard: ({ onStartCapture }: { onStartCapture: (intent?: string) => void }) => (
     <button onClick={() => onStartCapture("transcribe")}>start-capture</button>

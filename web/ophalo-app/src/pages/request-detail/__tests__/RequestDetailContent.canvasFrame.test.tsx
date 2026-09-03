@@ -58,7 +58,7 @@ function baseDetail(): KeepRequestDetailResult {
 }
 
 describe("RequestDetailContent — Canvas max-width frame", () => {
-  it("wraps the Canvas content in the left-anchored 1000px frame inside the sole scroll region", () => {
+  it("uses the centered focused-request frame inside the sole scroll region", () => {
     const { container } = render(
       <RequestDetailContent
         detail={baseDetail()}
@@ -91,8 +91,8 @@ describe("RequestDetailContent — Canvas max-width frame", () => {
     const scrollRegion = container.querySelector(".overflow-y-auto");
     expect(scrollRegion).not.toBeNull();
     const frame = scrollRegion?.firstElementChild as HTMLElement | null;
-    expect(frame?.className).toContain("max-w-[1000px]");
-    expect(frame?.className).not.toContain("mx-auto");
+    expect(frame?.className).toContain("max-w-4xl");
+    expect(frame?.className).toContain("mx-auto");
   });
 });
 

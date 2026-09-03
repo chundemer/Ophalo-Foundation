@@ -22,6 +22,8 @@ vi.mock("../DetailPanels", () => ({
   HeroAttentionBanner: () => <div data-testid="section-attention" />,
   OriginalRequestCard: () => null,
   RelatedWorkPanel: () => null,
+  ServiceLocationPanel: () => null,
+  TriagePanel: () => null,
   CustomerSignalPanel: () => null,
   FeedbackSummaryCard: () => null,
   SourceMetaPanel: () => null,
@@ -39,6 +41,7 @@ vi.mock("../ActualWorkCard", () => ({ ActualWorkCard: () => null }));
 vi.mock("../ActualWorkHistoryCard", () => ({ ActualWorkHistoryCard: () => null }));
 vi.mock("../ActualWorkComposer", () => ({ ActualWorkComposer: () => null }));
 vi.mock("../TeamSection", () => ({ TeamSection: () => null }));
+vi.mock("../TimingPanel", () => ({ TimingPanel: () => null }));
 vi.mock("../useActualWorkHistory", () => ({
   useActualWorkHistory: () => ({ state: { status: "loaded", submittedVisits: [] }, retry: vi.fn() }),
 }));

@@ -626,6 +626,18 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   // GAP-042: businessName is minimal authenticated workspace-shell context, sourced from the
   // shared ["me"] cache — every role that can reach Detail (Viewer included, via direct link).
   const meQuery = useQuery({ queryKey: ["me"], queryFn: api.getMe });
+  const canReadBusinessPage = meQuery.data?.accountRole === "owner" || meQuery.data?.accountRole === "admin";
+  const intakeQuery = useQuery({
+    queryKey: ["intake"],
+    queryFn: api.getIntake,
+    enabled: canReadBusinessPage,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const publicBaseUrl = ((import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined) ?? "").replace(/\/$/, "");
+  const businessPageUrl = intakeQuery.data?.hasActiveLink && intakeQuery.data.publicSlug
+    ? `${publicBaseUrl}/keep/s/${intakeQuery.data.publicSlug}`
+    : null;
 
   const needsShareEffective = !shareCleared && (detail?.needsShare ?? false);
   const canShare = detail?.availableActions.canRecordShareIntent ?? false;
@@ -835,6 +847,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         currentAccountUserId={meQuery.data?.accountUserId}
         focusPanel={focusPanel}
         onActualWorkReviewSuccess={handleActualWorkReviewSuccess}
+        businessPageUrl={businessPageUrl}
       />}
     </div>
   );
