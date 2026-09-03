@@ -1,9 +1,12 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-03 — **Request UI Upgrade 1.1 production implementation and its first
-authenticated hierarchy refinement are complete; final product-owner visual acceptance remains.** The locked contract is
-[Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), and delivery evidence is in
-[BL139](build-log/139-request-ui-upgrade-1.1-implementation.md).
+**Last updated:** 2026-09-03 — **Customer request page (Keep tracker) received a two-column layout,
+contact card, and link-token access copy correction (commit `75f472f`). Next implementation batch
+is GAP-033 — public-intake trust; see Next implementation sequence for its GAP-039 ordering
+dependency.** Request UI Upgrade 1.1 implementation is complete (locked contract
+[Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), delivery evidence
+[BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)); its product-owner visual
+acceptance pass is still outstanding.
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
@@ -33,12 +36,30 @@ relevant build log.
 
 ## Next implementation sequence
 
-**Next session: perform the product-owner visual acceptance pass for Request UI Upgrade 1.1.** Use
-representative dense Requests at 1366×768, 1440×900, and 1920×1080 and verify 100%, 125%, and 150%
-zoom. Confirm the Queue remains fully operational, Customer Need and every authorized frequent
-action remain reachable, the center work column is dominant, and Request Memory is readable
-without horizontal page scroll. Treat findings as bounded refinement unless they change the locked
-interaction or authority model.
+**Next implementation batch: GAP-033 — public-intake trust and tracker access truthfulness.**
+Full scope is [GAP-033](pilot-readiness-bug-tracker.md#gap-033--public-intake-does-not-establish-sufficient-customer-trust-or-return-continuity)
+(P1, `ophalo-web`). It corrects the public request journey so it does not overstate what the
+link-token model provides and does not collect personal data before establishing trust:
+
+- Show business identity and configured public contact before asking for customer address/contact
+  data; place factual privacy/use disclosures before the relevant fields.
+- Keep email visible and optional; land a successful submission directly on its tracker; ship a
+  real privacy-policy link.
+- Remove public copy that promises automatic tracker-link email, verification, or unsupported
+  security properties. (Tracker-page access copy was corrected ahead of this batch in commit
+  `75f472f`; the intake form still uses "private page"/"private link" wording.)
+- Audit the public tracker event-feed for exposure: serialize an explicit allowlist of
+  customer-relevant event types and message sources; internal activity must never reach
+  `page.events`.
+
+**Ordering dependency:** the tracker's Implementation Order is GAP-039 → GAP-033 → GAP-040, and
+GAP-039 (Sentry observability, P0) is still Open. Confirm GAP-039 sequencing before starting
+GAP-033; do not treat this entry as a decision to ship GAP-033 before GAP-039.
+
+Request UI Upgrade 1.1 still needs the product-owner visual acceptance pass (dense Requests at
+1366×768, 1440×900, 1920×1080; 100/125/150% zoom; Queue operational, frequent actions reachable,
+center work column dominant, Request Memory readable without horizontal page scroll). That is a
+product-owner review task, not a coding batch, and is independent of GAP-033.
 
 Do not begin GAP-042 implementation until GAP-067 passes that screenshot/acceptance review. Its
 read-only placement preflight remains valid: business name is `meQuery.data?.businessName` from the
