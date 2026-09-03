@@ -21,6 +21,7 @@ import { TrackerStatusCard } from "./TrackerStatusCard";
 import { TrackerActionCard } from "./TrackerActionCard";
 import { TrackerInitialRequestCard } from "./TrackerInitialRequestCard";
 import { TrackerHistoryCard } from "./TrackerHistoryCard";
+import { TrackerContactCard } from "./TrackerContactCard";
 
 export type { CustomerPageData };
 
@@ -219,9 +220,39 @@ export function CustomerTrackerView({
     );
   }
 
+  const hasContact =
+    (page.phone != null && page.phone.trim().length > 0) ||
+    (page.websiteUrl != null && page.websiteUrl.startsWith("https://"));
+
+  const initialRequestCard = (page.description || page.intakeUrgency) ? (
+    <TrackerInitialRequestCard
+      description={page.description}
+      intakeUrgency={page.intakeUrgency}
+      businessName={page.businessName}
+    />
+  ) : null;
+
+  const contactCard = hasContact ? (
+    <TrackerContactCard
+      businessName={page.businessName}
+      phone={page.phone}
+      websiteUrl={page.websiteUrl}
+    />
+  ) : null;
+
+  const historyCard = page.events !== null ? (
+    <TrackerHistoryCard
+      events={events}
+      referenceCode={page.referenceCode}
+      businessName={page.businessName}
+      initials={initials}
+      latestBusinessUpdate={latestBusinessUpdate}
+    />
+  ) : null;
+
   return (
     <main className="min-h-screen px-4 py-6 sm:py-10" style={trackerCanvasStyle}>
-      <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
+      <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5 lg:max-w-5xl">
 
         {welcomeVisible && (
           <div className="flex items-start justify-between gap-4 rounded-2xl bg-[var(--ophalo-navy)] px-5 py-4 sm:px-6">
@@ -245,65 +276,68 @@ export function CustomerTrackerView({
         <KeepBusinessHeader
           businessName={page.businessName}
           logoUrl={page.logoUrl}
-          label="Private Request Page"
-          description={`This private page keeps your request details and updates from ${page.businessName} in one place.`}
+          label="Your Request Page"
+          description={`This page keeps your request details and updates from ${page.businessName} in one place. Anyone with this link can open it, so keep it to yourself.`}
           className="pb-1"
         />
 
-        <TrackerStatusCard
-          status={page.status}
-          origin={page.origin}
-          businessName={page.businessName}
-          referenceCode={page.referenceCode}
-          latestBusinessUpdate={latestBusinessUpdate}
-          copied={copied}
-          canSharePage={canSharePage}
-          onShareOrCopy={shareOrCopyLink}
-        />
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
 
-        {(hasActions || phase.kind === "feedback_sent") && (
-          <TrackerActionCard
-            phase={phase}
-            businessName={page.businessName}
-            message={message}
-            onMessageChange={setMessage}
-            comment={comment}
-            onCommentChange={setComment}
-            wasResolved={wasResolved}
-            onWasResolvedChange={setWasResolved}
-            feedbackSubmittedAtUtc={page.feedbackSubmittedAtUtc}
-            errorMsg={errorMsg}
-            isSubmitting={isSubmitting}
-            selectedAction={selectedAction}
-            hasPrimaryAction={hasPrimaryAction}
-            availableSecondaryActions={availableSecondaryActions}
-            hasCancellationAction={hasCancellationAction}
-            hasFeedbackAction={hasFeedbackAction}
-            onOpenAction={openAction}
-            onBackToIdle={backToIdle}
-            onSubmitMessage={submitMessage}
-            onSubmitFeedback={submitFeedback}
-            onDismissSent={dismissSent}
-          />
-        )}
+          <div className="space-y-4 sm:space-y-5">
+            <TrackerStatusCard
+              status={page.status}
+              origin={page.origin}
+              businessName={page.businessName}
+              referenceCode={page.referenceCode}
+              latestBusinessUpdate={latestBusinessUpdate}
+              copied={copied}
+              canSharePage={canSharePage}
+              onShareOrCopy={shareOrCopyLink}
+            />
 
-        {(page.description || page.intakeUrgency) && (
-          <TrackerInitialRequestCard
-            description={page.description}
-            intakeUrgency={page.intakeUrgency}
-            businessName={page.businessName}
-          />
-        )}
+            {(hasActions || phase.kind === "feedback_sent") && (
+              <TrackerActionCard
+                phase={phase}
+                businessName={page.businessName}
+                message={message}
+                onMessageChange={setMessage}
+                comment={comment}
+                onCommentChange={setComment}
+                wasResolved={wasResolved}
+                onWasResolvedChange={setWasResolved}
+                feedbackSubmittedAtUtc={page.feedbackSubmittedAtUtc}
+                errorMsg={errorMsg}
+                isSubmitting={isSubmitting}
+                selectedAction={selectedAction}
+                hasPrimaryAction={hasPrimaryAction}
+                availableSecondaryActions={availableSecondaryActions}
+                hasCancellationAction={hasCancellationAction}
+                hasFeedbackAction={hasFeedbackAction}
+                onOpenAction={openAction}
+                onBackToIdle={backToIdle}
+                onSubmitMessage={submitMessage}
+                onSubmitFeedback={submitFeedback}
+                onDismissSent={dismissSent}
+              />
+            )}
 
-        {page.events !== null && (
-          <TrackerHistoryCard
-            events={events}
-            referenceCode={page.referenceCode}
-            businessName={page.businessName}
-            initials={initials}
-            latestBusinessUpdate={latestBusinessUpdate}
-          />
-        )}
+            {/* Context cards render here on mobile; on lg+ they move to the aside. */}
+            <div className="space-y-4 sm:space-y-5 lg:hidden">
+              {initialRequestCard}
+              {contactCard}
+            </div>
+
+            {historyCard}
+          </div>
+
+          {(initialRequestCard || contactCard) && (
+            <aside className="mt-4 hidden space-y-4 sm:space-y-5 lg:sticky lg:top-6 lg:mt-0 lg:block lg:self-start">
+              {initialRequestCard}
+              {contactCard}
+            </aside>
+          )}
+
+        </div>
 
       </div>
 

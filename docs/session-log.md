@@ -53,6 +53,11 @@ authenticated `/me` endpoint and belongs in shell chrome, outside Request Anchor
   integrity (GAP-016/021/051), then the remaining tracker order.
 - **Minimum Office Closeout:** Billing Revision, handoff, and correction/adjustment design resume
   only after the controlled-pilot and rehearsal gates; see [BL135](build-log/135-minimum-office-closeout-mechanical-preflight.md).
+- **Workbench background brand alignment:** `ophalo-app` uses an off-spec cool gray page
+  background. Align it to Canvas `#F8F6F1` (`--ophalo-canvas`) per
+  [BRAND.md](brand-kit/BRAND.md), with a token audit for other hardcoded grays. Internal staff
+  surface only — not a pilot blocker; run as its own small pass after the customer request page
+  ships.
 
 ## Guardrails
 

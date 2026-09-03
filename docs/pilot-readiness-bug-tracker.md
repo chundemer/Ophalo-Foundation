@@ -65,6 +65,8 @@ Complete each numbered slice with focused automated coverage and a production-ca
 
 Before asking for customer address/contact data, show business identity and configured public contact information when available; place factual privacy/use disclosures before relevant fields; keep email visible and optional; take a successful submission directly to its private tracker; and provide a real privacy-policy link. Public copy must not promise automatic tracker-link email, verification, or unsupported security properties.
 
+Additionally, audit the private tracker's request-history event feed for public exposure: the public tracker endpoint must serialize an explicit allowlist of customer-relevant event types and message sources, not "all events minus a blocklist." Internal activity (financial review, tech assignment, internal notes, raw status thrash) must never reach `page.events`. Business-authored customer messages and customer-friendly lifecycle phrasing are in scope to show; anything else is excluded by default.
+
 ### GAP-040 — Marketing site does not accurately represent the current product or launch posture
 
 **Status:** Open

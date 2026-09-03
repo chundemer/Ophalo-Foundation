@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -94,9 +95,11 @@ export function KeepConfiguredContact({
           href={safeWebsiteUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-medium text-[var(--keep-accent)] underline-offset-2 hover:underline"
+          className="inline-flex items-center gap-1 font-medium text-[var(--keep-accent)] underline-offset-2 hover:underline"
         >
           Visit website
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">(opens in a new tab)</span>
         </a>
       )}
     </div>

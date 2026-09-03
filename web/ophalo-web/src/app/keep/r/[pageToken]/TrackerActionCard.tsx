@@ -174,6 +174,9 @@ export function TrackerActionCard({
             rows={4}
             className="w-full resize-none rounded-lg border border-[var(--ophalo-border)] bg-card px-4 py-3 text-sm leading-6 text-foreground outline-none transition focus:border-[var(--keep-accent)] focus:ring-1 focus:ring-[var(--keep-accent)] disabled:opacity-50"
           />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Please don&apos;t include passwords, full card numbers, or other sensitive details.
+          </p>
           {errorMsg && (
             <p aria-live="polite" className="mt-2 text-sm text-destructive">{errorMsg}</p>
           )}
