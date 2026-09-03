@@ -1,8 +1,10 @@
 # Request Detail / Workbench — Production Interaction Specification
 
-**Status:** Locked — approved 2026-08-22; amended 2026-08-22 for Actual Work-only pilot scope; amended 2026-08-25 for desktop closeout; amended 2026-09-01 for Owner/Admin action clarity
+**Status:** Locked — approved 2026-08-22; amended 2026-08-22 for Actual Work-only pilot scope; amended 2026-08-25 for desktop closeout; amended 2026-09-01 for Owner/Admin action clarity; desktop composition superseded 2026-09-03 by Request UI Upgrade 1.1
 **Purpose:** One implementation-facing specification of the already locked Request Detail decisions.
 **Authority:** UI-001 through UI-013 in the [V2 Decision Register](keep-ui-production-decision-register.md), plus ADR-380, ADR-434 through ADR-441, ADR-482, ADR-487, and server-authored detail/action metadata. Where a server response does not authorize an action, this specification requires the UI to omit it.
+
+> **2026-09-03 supersession:** [Request UI Upgrade 1.1](request-ui-upgrade-1.1.md) replaces this document's conflicting two-column/no-right-rail desktop composition, full fixed-Anchor, and desktop scroll rules. The operational, authorization, communication, concurrency, attention, and price-blind Actual Work contracts remain in force as specified by Upgrade 1.1 section 2.
 
 ## Ratified interaction decisions
 

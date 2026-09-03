@@ -72,9 +72,8 @@ state transitions.
 
 ### UI-001 — Desktop Request Queue + Workbench shell
 
-**Status:** Locked — 2026-08-21  
-**Decision:** The authenticated desktop Requests surface uses a two-pane master-detail workbench: a
-focused operational Request Queue on the left and the selected request workbench on the right. The
+**Status:** Locked — 2026-08-21; desktop composition amended 2026-09-03 by Request UI Upgrade 1.1
+**Decision:** The authenticated desktop Requests surface uses an operational Request Queue on the left and, when usable width permits, a selected Request area composed as Active Request Work plus Request Memory. The complete three-column, scroll, responsive, toolbar, and Request Memory contract is locked in [Request UI Upgrade 1.1](request-ui-upgrade-1.1.md). The
 queue is not an inbox or generic global navigation; it uses Requests, Needs Attention, My Work/Assigned,
 ownership, and continuity language.
 
@@ -84,9 +83,10 @@ opening/closing a standalone detail page repeatedly.
 **Layout rules:**
 
 - The Request Queue uses a bounded 320–360 CSS-pixel width.
-- Two panes render only when the available application workspace also protects a usable selected
-  workbench minimum. This is a container/minimum-width rule, not a device label or a fixed viewport
-  breakpoint; it must be reviewed at 100%, 125%, and 150% browser zoom with realistic populated data.
+- The three-column workbench renders only when the available application workspace protects the
+  Queue, a minimum 620 CSS-px Active Request Work column, and a 300–340 CSS-px Request Memory rail.
+  This is a container/minimum-width rule, not a device label or fixed viewport breakpoint; it must be
+  reviewed at 100%, 125%, and 150% browser zoom with realistic populated data.
 - When that condition is not met, Keep renders the focused one-pane Queue → request drill-down
   presentation. It does not squeeze both panes into an operationally unusable layout.
 - No manual collapsible-queue control is included in this first redesign release.
