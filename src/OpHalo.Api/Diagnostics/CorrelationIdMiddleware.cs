@@ -16,6 +16,10 @@ public sealed class CorrelationIdMiddleware(RequestDelegate next, ILogger<Correl
     {
         var correlationId = Guid.NewGuid().ToString("n");
 
+        // Also exposed on HttpContext.Items so capture-time consumers (e.g. the Sentry event
+        // processor) can read it without depending on the response header write below.
+        context.Items[HeaderName] = correlationId;
+
         context.Response.OnStarting(() =>
         {
             context.Response.Headers[HeaderName] = correlationId;

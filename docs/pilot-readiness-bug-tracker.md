@@ -45,7 +45,7 @@ Complete each numbered slice with focused automated coverage and a production-ca
 **Severity:** P0
 **Area:** Production reliability and internal product operations
 
-**Locked decision:** Use **Sentry** for redacted server and browser error capture, with release/environment identity and **founder email** as the initial alert destination. Do not enable session replay, broad behavioral analytics, a data warehouse, or an owner-facing analytics dashboard in this pilot slice.
+**Locked decision:** Use **Sentry** for redacted server and browser error capture, with release/environment identity and **founder email** as the initial alert destination. The telemetry boundary, production-configuration, source-map, and operational-gate contract is [ADR-495](decisions/ADR-495-gap-039-redacted-error-capture-and-release-safety.md). Do not enable session replay, broad behavioral analytics, a data warehouse, or an owner-facing analytics dashboard in this pilot slice.
 
 **Implementation order:**
 
@@ -54,6 +54,8 @@ Complete each numbered slice with focused automated coverage and a production-ca
 3. Add the Sentry React integration to the authenticated PWA with release/environment identity. Validate `VITE_PUBLIC_BASE_URL` at startup/build time and make missing or malformed configuration fail safely rather than allowing request-detail `.replace()` calls to throw. Do not add session replay.
 4. Configure Railway health checking against `/health/ready`, Sentry environment/DSN/release configuration, and the founder-email alert rule. Record a short runbook: inspect release/correlation ID, check health and Railway logs, decide mitigation versus rollback, and record the incident.
 5. Verify a production candidate with controlled server and browser failures, normal/unhealthy health responses, an invalid public-base URL, alert delivery, release identity, and automated redaction checks for representative PII and public-token paths.
+
+**Delivered:** Steps 1–2 — the API telemetry boundary (`SentryTelemetryScrubber` allowlist rebuild with residual-token discard), the `Sentry.AspNetCore` integration, the authenticated-only `account_id` / correlation-id tags, and the `Sentry__Dsn` production startup requirement — are implemented and accepted ([BL141](build-log/141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md), 2026-09-03). Steps 3–5 remain.
 
 **Done when:** Controlled server and browser failures arrive in Sentry with useful release/correlation context and no protected data; founder email alerting works; readiness/availability monitoring is verified; invalid required public configuration fails safely; and the runbook is usable by the founder.
 

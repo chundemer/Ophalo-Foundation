@@ -35,6 +35,9 @@ using OpHalo.Foundation.Infrastructure.Push;
 using OpHalo.Foundation.Infrastructure.Security;
 using OpHalo.Foundation.Infrastructure.Services;
 using OpHalo.SharedKernel.Abstractions;
+using Sentry;
+using Sentry.AspNetCore;
+using Sentry.Extensibility;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +52,34 @@ if (!string.IsNullOrWhiteSpace(railwayPort))
 // appsettings.json already sets "Microsoft.AspNetCore": "Warning" but this code-level filter
 // makes the intent explicit and durable against config changes (GAP-013, G8b).
 builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+
+// --- Sentry: errors-only, redacted server error capture (GAP-039, ADR-495) ---
+// The DSN is deployment configuration. Without it (local/test) the SDK initializes but performs
+// no external send; ProductionConfigurationValidator requires Sentry__Dsn outside local/test so a
+// production deploy proves the integration is live. The retained-data allowlist and the final
+// discard rule live in SentryTelemetryScrubber; RequestContextSentryEventProcessor supplies the
+// correlation-id and (authenticated-only) account_id tags.
+builder.WebHost.UseSentry(options =>
+{
+    var dsn = builder.Configuration["Sentry:Dsn"];
+
+    // Only initialize the SDK when a DSN is configured. Without one (local dev, tests) the
+    // integration is a complete no-op and never touches the global Sentry hub.
+    options.InitializeSdk = !string.IsNullOrWhiteSpace(dsn);
+    if (!string.IsNullOrWhiteSpace(dsn))
+        options.Dsn = dsn;
+
+    options.Release = ReleaseIdentity.Current;
+    options.Environment = builder.Environment.EnvironmentName.ToLowerInvariant();
+
+    options.SendDefaultPii = false;
+    options.MaxRequestBodySize = RequestSize.None;
+    options.MaxBreadcrumbs = 0;
+    options.AutoSessionTracking = false;
+    options.CaptureFailedRequests = false;
+    options.SetBeforeBreadcrumb(static (_, _) => null);
+    options.SetBeforeSend(static (SentryEvent evt, SentryHint _) => SentryTelemetryScrubber.Scrub(evt));
+});
 
 // RFC 7807 ProblemDetails support across all error responses.
 builder.Services.AddProblemDetails();
@@ -182,6 +213,9 @@ else if (r2Settings.IsConfigured)
 
 // --- Auth ---
 builder.Services.AddHttpContextAccessor();
+
+// Supplies the correlation-id and authenticated-only account_id Sentry tags (ADR-495 D2).
+builder.Services.AddSingleton<ISentryEventProcessor, RequestContextSentryEventProcessor>();
 builder.Services.Configure<AuthCookieSettings>(builder.Configuration.GetSection("Auth"));
 builder.Services.AddSingleton<AuthCookieOptionsFactory>();
 
@@ -322,6 +356,14 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     }
 }).DisableRateLimiting();
 
+// Test-host only (GAP-039, ADR-495): a deterministic unhandled failure so integration tests can
+// prove the Sentry boundary observes the unhandled-exception path without changing the API's
+// ProblemDetails/status contract. Never mapped outside the "Testing" environment.
+if (app.Environment.IsEnvironment("Testing"))
+{
+    app.MapGet("/__test/unhandled", ThrowTestFailure);
+}
+
 // --- Routes ---
 app.MapKeepEndpoints();
 app.MapPriceBookEndpoints();
@@ -344,6 +386,11 @@ app.MapInternalEntitlementsEndpoints();
 app.MapBadgeEndpoints();
 
 app.Run();
+
+// Test-host only (GAP-039): raises an unhandled exception so integration tests can assert the
+// Sentry boundary observes the failure path without altering the API's 500/status contract.
+static IResult ThrowTestFailure(string? note) =>
+    throw new InvalidOperationException($"deliberate unhandled test failure {note}");
 
 // Railway supplies PostgreSQL's DATABASE_URL in URI form. Npgsql uses keyword/value connection
 // strings, so normalize that provider-standard URI at the configuration boundary while retaining

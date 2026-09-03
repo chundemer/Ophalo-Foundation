@@ -12,6 +12,7 @@
     <!-- Explicitly override ASP.NET Core 10's vulnerable transitive 2.0.0 dependency.
          Stay on the compatible 2.x line; 2.7.5 is the first patched release for CVE-2026-49451. -->
     <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageReference Include="Sentry.AspNetCore" Version="6.10.0" />
   </ItemGroup>
 
   <ItemGroup>

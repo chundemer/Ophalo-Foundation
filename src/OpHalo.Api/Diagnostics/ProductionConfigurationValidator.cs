@@ -34,6 +34,15 @@ public static class ProductionConfigurationValidator
         else if (!fromAddress.Contains('@'))
             missing.Add("Resend:FromAddress (not a valid address)");
 
+        // GAP-039 / ADR-495 D3: a production deployment must prove the Sentry integration is live.
+        // A missing or malformed DSN is a configuration error, not a silent no-op.
+        var sentryDsn = configuration["Sentry:Dsn"];
+        if (string.IsNullOrWhiteSpace(sentryDsn))
+            missing.Add("Sentry__Dsn");
+        else if (!Uri.TryCreate(sentryDsn, UriKind.Absolute, out var dsnUri)
+                 || (dsnUri.Scheme != Uri.UriSchemeHttps && dsnUri.Scheme != Uri.UriSchemeHttp))
+            missing.Add("Sentry__Dsn (not a valid DSN)");
+
         return missing;
     }
 

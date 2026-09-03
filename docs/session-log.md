@@ -1,8 +1,9 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-03 — **Customer request page (Keep tracker) received a two-column layout,
-contact card, and link-token access copy correction (commit `75f472f`). Next implementation batch
-is GAP-039 — production observability (Sentry); GAP-033 (public-intake trust) follows it.** Request
+**Last updated:** 2026-09-03 — **GAP-039 Batch 1 (API telemetry boundary + Sentry error capture)
+is implemented and accepted ([BL141](build-log/141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md)).
+Next implementation batch is GAP-039 Batch 2 — authenticated-PWA Sentry, the `VITE_PUBLIC_BASE_URL`
+shared accessor and fail-safe UI, and source-map upload.** Request
 UI Upgrade 1.1 implementation is complete (locked contract
 [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), delivery evidence
 [BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)); its product-owner visual
@@ -33,20 +34,29 @@ relevant build log.
 - The controlled pilot keeps the contractor's existing system authoritative for estimates,
   invoices, payments, and accounting. Keep is the factual field record; the existing-ticket
   workflow remains the outage fallback.
+- GAP-039 Batch 1 is complete ([BL141](build-log/141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md)):
+  the API host has an errors-only redacted Sentry boundary (`Sentry.AspNetCore` 6.10.0,
+  `SentryTelemetryScrubber` allowlist rebuild + residual-token discard,
+  `RequestContextSentryEventProcessor` for the correlation-id / authenticated-only account-id
+  tags), `Sentry__Dsn` is a production startup requirement, and the SDK is a full no-op without a
+  DSN. No response, health, or logging behavior changed. Full unit + integration + architecture
+  suites pass.
 
 ## Next implementation sequence
 
-**Next implementation batch: GAP-039 — production failures and pilot health are not observable
-enough to earn trust.** Full scope is
+**Next implementation batch: GAP-039 Batch 2 — authenticated-PWA Sentry and configuration safety.**
+Full scope is
 [GAP-039](pilot-readiness-bug-tracker.md#gap-039--production-failures-and-pilot-health-are-not-observable-enough-to-earn-trust)
-(P0, Active Work). Locked decision: Sentry for redacted server + browser error capture with
-release/environment identity and founder-email alerting; no session replay, behavioral analytics,
-warehouse, or owner analytics dashboard in this slice. Its five-step implementation order (telemetry
-boundary and redaction; Sentry ASP.NET integration; Sentry React integration in the authenticated
-PWA plus `VITE_PUBLIC_BASE_URL` startup validation; Railway health-check + alert-rule config +
-runbook; production-candidate verification with controlled failures and redaction checks) is in the
-tracker entry. Release-safety gate — "required before any customer-facing production pilot" — and
-precedes GAP-033.
+(P0, Active Work), governed by [ADR-495](decisions/ADR-495-gap-039-redacted-error-capture-and-release-safety.md)
+and the [BL140](build-log/140-gap-039-sentry-implementation-handoff.md) handoff (its "Batch 2").
+Batch 1 (API telemetry boundary + Sentry ASP.NET) is delivered — see
+[BL141](build-log/141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md). Batch 2 adds
+`@sentry/react` init in `web/ophalo-app` before render, requires `VITE_SENTRY_DSN` for a production
+build only, replaces every unsafe `VITE_PUBLIC_BASE_URL` use with one parsed shared accessor plus a
+safe configuration-failure UI path, and configures build-only private source-map upload. Remaining
+after Batch 2: BL140 Batch 3 (Railway health-check / DSN / alert-rule console config + runbook) and
+Batch 4 (production-candidate verification) — both founder-owned. Release-safety gate — "required
+before any customer-facing production pilot" — and precedes GAP-033.
 
 **GAP-033 — public-intake trust and tracker access truthfulness — follows GAP-039.**
 Full scope is [GAP-033](pilot-readiness-bug-tracker.md#gap-033--public-intake-does-not-establish-sufficient-customer-trust-or-return-continuity)
