@@ -1,9 +1,9 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-03 — **GAP-039 Batch 1 (API telemetry boundary + Sentry error capture)
-and Batches 2a + 2b (`VITE_PUBLIC_BASE_URL` shared accessor, fail-safe UI, and all consumer
-conversions) are implemented and accepted. Next implementation batch is GAP-039 Batch 2c —
-`@sentry/react` init + private source-map upload.** Request
+**Last updated:** 2026-09-03 — **GAP-039 Batches 1, 2a, 2b, and 2c are implemented and accepted.
+All GAP-039 code slices are done; the remainder (BL140 Batch 3 console/runbook config and Batch 4
+production-candidate verification) is founder-owned. Next Claude implementation batch is GAP-033 —
+public-intake trust and tracker access truthfulness.** Request
 UI Upgrade 1.1 implementation is complete (locked contract
 [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), delivery evidence
 [BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)); its product-owner visual
@@ -41,18 +41,29 @@ relevant build log.
   tags), `Sentry__Dsn` is a production startup requirement, and the SDK is a full no-op without a
   DSN. No response, health, or logging behavior changed. Full unit + integration + architecture
   suites pass.
+- GAP-039 Batch 2c is complete: `@sentry/react` 10.73.0 + `@sentry/vite-plugin` 5.4.0 (exact
+  pins). `src/lib/sentry.ts` `initSentry()` runs before render in `main.tsx` — errors-only, no
+  tracing/replay, `maxBreadcrumbs: 0`; a no-op without `VITE_SENTRY_DSN`. `src/lib/sentryScrub.ts`
+  is the browser `beforeSend`: a fresh allowlisted event (release, environment, safe pathname,
+  exception type + sanitized frame metadata) with opaque-token/query/fragment detection scoped to
+  the retained pathname and frame filename/function only (never the Sentry event id or release
+  SHA), discarding the whole event if the invariant fails. `ErrorBoundary` forwards React-caught
+  render errors through that path; the user-facing fallback is unchanged.
+  `scripts/resolveDeployment.ts` is the fail-closed build gate: `OPHALO_DEPLOY_ENV`
+  (`production`/`preview` only, else the build throws) is authoritative and independent of Vercel
+  System Environment Variables; a classified build requires `VERCEL_ENV` to match and a non-local
+  `VERCEL_GIT_COMMIT_SHA`, production additionally requires DSN + `SENTRY_AUTH_TOKEN`/`ORG`/
+  `PROJECT`. Source-map upload runs only for a classified build with complete upload config
+  (`build.sourcemap: "hidden"` + `filesToDeleteAfterUpload: ["./dist/**/*.map"]`, no
+  `errorHandler`); a local build generates no maps. Local build verified: `dist` has zero `.map`
+  files and no `sourceMappingURL` comments. Full app suite 1064 passed.
 
 ## Next implementation sequence
 
-**Next implementation batch: GAP-039 Batch 2c — `@sentry/react` init + private source-map upload.**
-Full scope is
-[GAP-039](pilot-readiness-bug-tracker.md#gap-039--production-failures-and-pilot-health-are-not-observable-enough-to-earn-trust)
-(P0, Active Work), governed by [ADR-495](decisions/ADR-495-gap-039-redacted-error-capture-and-release-safety.md)
-and the [BL140](build-log/140-gap-039-sentry-implementation-handoff.md) handoff (its "Batch 2").
-Batch 1 (API telemetry boundary + Sentry ASP.NET) is delivered — see
-[BL141](build-log/141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md). BL140 "Batch 2"
-exceeds the CLAUDE.md batch-size gate (~15 production files), so it is split into three
-independently-compiling slices:
+BL140 "Batch 2" exceeded the CLAUDE.md batch-size gate (~15 production files) and was split into
+three independently-compiling slices, all now delivered against
+[ADR-495](decisions/ADR-495-gap-039-redacted-error-capture-and-release-safety.md) and the
+[BL140](build-log/140-gap-039-sentry-implementation-handoff.md) handoff:
 
 - **Batch 2a — `VITE_PUBLIC_BASE_URL` shared accessor + fail-safe UI + non-request-detail consumers.**
   DONE, accepted. New `src/lib/publicBaseUrl.ts` (throw-free; `publicBaseUrlResult` typed
@@ -68,18 +79,18 @@ independently-compiling slices:
   (`NotifyCustomerPanel.test.tsx`, `CallHandoffQr.test.tsx`) now `vi.mock` the accessor rather than
   `vi.stubEnv` (the accessor parses at module load). No raw `import.meta.env.VITE_PUBLIC_BASE_URL`
   read remains outside `publicBaseUrl.ts`. Full app suite 1040 passed; production build passes.
-- **Batch 2c — `@sentry/react` init + private source-map upload. CURRENT.** Pin/add `@sentry/react` +
-  `@sentry/vite-plugin` (exact versions proposed at slice start). `src/lib/sentry.ts` init before
-  render in `main.tsx`; errors-only, no PII, DSN optional (production build requires `VITE_SENTRY_DSN`
-  only). `vite.config.ts` source-map generation + build-only upload. `env.d.ts` gets `VITE_SENTRY_DSN`.
-  2c preflight must first specify: (1) the exact production/preview environment source and release-SHA
-  source — `import.meta.env.PROD` alone is insufficient because Vercel previews are also production
-  builds; (2) proof that uploaded source maps are deleted from the deploy artifact, not merely hidden
-  from browser source-map comments.
+- **Batch 2c — `@sentry/react` init + private source-map upload. DONE, accepted.** See the
+  Batch 2c bullet under "Current repository state" above for the delivered shape. The two
+  preflight questions are resolved: (1) environment/release come from `OPHALO_DEPLOY_ENV` (explicit,
+  system-var-independent) corroborated by `VERCEL_ENV` + `VERCEL_GIT_COMMIT_SHA`, never
+  `import.meta.env.PROD`; (2) `filesToDeleteAfterUpload` physically removes every `.map` from the
+  build output after upload — proven locally by `dist` containing zero `.map` files.
 
-Remaining after 2c: BL140 Batch 3 (Railway health-check / DSN / alert-rule console config + runbook)
-and Batch 4 (production-candidate verification) — both founder-owned. Release-safety gate — "required
-before any customer-facing production pilot" — and precedes GAP-033.
+Remaining in GAP-039 — **founder-owned, release-safety gate, required before any customer-facing
+production pilot:** BL140 Batch 3 (Vercel System Environment Variables + `OPHALO_DEPLOY_ENV` +
+`VITE_SENTRY_DSN`/`SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT`; Railway health-check; Sentry
+alert rules; runbook) and Batch 4 (production-candidate verification, incl. proof that a real
+production upload leaves zero `.map` in the deployed artifact). This gate precedes GAP-033.
 
 **GAP-033 — public-intake trust and tracker access truthfulness — follows GAP-039.**
 Full scope is [GAP-033](pilot-readiness-bug-tracker.md#gap-033--public-intake-does-not-establish-sufficient-customer-trust-or-return-continuity)

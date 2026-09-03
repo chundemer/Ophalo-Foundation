@@ -5,7 +5,12 @@ import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ConfigurationError } from "./components/ConfigurationError";
 import { publicBaseUrlResult } from "./lib/publicBaseUrl";
+import { initSentry } from "./lib/sentry";
 import "./styles/app.css";
+
+// Errors-only, no-PII capture (GAP-039). Before any render so a configuration-error screen
+// or an early bootstrap throw is still reported. No-op without VITE_SENTRY_DSN.
+initSentry();
 
 const queryClient = new QueryClient({
   defaultOptions: {

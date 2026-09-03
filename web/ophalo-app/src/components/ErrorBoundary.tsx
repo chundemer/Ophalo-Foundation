@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { captureHandledError } from "../lib/sentry";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -15,6 +16,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   static getDerivedStateFromError(): ErrorBoundaryState {
     return { hasError: true };
+  }
+
+  // React swallows errors caught here, so the Sentry SDK's global handlers never see them.
+  // Forward the exception through the scrubbed capture path (GAP-039); the user-facing
+  // fallback below is unchanged and still shows no exception detail.
+  componentDidCatch(error: Error): void {
+    captureHandledError(error);
   }
 
   handleReload = (): void => {
