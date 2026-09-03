@@ -2,8 +2,8 @@
 
 **Last updated:** 2026-09-03 — **Customer request page (Keep tracker) received a two-column layout,
 contact card, and link-token access copy correction (commit `75f472f`). Next implementation batch
-is GAP-033 — public-intake trust; see Next implementation sequence for its GAP-039 ordering
-dependency.** Request UI Upgrade 1.1 implementation is complete (locked contract
+is GAP-039 — production observability (Sentry); GAP-033 (public-intake trust) follows it.** Request
+UI Upgrade 1.1 implementation is complete (locked contract
 [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), delivery evidence
 [BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)); its product-owner visual
 acceptance pass is still outstanding.
@@ -36,7 +36,19 @@ relevant build log.
 
 ## Next implementation sequence
 
-**Next implementation batch: GAP-033 — public-intake trust and tracker access truthfulness.**
+**Next implementation batch: GAP-039 — production failures and pilot health are not observable
+enough to earn trust.** Full scope is
+[GAP-039](pilot-readiness-bug-tracker.md#gap-039--production-failures-and-pilot-health-are-not-observable-enough-to-earn-trust)
+(P0, Active Work). Locked decision: Sentry for redacted server + browser error capture with
+release/environment identity and founder-email alerting; no session replay, behavioral analytics,
+warehouse, or owner analytics dashboard in this slice. Its five-step implementation order (telemetry
+boundary and redaction; Sentry ASP.NET integration; Sentry React integration in the authenticated
+PWA plus `VITE_PUBLIC_BASE_URL` startup validation; Railway health-check + alert-rule config +
+runbook; production-candidate verification with controlled failures and redaction checks) is in the
+tracker entry. Release-safety gate — "required before any customer-facing production pilot" — and
+precedes GAP-033.
+
+**GAP-033 — public-intake trust and tracker access truthfulness — follows GAP-039.**
 Full scope is [GAP-033](pilot-readiness-bug-tracker.md#gap-033--public-intake-does-not-establish-sufficient-customer-trust-or-return-continuity)
 (P1, `ophalo-web`). It corrects the public request journey so it does not overstate what the
 link-token model provides and does not collect personal data before establishing trust:
@@ -52,9 +64,7 @@ link-token model provides and does not collect personal data before establishing
   customer-relevant event types and message sources; internal activity must never reach
   `page.events`.
 
-**Ordering dependency:** the tracker's Implementation Order is GAP-039 → GAP-033 → GAP-040, and
-GAP-039 (Sentry observability, P0) is still Open. Confirm GAP-039 sequencing before starting
-GAP-033; do not treat this entry as a decision to ship GAP-033 before GAP-039.
+Tracker Implementation Order for this pair is GAP-039 → GAP-033 → GAP-040 (`pilot-readiness-bug-tracker.md`).
 
 Request UI Upgrade 1.1 still needs the product-owner visual acceptance pass (dense Requests at
 1366×768, 1440×900, 1920×1080; 100/125/150% zoom; Queue operational, frequent actions reachable,
