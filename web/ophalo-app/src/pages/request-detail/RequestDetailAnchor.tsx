@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   BadgeDollarSign,
+  CircleAlert,
   ChevronDown,
   ChevronUp,
   CircleDollarSign,
@@ -23,8 +24,9 @@ interface RequestDetailAnchorProps extends RequestDetailLayoutProps {
   onOpenClearAttention: () => void;
   onActivateCustomerUpdateComposer: () => void;
   actualWorkShortcut?: { label: string; onClick: () => void };
-  financialReviewShortcut?: { label: string; onClick: () => void };
+  financialReviewShortcut?: { label: string; onClick: () => void; tone: "ready" | "blocked" };
   businessPageUrl?: string | null;
+  demoteMarkWorkDone?: boolean;
 }
 
 const utilityLinkClass = `inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] ${FOCUS_RING}`;
@@ -43,6 +45,7 @@ export function RequestDetailAnchor({
   needsShare,
   onOpenShareDrawer,
   businessPageUrl,
+  demoteMarkWorkDone = false,
 }: RequestDetailAnchorProps) {
   const [needExpanded, setNeedExpanded] = useState(false);
   const hasActiveAttention = detail.effectiveAttention.level !== "none";
@@ -81,6 +84,7 @@ export function RequestDetailAnchor({
               onRecordFollowUp={onRecordFollowUp}
               onContactLaunched={onContactLaunched}
               onActivateCustomerUpdateComposer={onActivateCustomerUpdateComposer}
+              demoteMarkWorkDone={demoteMarkWorkDone}
             />
           </div>
         )}
@@ -111,33 +115,36 @@ export function RequestDetailAnchor({
       )}
 
       <div aria-label="Frequent request actions" className="mt-2 flex max-h-[88px] flex-wrap items-center gap-1.5 overflow-hidden border-t border-[var(--ophalo-border)] pt-2">
-        {detail.availableActions.canLogExternalContact && (
-          <button
-            type="button"
-            onClick={() => onContactLaunched("outbound", defaultContactChannel)}
-            className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[var(--keep-request-primary)] px-3 text-xs font-semibold text-white shadow-sm hover:bg-[var(--keep-request-primary-hover)] ${FOCUS_RING}`}
-          >
-            <PhoneCall className="h-4 w-4" aria-hidden="true" />
-            Contact customer
-          </button>
-        )}
-
-        {(detail.customerPhone || detail.customerEmail) && (
-          <div className="inline-flex min-h-9 overflow-hidden rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)]" role="group" aria-label="Contact channels">
-            {detail.customerPhone && (
-              <>
-                <button type="button" onClick={() => onContactLaunched("outbound", "phone")} className={`${utilityLinkClass} rounded-none`}>
-                  <Phone className="h-3.5 w-3.5" aria-hidden="true" /> Call
-                </button>
-                <button type="button" onClick={() => onContactLaunched("outbound", "sms")} className={`${utilityLinkClass} rounded-none border-l border-[var(--ophalo-border)]`}>
-                  <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" /> Text
-                </button>
-              </>
-            )}
-            {detail.customerEmail && (
-              <button type="button" onClick={() => onContactLaunched("outbound", "email")} className={`${utilityLinkClass} rounded-none ${detail.customerPhone ? "border-l border-[var(--ophalo-border)]" : ""}`}>
-                <Mail className="h-3.5 w-3.5" aria-hidden="true" /> Email
+        {(detail.availableActions.canLogExternalContact || detail.customerPhone || detail.customerEmail) && (
+          <div className="inline-flex items-center gap-1.5" role="group" aria-label="Customer contact actions">
+            {detail.availableActions.canLogExternalContact && (
+              <button
+                type="button"
+                onClick={() => onContactLaunched("outbound", defaultContactChannel)}
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[var(--keep-request-primary)] px-3 text-xs font-semibold text-white shadow-sm hover:bg-[var(--keep-request-primary-hover)] ${FOCUS_RING}`}
+              >
+                <PhoneCall className="h-4 w-4" aria-hidden="true" />
+                Contact customer
               </button>
+            )}
+            {(detail.customerPhone || detail.customerEmail) && (
+              <div className="inline-flex min-h-9 overflow-hidden rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)]" role="group" aria-label="Contact channels">
+                {detail.customerPhone && (
+                  <>
+                    <button type="button" onClick={() => onContactLaunched("outbound", "phone")} className={`${utilityLinkClass} rounded-none`}>
+                      <Phone className="h-3.5 w-3.5" aria-hidden="true" /> Call
+                    </button>
+                    <button type="button" onClick={() => onContactLaunched("outbound", "sms")} className={`${utilityLinkClass} rounded-none border-l border-[var(--ophalo-border)]`}>
+                      <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" /> Text
+                    </button>
+                  </>
+                )}
+                {detail.customerEmail && (
+                  <button type="button" onClick={() => onContactLaunched("outbound", "email")} className={`${utilityLinkClass} rounded-none ${detail.customerPhone ? "border-l border-[var(--ophalo-border)]" : ""}`}>
+                    <Mail className="h-3.5 w-3.5" aria-hidden="true" /> Email
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -160,17 +167,27 @@ export function RequestDetailAnchor({
           </div>
         )}
 
-        {actualWorkShortcut && (
-          <button type="button" onClick={actualWorkShortcut.onClick} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--keep-request-primary)] px-2.5 text-xs font-semibold text-[var(--keep-request-primary)] hover:bg-[var(--keep-accent-bg)] ${FOCUS_RING}`}>
-            <BadgeDollarSign className="h-4 w-4" aria-hidden="true" />
-            {actualWorkShortcut.label}
-          </button>
-        )}
-        {financialReviewShortcut && (
-          <button type="button" onClick={financialReviewShortcut.onClick} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-[var(--keep-request-financial)] hover:bg-slate-100 ${FOCUS_RING}`}>
-            <CircleDollarSign className="h-4 w-4" aria-hidden="true" />
-            {financialReviewShortcut.label}
-          </button>
+        {(actualWorkShortcut || financialReviewShortcut) && (
+          <div className="ml-auto inline-flex items-center gap-1.5 border-l border-[var(--ophalo-border)] pl-2" role="group" aria-label="Work and financial actions">
+            {actualWorkShortcut && (
+              <button type="button" onClick={actualWorkShortcut.onClick} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--keep-request-primary)] px-2.5 text-xs font-semibold text-[var(--keep-request-primary)] hover:bg-[var(--keep-accent-bg)] ${FOCUS_RING}`}>
+                <BadgeDollarSign className="h-4 w-4" aria-hidden="true" />
+                {actualWorkShortcut.label}
+              </button>
+            )}
+            {financialReviewShortcut && (
+              <button
+                type="button"
+                onClick={financialReviewShortcut.onClick}
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold ${FOCUS_RING} ${financialReviewShortcut.tone === "blocked" ? "border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)] hover:bg-amber-100" : "border-[var(--keep-request-financial)] bg-[var(--keep-request-financial)] text-white hover:bg-[var(--keep-request-financial-hover)]"}`}
+              >
+                {financialReviewShortcut.tone === "blocked"
+                  ? <CircleAlert className="h-4 w-4" aria-hidden="true" />
+                  : <CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
+                {financialReviewShortcut.label}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

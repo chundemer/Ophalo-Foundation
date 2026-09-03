@@ -32,9 +32,10 @@ export interface PrimaryActionSlotProps {
   // GAP-067 Slice 4: `HeroAttentionBanner` passes `"request-primary"` so its routed
   // customer-resolution action (respond / acknowledge / follow-up / logged contact) renders as the
   // visually dominant teal `--keep-request-primary` fill. The no-attention Anchor mounts leave it
-  // at the default `"teal"`. The `mutation` route (mark work done / close) is a lifecycle action
-  // and stays `"teal"` regardless.
+  // at the default `"teal"`. Lifecycle mutations remain server-authored; `demoteMarkWorkDone`
+  // changes only the no-attention desktop presentation when unfinished operational work is known.
   primaryEmphasis?: "teal" | "request-primary";
+  demoteMarkWorkDone?: boolean;
 }
 
 export function PrimaryActionSlot({
@@ -46,6 +47,7 @@ export function PrimaryActionSlot({
   onContactLaunched,
   onActivateCustomerUpdateComposer,
   primaryEmphasis = "teal",
+  demoteMarkWorkDone = false,
 }: PrimaryActionSlotProps) {
   const action = detail.availableActions.primaryAction;
   if (!action) return null;
@@ -96,6 +98,7 @@ export function PrimaryActionSlot({
           label={action.label}
           targetStatus={targetStatus}
           confirmationCopy={action.key === "mark_work_done" ? MARK_WORK_DONE_CONFIRMATION : action.confirmationCopy}
+          variant={action.key === "mark_work_done" && demoteMarkWorkDone ? "neutral" : "primary"}
         />
       );
     }
@@ -165,7 +168,7 @@ interface PrimaryMutationButtonProps {
   label: string;
   targetStatus: "resolved" | "closed";
   confirmationCopy: string | null;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "neutral";
   accessibleSuffix?: string;
 }
 
@@ -272,6 +275,15 @@ function PrimaryMutationButton({
         >
           {isSubmitting ? "Working…" : visibleLabel}
         </KeepButton>
+      ) : variant === "neutral" ? (
+        <button
+          type="button"
+          disabled={isSubmitting || conflictDisabled}
+          onClick={handleClick}
+          className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 text-sm font-semibold text-[var(--ophalo-ink)] transition-colors hover:bg-[var(--ophalo-canvas)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+        >
+          {isSubmitting ? "Working…" : visibleLabel}
+        </button>
       ) : (
         // Demoted secondary (locked desktop-polish decision, 2026-08-24): a quiet text-style
         // trigger, not an equal-weight outline button competing with the attention primary — and

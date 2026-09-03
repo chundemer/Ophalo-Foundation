@@ -111,6 +111,21 @@ describe("RequestMemoryRail", () => {
     expect(onAddInternalNote).toHaveBeenCalledOnce();
   });
 
+  it("keeps communication actions above the filters and event timeline", () => {
+    const { container } = renderRail();
+    const panel = screen.getByRole("tabpanel", { name: "Communications" });
+    const all = Array.from(panel.querySelectorAll("button, [role='group'], p"));
+    const indexOf = (element: Element) => all.indexOf(element);
+
+    expect(indexOf(screen.getByRole("button", { name: "Add internal note" }))).toBeLessThan(
+      indexOf(screen.getByRole("group", { name: "Communication filter" })),
+    );
+    expect(indexOf(screen.getByRole("button", { name: "Contact customer" }))).toBeLessThan(
+      indexOf(within(panel).getByText("Customer message")),
+    );
+    expect(container.querySelector("[data-request-memory-rail]")).not.toBeNull();
+  });
+
   it("supports arrow-key tab navigation", async () => {
     renderRail();
     const communications = screen.getByRole("tab", { name: "Communications" });

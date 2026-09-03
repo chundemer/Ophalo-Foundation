@@ -9,7 +9,8 @@ export type KeepButtonVariant =
   | "primary"
   | "secondary"
   | "request-primary"
-  | "request-financial";
+  | "request-financial"
+  | "request-financial-blocked";
 
 export const KeepButton = forwardRef<
   HTMLButtonElement,
@@ -41,6 +42,9 @@ export const KeepButton = forwardRef<
     "bg-[var(--keep-request-financial)] text-white hover:bg-[var(--keep-request-financial-hover)]";
   const disabledRequestFinancial = "border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-muted)]";
 
+  const enabledRequestFinancialBlocked =
+    "border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)] hover:bg-amber-100";
+
   let variantClass: string;
   if (variant === "teal") {
     variantClass = disabled ? disabledTeal : enabledTeal;
@@ -50,6 +54,8 @@ export const KeepButton = forwardRef<
     variantClass = disabled ? disabledRequestPrimary : enabledRequestPrimary;
   } else if (variant === "request-financial") {
     variantClass = disabled ? disabledRequestFinancial : enabledRequestFinancial;
+  } else if (variant === "request-financial-blocked") {
+    variantClass = disabled ? disabledRequestFinancial : enabledRequestFinancialBlocked;
   } else {
     variantClass = disabled ? disabledPrimary : enabledPrimary;
   }

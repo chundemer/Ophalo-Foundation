@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-03 — **Request UI Upgrade 1.1 production implementation is complete and
-mechanically verified; product-owner visual acceptance remains.** The locked contract is
+**Last updated:** 2026-09-03 — **Request UI Upgrade 1.1 production implementation and its first
+authenticated hierarchy refinement are complete; final product-owner visual acceptance remains.** The locked contract is
 [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), and delivery evidence is in
 [BL139](build-log/139-request-ui-upgrade-1.1-implementation.md).
 
@@ -24,7 +24,9 @@ relevant build log.
   [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md).
 - Request UI Upgrade 1.1 now supplies the three-column desktop composition, compact sticky Request
   strip, frequent communication/share/work actions, and persistent Request Memory rail. Full
-  frontend tests and the production build pass; visual acceptance remains.
+  frontend tests and the production build pass. The first visual-review refinement grouped the
+  toolbar, demoted lifecycle completion while operational work remains, added authoritative
+  financial-blocker CTAs, and moved communication actions above the right-rail timeline.
 - The controlled pilot keeps the contractor's existing system authoritative for estimates,
   invoices, payments, and accounting. Keep is the factual field record; the existing-ticket
   workflow remains the outage fallback.

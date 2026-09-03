@@ -47,7 +47,7 @@ function renderAnchor(
         onOpenClearAttention={vi.fn()}
         onActivateCustomerUpdateComposer={vi.fn()}
         actualWorkShortcut={{ label: "Record Actual Work", onClick: callbacks.onActualWork }}
-        financialReviewShortcut={{ label: "Review financials (1)", onClick: callbacks.onFinancialReview }}
+        financialReviewShortcut={{ label: "Review financials (1)", onClick: callbacks.onFinancialReview, tone: "ready" }}
         businessPageUrl="https://example.test/keep/s/demo"
         {...overrides}
       />
@@ -91,6 +91,9 @@ describe("RequestDetailAnchor — compact identity and frequent actions", () => 
     expect(callbacks.onOpenShareDrawer).toHaveBeenCalledOnce();
     expect(callbacks.onActualWork).toHaveBeenCalledOnce();
     expect(callbacks.onFinancialReview).toHaveBeenCalledOnce();
+    expect(screen.getByRole("group", { name: "Customer contact actions" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Share pages" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Work and financial actions" })).toHaveClass("ml-auto");
   });
 
   it("shares the business page through the native share contract when available", async () => {
@@ -129,6 +132,23 @@ describe("RequestDetailAnchor — compact identity and frequent actions", () => 
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByRole("heading", { name: "Mark request as Work completed?" })).toBeInTheDocument();
     expect(within(dialog).getByText(/does not notify the customer/i)).toBeInTheDocument();
+  });
+
+  it("demotes Mark work done to a neutral lifecycle control when operational work remains", () => {
+    renderAnchor({ ...baseDetail(), attentionLevel: "none" }, { demoteMarkWorkDone: true });
+    const button = screen.getByRole("button", { name: "Mark work done" });
+
+    expect(button.className).toContain("border-[var(--ophalo-border)]");
+    expect(button.className).not.toContain("bg-[var(--keep-accent)]");
+  });
+
+  it("uses an amber financial shortcut when the authoritative visit state is blocked", () => {
+    renderAnchor(baseDetail(), {
+      financialReviewShortcut: { label: "Resolve cost & price (1)", onClick: vi.fn(), tone: "blocked" },
+    });
+    const button = screen.getByRole("button", { name: "Resolve cost & price (1)" });
+    expect(button.className).toContain("border-[var(--ophalo-attention)]");
+    expect(button.className).toContain("bg-[var(--ophalo-attention-bg)]");
   });
 
   it("uses the server-authored Close action and confirmation", async () => {

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { KeepButton } from "../KeepButton";
 
-// GAP-067 Slice 4 added two additive, Request-Detail-scoped fills alongside the existing
+// GAP-067 Slice 4 added Request-Detail-scoped variants alongside the existing
 // teal/primary/secondary variants. They must map to the locked `--keep-request-*` tokens and
 // still fall back to the shared disabled outline treatment.
 describe("KeepButton — request-scoped variants (GAP-067 Slice 4)", () => {
@@ -21,7 +21,14 @@ describe("KeepButton — request-scoped variants (GAP-067 Slice 4)", () => {
     expect(cls).toContain("hover:bg-[var(--keep-request-financial-hover)]");
   });
 
-  it("both new variants use the shared disabled outline treatment when disabled", () => {
+  it("request-financial-blocked renders the amber resolution emphasis", () => {
+    render(<KeepButton variant="request-financial-blocked">Resolve cost & price</KeepButton>);
+    const cls = screen.getByRole("button", { name: "Resolve cost & price" }).className;
+    expect(cls).toContain("border-[var(--ophalo-attention)]");
+    expect(cls).toContain("bg-[var(--ophalo-attention-bg)]");
+  });
+
+  it("request variants use the shared disabled outline treatment when disabled", () => {
     const { rerender } = render(
       <KeepButton variant="request-primary" disabled>
         Respond

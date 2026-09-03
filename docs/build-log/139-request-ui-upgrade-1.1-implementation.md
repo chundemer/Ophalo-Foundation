@@ -54,3 +54,23 @@ authenticated workspace with representative dense Requests at 1366×768, 1440×9
 plus 100%, 125%, and 150% zoom. Any resulting work should be bounded visual refinement; a change to
 action meaning, auditability, privacy, authorization, or the locked column model returns to product
 review.
+
+## Authenticated visual-review refinement — 2026-09-03
+
+The first live-layout review produced a bounded hierarchy pass:
+
+- the toolbar now presents explicit contact, share, and right-aligned work/financial groups while
+  retaining both directly visible share destinations;
+- Mark work done becomes visually neutral, without being disabled, when an open Actual Work draft
+  or pending financial review is authoritatively known;
+- pending financial-review card and toolbar actions reflect the server-provided blocker with
+  precise resolution language and amber treatment;
+- Request Memory's Add internal note and Contact customer actions moved above its filters and event
+  history; and
+- all four contact entry points remain wired to the same channel-seeded Contact customer sheet.
+
+The customer-page update submit behavior was inspected but not changed: the screenshot showed its
+correct empty/no-status disabled state, and the existing valid-message state already uses the solid
+request-primary split button. Verification after this refinement: TypeScript passed, the full
+frontend suite passed 1,030 tests across 108 files, the production build and CSS-token check passed,
+and `git diff --check` passed.

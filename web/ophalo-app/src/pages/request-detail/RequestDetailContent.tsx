@@ -254,11 +254,22 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
     if (pendingReviews.state.status !== "loaded" || pendingReviews.state.count === 0) return undefined;
     const firstPendingVisit = pendingReviews.state.items[0];
     if (!firstPendingVisit) return undefined;
+    const label = firstPendingVisit.reviewStatus === "NeedsCostPriceResolution"
+      ? `Resolve cost & price (${pendingReviews.state.count})`
+      : firstPendingVisit.reviewStatus === "NeedsNoChargeDisposition"
+        ? `Record no-charge disposition (${pendingReviews.state.count})`
+        : `Review financials (${pendingReviews.state.count})`;
     return {
-      label: `Review financials (${pendingReviews.state.count})`,
+      label,
       onClick: () => handleReviewPendingVisit(firstPendingVisit.actualWorkId),
+      tone: firstPendingVisit.reviewStatus === "ReadyToReview" ? "ready" as const : "blocked" as const,
     };
   })();
+  const hasOpenActualWork =
+    actualWorkCapture.state.status === "draft" ||
+    actualWorkCapture.state.status === "owner-recovery" ||
+    actualWorkCapture.state.status === "held-by-other";
+  const hasPendingFinancialReview = pendingReviews.state.status === "loaded" && pendingReviews.state.count > 0;
 
   const requestMemoryDetails = (
     <div className="space-y-4">
@@ -315,6 +326,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       actualWorkShortcut={actualWorkShortcut}
       financialReviewShortcut={financialReviewShortcut}
       businessPageUrl={props.businessPageUrl}
+      demoteMarkWorkDone={hasOpenActualWork || hasPendingFinancialReview}
     />
   );
 

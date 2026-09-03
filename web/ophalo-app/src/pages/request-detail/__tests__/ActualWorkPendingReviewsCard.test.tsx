@@ -32,7 +32,7 @@ describe("ActualWorkPendingReviewsCard", () => {
     expect(screen.getByText("Ready to review")).toBeInTheDocument();
     expect(screen.getByText(/No work lines/)).toBeInTheDocument();
     // BL138 locked zero-line copy: the action verb, not "Needs …".
-    expect(screen.getByText("Record no-charge disposition")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Record no-charge disposition" })).toBeInTheDocument();
   });
 
   it("invokes onReviewVisit with the exact visit id", async () => {
@@ -47,6 +47,18 @@ describe("ActualWorkPendingReviewsCard", () => {
     expect(screen.getByRole("button", { name: "Review financials" }).className).toContain(
       "bg-[var(--keep-request-financial)]",
     );
+  });
+
+  it("uses the authoritative blocker to label and emphasize resolution entry", () => {
+    render(
+      <ActualWorkPendingReviewsCard
+        {...baseProps}
+        state={loaded({ ...item, reviewStatus: "NeedsCostPriceResolution" })}
+      />,
+    );
+    const action = screen.getByRole("button", { name: "Resolve cost & price" });
+    expect(action.className).toContain("border-[var(--ophalo-attention)]");
+    expect(action.className).toContain("bg-[var(--ophalo-attention-bg)]");
   });
 
   it("renders nothing while loading, hidden, or when nothing is pending", () => {

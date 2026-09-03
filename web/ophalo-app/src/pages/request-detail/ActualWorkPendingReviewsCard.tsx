@@ -23,6 +23,12 @@ const STATUS_LABELS: Record<ActualWorkPendingReviewStatus, string> = {
   NeedsNoChargeDisposition: "Record no-charge disposition",
 };
 
+const ACTION_LABELS: Record<ActualWorkPendingReviewStatus, string> = {
+  ReadyToReview: "Review financials",
+  NeedsCostPriceResolution: "Resolve cost & price",
+  NeedsNoChargeDisposition: "Record no-charge disposition",
+};
+
 function lineCountLabel(count: number): string {
   if (count === 0) return "No work lines";
   return `${count} work ${count === 1 ? "line" : "lines"}`;
@@ -74,8 +80,12 @@ export function ActualWorkPendingReviewsCard({ state, onRetry, onReviewVisit }: 
                   {STATUS_LABELS[item.reviewStatus]}
                 </p>
               </div>
-              <KeepButton variant="request-financial" onClick={() => onReviewVisit(item.actualWorkId)}>
-                Review financials
+              <KeepButton
+                variant={needsWork ? "request-financial-blocked" : "request-financial"}
+                onClick={() => onReviewVisit(item.actualWorkId)}
+              >
+                {needsWork && <CircleAlert className="mr-1.5 h-4 w-4" aria-hidden="true" />}
+                {ACTION_LABELS[item.reviewStatus]}
               </KeepButton>
             </li>
           );

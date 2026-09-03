@@ -162,6 +162,23 @@ export function RequestMemoryRail({
             </div>
           </div>
 
+          {(canLogExternalContact || canAddInternalNote) && (
+            <div className="grid gap-2 border-y border-[var(--ophalo-border)] py-3">
+              {canAddInternalNote && (
+                <button type="button" onClick={onAddInternalNote} className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--keep-accent-bg)] px-3 py-2 text-sm font-semibold text-[var(--keep-accent)] hover:bg-teal-100 ${FOCUS_RING}`}>
+                  <FileText className="h-4 w-4" aria-hidden="true" />
+                  Add internal note
+                </button>
+              )}
+              {canLogExternalContact && (
+                <button type="button" onClick={onContactCustomer} className={`inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--ophalo-border)] px-3 py-2 text-sm font-semibold text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}>
+                  <PhoneCall className="h-4 w-4 text-[var(--keep-accent)]" aria-hidden="true" />
+                  Contact customer
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="flex rounded-lg border border-[var(--ophalo-border)]" role="group" aria-label="Communication filter">
             {(["all", "customer", "internal"] as const).map((filter, index) => (
               <button
@@ -181,23 +198,6 @@ export function RequestMemoryRail({
           </div>
 
           {eventList(communicationEvents, communicationFilter === "internal" ? "No internal notes yet." : communicationFilter === "customer" ? "No customer communication yet." : "No communication or internal notes yet.")}
-
-          {(canLogExternalContact || canAddInternalNote) && (
-            <div className="grid gap-2 border-t border-[var(--ophalo-border)] pt-3">
-              {canLogExternalContact && (
-                <button type="button" onClick={onContactCustomer} className={`inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--ophalo-border)] px-3 py-2 text-sm font-semibold text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}>
-                  <PhoneCall className="h-4 w-4 text-[var(--keep-accent)]" aria-hidden="true" />
-                  Contact customer
-                </button>
-              )}
-              {canAddInternalNote && (
-                <button type="button" onClick={onAddInternalNote} className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] ${FOCUS_RING}`}>
-                  <FileText className="h-4 w-4" aria-hidden="true" />
-                  Add internal note
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
         <div

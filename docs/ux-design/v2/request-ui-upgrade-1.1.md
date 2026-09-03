@@ -442,3 +442,32 @@ Upgrade 1.1 does not introduce:
 ## 19. Signoff
 
 Product-owner approval on 2026-09-03 locks the three-column desktop direction and authorizes implementation discovery/slicing. Any discovered API gap that changes action meaning, auditability, privacy, or authorization returns to product review rather than being filled by a visual-only client assumption.
+
+## 20. Post-implementation refinement — 2026-09-03
+
+The first authenticated visual review locks these refinements without changing the underlying
+action, authorization, or audit contracts:
+
+- **Toolbar grouping:** Contact customer and the Call/Text/Email channel launches read as one
+  contact group. Both share destinations remain directly labelled in one share group; they do not
+  move behind a generic dropdown. Actual Work and financial actions form a distinct right-aligned
+  work group.
+- **One contact workflow:** Contact customer, Call, Text, and Email are four entry points into the
+  same existing Contact customer sheet, each supplying the appropriate initial channel. Opening
+  that sheet or its channel-specific QR/draft affordance does not create a contact event.
+- **Lifecycle emphasis:** When the client has authoritative knowledge of an open Actual Work draft
+  or one or more pending financial reviews, Mark work done remains available if server-authorized
+  but renders as a neutral lifecycle control. This is visual precedence only: it does not create a
+  lifecycle gate or couple Work completed to internal financial review.
+- **Financial blocker language:** Pending-review actions use the server-provided review status.
+  Ready work reads **Review financials** with the dark financial treatment;
+  `NeedsCostPriceResolution` reads **Resolve cost & price**; and
+  `NeedsNoChargeDisposition` reads **Record no-charge disposition**. Blocked states use the amber
+  resolution treatment and continue to route to the existing review workspace.
+- **Communication actions first:** Add internal note and Contact customer appear above the
+  communication filters and event list, so long histories cannot bury them. Add internal note
+  continues to switch the center composer to Internal note, scroll it into view, and focus the
+  textarea.
+- **Composer enabled state:** The empty customer-page update control remains visibly disabled
+  because neither a message nor status change would be submitted. Entering a valid message retains
+  the existing high-contrast request-primary submit treatment.
