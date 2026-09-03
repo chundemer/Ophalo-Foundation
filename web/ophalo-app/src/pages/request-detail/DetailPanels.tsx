@@ -6,6 +6,7 @@ import {
   ApiError,
   type KeepRequestDetailResult,
 } from "../../lib/apiClient";
+import { getPublicBaseUrl } from "../../lib/publicBaseUrl";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { ResponsiveSheet } from "../../components/keep/ResponsiveSheet";
 import { PrimaryActionSlot } from "./PrimaryActionControl";
@@ -569,7 +570,7 @@ export function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps)
   const { copiedId: copiedContactId, failedId: copyContactFailedId, copy: copyContact } = useCopyFeedback();
   const callAction = detail.contactActions.find((a) => a.available && a.type === "call");
   const emailAction = detail.contactActions.find((a) => a.available && a.type !== "call");
-  const publicBaseUrl = (import.meta.env.VITE_PUBLIC_BASE_URL as string).replace(/\/$/, "");
+  const publicBaseUrl = getPublicBaseUrl();
   const customerPageUrl = detail.pageToken ? `${publicBaseUrl}/keep/r/${detail.pageToken}` : null;
   const canLogContact = detail.availableActions.canLogExternalContact;
   const hasContact = !!(detail.customerPhone || detail.customerEmail);

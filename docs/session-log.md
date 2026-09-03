@@ -1,9 +1,9 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-09-03 — **GAP-039 Batch 1 (API telemetry boundary + Sentry error capture)
-is implemented and accepted ([BL141](build-log/141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md)).
-Next implementation batch is GAP-039 Batch 2 — authenticated-PWA Sentry, the `VITE_PUBLIC_BASE_URL`
-shared accessor and fail-safe UI, and source-map upload.** Request
+and Batches 2a + 2b (`VITE_PUBLIC_BASE_URL` shared accessor, fail-safe UI, and all consumer
+conversions) are implemented and accepted. Next implementation batch is GAP-039 Batch 2c —
+`@sentry/react` init + private source-map upload.** Request
 UI Upgrade 1.1 implementation is complete (locked contract
 [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), delivery evidence
 [BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)); its product-owner visual
@@ -44,18 +44,41 @@ relevant build log.
 
 ## Next implementation sequence
 
-**Next implementation batch: GAP-039 Batch 2 — authenticated-PWA Sentry and configuration safety.**
+**Next implementation batch: GAP-039 Batch 2c — `@sentry/react` init + private source-map upload.**
 Full scope is
 [GAP-039](pilot-readiness-bug-tracker.md#gap-039--production-failures-and-pilot-health-are-not-observable-enough-to-earn-trust)
 (P0, Active Work), governed by [ADR-495](decisions/ADR-495-gap-039-redacted-error-capture-and-release-safety.md)
 and the [BL140](build-log/140-gap-039-sentry-implementation-handoff.md) handoff (its "Batch 2").
 Batch 1 (API telemetry boundary + Sentry ASP.NET) is delivered — see
-[BL141](build-log/141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md). Batch 2 adds
-`@sentry/react` init in `web/ophalo-app` before render, requires `VITE_SENTRY_DSN` for a production
-build only, replaces every unsafe `VITE_PUBLIC_BASE_URL` use with one parsed shared accessor plus a
-safe configuration-failure UI path, and configures build-only private source-map upload. Remaining
-after Batch 2: BL140 Batch 3 (Railway health-check / DSN / alert-rule console config + runbook) and
-Batch 4 (production-candidate verification) — both founder-owned. Release-safety gate — "required
+[BL141](build-log/141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md). BL140 "Batch 2"
+exceeds the CLAUDE.md batch-size gate (~15 production files), so it is split into three
+independently-compiling slices:
+
+- **Batch 2a — `VITE_PUBLIC_BASE_URL` shared accessor + fail-safe UI + non-request-detail consumers.**
+  DONE, accepted. New `src/lib/publicBaseUrl.ts` (throw-free; `publicBaseUrlResult` typed
+  valid/invalid + `getPublicBaseUrl()`) and `src/components/ConfigurationError.tsx` (static safe
+  screen). `main.tsx` renders it before mocks or `<App>` load when config is invalid. Converted
+  `lib/redirectToSignIn.ts`, `pages/settings/PublicLinkSection.tsx`, `components/ShareLinkModal.tsx`,
+  `components/QuickCapture.tsx`. `env.d.ts` marks `VITE_PUBLIC_BASE_URL` optional. Tests: accessor
+  (valid/trailing-slash/base-path/missing/malformed/bad-scheme), `main.tsx` gate. Full app suite
+  1040 passed; production build passes.
+- **Batch 2b — request-detail consumer conversions. DONE, accepted.** Converted
+  `pages/RequestDetail.tsx` (2 uses), `pages/request-detail/DetailPanels.tsx`, `DetailHero.tsx`,
+  `NotifyCustomerPanel.tsx` to `getPublicBaseUrl()`. The request-detail test env stubs
+  (`NotifyCustomerPanel.test.tsx`, `CallHandoffQr.test.tsx`) now `vi.mock` the accessor rather than
+  `vi.stubEnv` (the accessor parses at module load). No raw `import.meta.env.VITE_PUBLIC_BASE_URL`
+  read remains outside `publicBaseUrl.ts`. Full app suite 1040 passed; production build passes.
+- **Batch 2c — `@sentry/react` init + private source-map upload. CURRENT.** Pin/add `@sentry/react` +
+  `@sentry/vite-plugin` (exact versions proposed at slice start). `src/lib/sentry.ts` init before
+  render in `main.tsx`; errors-only, no PII, DSN optional (production build requires `VITE_SENTRY_DSN`
+  only). `vite.config.ts` source-map generation + build-only upload. `env.d.ts` gets `VITE_SENTRY_DSN`.
+  2c preflight must first specify: (1) the exact production/preview environment source and release-SHA
+  source — `import.meta.env.PROD` alone is insufficient because Vercel previews are also production
+  builds; (2) proof that uploaded source maps are deleted from the deploy artifact, not merely hidden
+  from browser source-map comments.
+
+Remaining after 2c: BL140 Batch 3 (Railway health-check / DSN / alert-rule console config + runbook)
+and Batch 4 (production-candidate verification) — both founder-owned. Release-safety gate — "required
 before any customer-facing production pilot" — and precedes GAP-033.
 
 **GAP-033 — public-intake trust and tracker access truthfulness — follows GAP-039.**

@@ -33,11 +33,15 @@ vi.mock("react-qr-code", () => ({
   default: ({ value }: { value: string }) => <div data-testid="qr" data-value={value} />,
 }));
 
+// CustomerContactStrip reads the shared public-base-URL accessor for an unrelated (non-call)
+// customer-page link. The accessor parses `VITE_PUBLIC_BASE_URL` once at module load, so mock it
+// directly rather than stubbing the env per test.
+vi.mock("../../../lib/publicBaseUrl", () => ({
+  getPublicBaseUrl: () => "http://localhost:3000",
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
-  // CustomerContactStrip reads this for an unrelated (non-call) customer-page link; stub it so
-  // the component under test doesn't need the full Vite env in isolation.
-  vi.stubEnv("VITE_PUBLIC_BASE_URL", "http://localhost:3000");
 });
 
 describe("CallHandoffQr (shared component/hook)", () => {

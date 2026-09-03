@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { api, type ShareIntentMethod } from "../lib/apiClient";
 import { ApiError } from "../lib/apiClient";
+import { getPublicBaseUrl } from "../lib/publicBaseUrl";
 import { KeepButton } from "./keep/KeepButton";
 import { formatNaPhone } from "./quick-capture/utils";
 import { useCopyFeedback } from "../hooks/useCopyFeedback";
@@ -75,7 +76,7 @@ interface ShareLinkModalProps {
 // ---------------------------------------------------------------------------
 
 export function ShareLinkModal({ requestId, onClose, onShared }: ShareLinkModalProps) {
-  const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
+  const publicBaseUrl = getPublicBaseUrl();
   const appBaseUrl = import.meta.env.VITE_APP_BASE_URL as string;
 
   const { data: detail } = useQuery({

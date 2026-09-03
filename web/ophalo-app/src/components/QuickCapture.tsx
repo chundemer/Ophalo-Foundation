@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { type PhoneLookupResult } from "../lib/apiClient";
+import { getPublicBaseUrl } from "../lib/publicBaseUrl";
 import { type Stage, type CaptureFormDraft } from "./quick-capture/utils";
 import { HandoffPanel } from "./quick-capture/HandoffPanel";
 import { LookupGate } from "./quick-capture/LookupGate";
@@ -23,7 +24,7 @@ export interface QuickCaptureProps {
 }
 
 export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isReadOnly = false, isOwnerOrAdmin = false, onNavigateSettings, followUpPrefill }: QuickCaptureProps) {
-  const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
+  const publicBaseUrl = getPublicBaseUrl();
 
   const [stage, setStage] = useState<Stage>(
     followUpPrefill

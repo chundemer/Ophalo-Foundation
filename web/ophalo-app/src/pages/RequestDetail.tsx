@@ -15,6 +15,7 @@ import { KeepButton } from "../components/keep/KeepButton";
 import { ExternalContactForm } from "../components/ExternalContactForm";
 import { formatNaPhone } from "../components/quick-capture/utils";
 import { useCopyFeedback } from "../hooks/useCopyFeedback";
+import { getPublicBaseUrl } from "../lib/publicBaseUrl";
 import {
   FOCUS_RING,
   STATUS_CONFLICT_MESSAGE,
@@ -107,7 +108,7 @@ export function LogContactModal({
   const showPhone = channel === "phone" && !!detail.customerPhone;
   const showSms = channel === "sms" && !!detail.customerPhone;
   const showEmail = channel === "email" && !!detail.customerEmail;
-  const publicBaseUrl = ((import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined) ?? "").replace(/\/$/, "");
+  const publicBaseUrl = getPublicBaseUrl();
   const customerPageUrl = detail.pageToken ? `${publicBaseUrl}/keep/r/${detail.pageToken}` : null;
   const directMessage = customerPageUrl
     ? `${detail.businessName}: Regarding your request, please see ${customerPageUrl}`
@@ -634,7 +635,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
-  const publicBaseUrl = ((import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined) ?? "").replace(/\/$/, "");
+  const publicBaseUrl = getPublicBaseUrl();
   const businessPageUrl = intakeQuery.data?.hasActiveLink && intakeQuery.data.publicSlug
     ? `${publicBaseUrl}/keep/s/${intakeQuery.data.publicSlug}`
     : null;

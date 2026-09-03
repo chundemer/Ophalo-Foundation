@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import QRCode from "react-qr-code";
 import { RefreshCw } from "lucide-react";
 import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
+import { getPublicBaseUrl } from "../../lib/publicBaseUrl";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { KeepBadge } from "../../components/keep/KeepBadge";
 import { formatEventTime, suggestedNotifyChannel, type NotifyChannel } from "./helpers";
@@ -51,7 +52,7 @@ export function NotifyCustomerPanel({
   // canvas until the operator explicitly chooses to send the prepared text from their phone.
   const [smsHandoffOpen, setSmsHandoffOpen] = useState(false);
 
-  const publicBaseUrl = (import.meta.env.VITE_PUBLIC_BASE_URL as string).replace(/\/$/, "");
+  const publicBaseUrl = getPublicBaseUrl();
   const customerPageUrl = `${publicBaseUrl}/keep/r/${detail.pageToken}`;
   const messageBody = `${detail.businessName}: You have an update on your request. View it here: ${customerPageUrl}`;
 

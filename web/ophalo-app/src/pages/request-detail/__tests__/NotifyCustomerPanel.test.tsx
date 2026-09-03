@@ -36,6 +36,12 @@ vi.mock("react-qr-code", () => ({
   default: ({ value }: { value: string }) => <div data-testid="qr" data-value={value} />,
 }));
 
+// The shared public-base-URL accessor parses `VITE_PUBLIC_BASE_URL` once at module load, so a
+// per-test `vi.stubEnv` would be too late; mock the accessor directly.
+vi.mock("../../../lib/publicBaseUrl", () => ({
+  getPublicBaseUrl: () => "http://localhost:3000",
+}));
+
 function baseDetail(overrides: Partial<KeepRequestDetailResult> = {}): KeepRequestDetailResult {
   return {
     ...mockRequestDetails["mock-req-001"],
@@ -45,7 +51,6 @@ function baseDetail(overrides: Partial<KeepRequestDetailResult> = {}): KeepReque
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("VITE_PUBLIC_BASE_URL", "http://localhost:3000");
   mockCreateSmsHandoff.mockResolvedValue({
     handoffUrl: "https://app.ophalo.com/keep/share-sms/mock-token",
     expiresAtUtc: "2026-07-26T23:00:00Z",

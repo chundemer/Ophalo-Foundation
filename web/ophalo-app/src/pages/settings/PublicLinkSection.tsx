@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type IntakeStatusResult, ApiError } from "../../lib/apiClient";
+import { getPublicBaseUrl } from "../../lib/publicBaseUrl";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { KeepButton } from "../../components/keep/KeepButton";
 
@@ -180,7 +181,7 @@ interface PublicLinkSectionProps {
 }
 
 export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionProps) {
-  const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
+  const publicBaseUrl = getPublicBaseUrl();
   const queryClient = useQueryClient();
   const { data: intake, isLoading } = useQuery({
     queryKey: ["intake"],

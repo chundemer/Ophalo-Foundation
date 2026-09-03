@@ -11,14 +11,15 @@
  * Only 401 (authentication) reaches here. 403 and every other failure keep their
  * existing local treatment.
  */
+import { getPublicBaseUrl } from "./publicBaseUrl";
+
 let redirecting = false;
 
 export function redirectToSignInOnce(): void {
   if (redirecting) return;
   if (typeof window === "undefined") return;
   redirecting = true;
-  const base = (import.meta.env.VITE_PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
-  window.location.href = `${base}/signin`;
+  window.location.href = `${getPublicBaseUrl()}/signin`;
 }
 
 /** Test-only: reset the module guard between cases. */

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { AlertTriangle, Clock, Eye, ExternalLink, Share2 } from "lucide-react";
 import { type KeepRequestDetailResult } from "../../lib/apiClient";
+import { getPublicBaseUrl } from "../../lib/publicBaseUrl";
 import { KeepBadge } from "../../components/keep/KeepBadge";
 import {
   isDateOnlyToday,
@@ -25,7 +26,7 @@ interface CustomerPageLinkProps {
 }
 
 export function CustomerPageLink({ pageToken }: CustomerPageLinkProps) {
-  const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
+  const publicBaseUrl = getPublicBaseUrl();
   const customerPageUrl = `${publicBaseUrl}/keep/r/${pageToken}`;
 
   return (
