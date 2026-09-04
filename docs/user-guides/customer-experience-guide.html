@@ -154,6 +154,50 @@
     margin:0 0 10px;padding:10px 14px;border-left:3px solid var(--accent);
     background:var(--accent-soft);border-radius:0 8px 8px 0;color:var(--ink);
   }
+
+  /* ---- print / PDF ---- */
+  @page{ margin: 14mm 15mm; }
+  @media print{
+    /* force the light palette regardless of the viewer's theme */
+    :root, :root[data-theme="dark"], :root:not([data-theme="light"]){
+      --ground:#ffffff; --surface:#ffffff; --ink:#141d2b; --ink-soft:#414c5e;
+      --line:#c7d0dc; --line-soft:#dde4ec;
+      --primary:#10243e; --primary-deep:#0b1a2e;
+      --accent:#0e6a76; --accent-soft:#e6f0f1;
+      --attention:#a85c14; --attention-soft:#f6e9da;
+      --shadow:none;
+    }
+    /* print background fills even without the "Background graphics" checkbox */
+    :root{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    *{ box-shadow:none !important; }
+
+    body{ background:#fff; color:var(--ink); font-size:10.5pt; line-height:1.5; }
+    header.top, .wrap, footer{ max-width:none; margin:0; padding:0; }
+    header.top{ padding:0 0 10pt; }
+    footer{ margin-top:24pt; padding-top:10pt; font-size:8pt; }
+    a{ color:var(--primary); text-decoration:none; }
+
+    h1{ font-size:23pt; line-height:1.1; }
+    h2{ font-size:14pt; margin:18pt 0 3pt; break-after:avoid; }
+    .sub, .step h3, .track h3, figure.shot figcaption .look{ break-after:avoid; }
+    .standfirst{ font-size:12pt; }
+
+    /* keep visual blocks whole across page breaks */
+    figure.shot, .caution, .lede-block, .track, .ty, .journey .leg,
+    details.faq, .step, .fields, .fields .row, .types{ break-inside:avoid; }
+    figure.shot img{ max-height:none; }
+
+    /* expand every FAQ answer so nothing is hidden in the PDF */
+    details.faq > *{ content-visibility:visible !important; }
+    details.faq .a{ display:block !important; }
+    details.faq summary{ cursor:default; }
+    details.faq summary::after{ content:"" !important; }
+
+    /* the two-up grids sit better stacked on paper */
+    .tracks, .types{ display:block !important; }
+    .tracks > *, .types > *{ margin-bottom:10pt; }
+    .journey{ grid-template-columns:1fr 1fr !important; }
+  }
 </style>
 
 <header class="top">
@@ -163,7 +207,7 @@
   <div class="meta">
     <span>For: office staff &amp; owners</span>
     <span>Companion to: "Turning a phone call into a request"</span>
-    <span>Draft v3</span>
+    <span>Draft v4</span>
   </div>
 </header>
 
@@ -384,5 +428,21 @@
 </div>
 
 <footer>
-  OpHalo Keep &middot; What Your Customers See &middot; Draft v3 for review &middot; companion to "Turning a phone call into a request"
+  OpHalo Keep &middot; What Your Customers See &middot; Draft v4 for review &middot; companion to "Turning a phone call into a request"
 </footer>
+<script>
+  // Expand every FAQ while printing so no answer is missing from the PDF
+  (function(){
+    var opened=[];
+    addEventListener('beforeprint',function(){
+      opened=[];
+      document.querySelectorAll('details').forEach(function(d){
+        if(!d.open){opened.push(d);d.open=true;}
+      });
+    });
+    addEventListener('afterprint',function(){
+      opened.forEach(function(d){d.open=false;});
+      opened=[];
+    });
+  })();
+</script>
