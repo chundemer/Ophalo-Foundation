@@ -322,7 +322,7 @@ export default function IntakeForm({
                 : "Share a few details. After you submit, you'll get a private page to track this request and message the business."}
             </p>
 
-            <div className="mt-6 space-y-7">
+            <div className="mt-6 space-y-6">
 
             {/* ── Section 1: Contact ── */}
             <section>
@@ -330,12 +330,12 @@ export default function IntakeForm({
                 icon={<UserRound className="h-4 w-4" />}
                 label="Who should we contact?"
               />
-              <p className="mb-3 text-xs text-muted-foreground">
-                Shared only with {biz ?? "this business"} to respond to this request. Not used for
-                marketing or sold.
-              </p>
+              <div className="mb-4 flex items-center gap-1.5 rounded-md bg-[var(--keep-accent-bg)] px-3 py-2 text-xs text-[var(--ophalo-navy)]">
+                <Lock className="h-3 w-3 shrink-0 text-[var(--keep-accent)]" aria-hidden />
+                <span>Shared only with {biz ?? "this business"} — never sold or used for marketing.</span>
+              </div>
 
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label htmlFor="customerName" className={labelClass}>
                     Your name <RequiredMark />
@@ -411,10 +411,6 @@ export default function IntakeForm({
                       {fieldError.message}
                     </p>
                   )}
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    {biz ? `${biz} may use this to contact you about your request.` : "May be used to contact you about your request."}{" "}
-                    Not used for marketing.
-                  </p>
                 </div>
 
                 <div>
@@ -438,7 +434,7 @@ export default function IntakeForm({
             </section>
 
             {/* ── Section 2: Request details ── */}
-            <section>
+            <section className="border-t border-[var(--ophalo-border)] pt-6">
               <KeepSectionHeader
                 icon={<ClipboardList className="h-4 w-4" />}
                 label="What do you need help with?"
@@ -449,7 +445,7 @@ export default function IntakeForm({
               <textarea
                 id="description"
                 name="description"
-                rows={5}
+                rows={4}
                 required
                 disabled={submitting}
                 ref={(el) => { fieldRefs.current.description = el; }}
@@ -466,59 +462,60 @@ export default function IntakeForm({
             </section>
 
             {/* ── Section 3: Urgency ── */}
-            <section>
+            <section className="border-t border-[var(--ophalo-border)] pt-6">
               <KeepSectionHeader
                 icon={<Clock className="h-4 w-4" />}
                 label="How urgent is this?"
               />
-              <select
-                id="urgency"
-                name="urgency"
-                value={urgency}
-                onChange={(e) => setUrgency(e.target.value)}
-                disabled={submitting}
-                className={inputClass + " text-base"}
-              >
-                <option value="Routine">Routine</option>
-                <option value="Soon">Soon</option>
-                <option value="Urgent">Urgent</option>
-              </select>
-              {urgency === "Urgent" ? (
-                <div className="mt-2 flex gap-2 rounded-lg bg-[var(--ophalo-attention-bg)] px-3 py-2.5">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ophalo-attention)]" />
-                  <div>
-                    <p className="text-xs font-semibold text-[var(--ophalo-attention)]">Marked urgent</p>
-                    <p className="mt-0.5 text-xs text-[var(--ophalo-attention)]">
-                      This request will be highlighted for the business. If there's an immediate safety risk, call emergency services first.
-                    </p>
-                  </div>
-                </div>
-              ) : urgency === "Soon" ? (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Use Soon when you'd like help in the next day or two.
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Use Routine for work that can be scheduled when convenient.
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="How urgent is this?">
+                {[
+                  { value: "Routine", label: "Routine", description: "Convenient scheduling", tone: "" },
+                  { value: "Soon", label: "Soon", description: "Help in the next day or two", tone: "" },
+                  { value: "Urgent", label: "Urgent", description: "Needs attention as soon as possible", tone: "text-[var(--ophalo-attention)]" },
+                ].map((option) => (
+                  <label key={option.value} className="cursor-pointer">
+                    <input
+                      type="radio"
+                      name="urgency"
+                      value={option.value}
+                      checked={urgency === option.value}
+                      onChange={(e) => setUrgency(e.target.value)}
+                      disabled={submitting}
+                      className="peer sr-only"
+                    />
+                    <span className="flex min-h-[72px] rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5 transition-colors peer-checked:border-[var(--keep-accent)] peer-checked:bg-[var(--keep-accent-bg)] peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--keep-accent)] peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
+                      <span>
+                        <span className={`block text-sm font-semibold ${option.tone || "text-foreground"}`}>{option.label}</span>
+                        <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">{option.description}</span>
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {urgency === "Urgent" && (
+                <p className="mt-2 flex items-start gap-1.5 text-xs text-[var(--ophalo-attention)]">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                  If there&apos;s an immediate safety risk, call emergency services first.
                 </p>
               )}
             </section>
 
             {/* ── Section 4: Service location ── */}
-            <section>
+            <section className="border-t border-[var(--ophalo-border)] pt-6">
               <KeepSectionHeader
                 icon={<MapPin className="h-4 w-4" />}
                 label="Where is the service needed?"
               />
-              <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <div className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Lock className="h-3 w-3 shrink-0" aria-hidden />
                 <span>
                   Shared with {biz ?? "this business"} only. Not shown on your request page.
                 </span>
               </div>
 
-              <div className="space-y-3">
-                <div>
+              <div className="space-y-4">
+                <div className={showAptUnit ? "grid grid-cols-1 gap-4 sm:grid-cols-3" : ""}>
+                  <div className={showAptUnit ? "sm:col-span-2" : ""}>
                   <label htmlFor="serviceAddressLine1" className={labelClass}>
                     Street address <RequiredMark />
                   </label>
@@ -566,9 +563,10 @@ export default function IntakeForm({
                     + Add apartment / unit
                   </button>
                 )}
+                </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px_100px]">
-                  <div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
+                  <div className="sm:col-span-6">
                     <label htmlFor="serviceCity" className={labelClass}>
                       City <RequiredMark />
                     </label>
@@ -592,7 +590,7 @@ export default function IntakeForm({
                     )}
                   </div>
 
-                  <div>
+                  <div className="sm:col-span-3">
                     <label htmlFor="serviceState" className={labelClass}>
                       State <RequiredMark />
                     </label>
@@ -619,7 +617,7 @@ export default function IntakeForm({
                     )}
                   </div>
 
-                  <div>
+                  <div className="sm:col-span-3">
                     <label htmlFor="serviceZip" className={labelClass}>
                       ZIP <OptionalMark>Opt.</OptionalMark>
                     </label>
@@ -641,7 +639,7 @@ export default function IntakeForm({
             </div>{/* end space-y-7 sections */}
 
             {/* ── Submit ── */}
-            <div className="mt-6">
+            <div className="mt-6 border-t border-[var(--ophalo-border)] pt-6">
               {error && (
                 <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
                   <p className="text-sm text-destructive">{error}</p>
@@ -665,7 +663,8 @@ export default function IntakeForm({
               </KeepButton>
 
               <p className="mt-3 text-center text-xs text-muted-foreground">
-                You&apos;ll get a private request page after submitting.
+                <Lock className="mr-1 inline h-3 w-3" aria-hidden />
+                You&apos;ll instantly receive a private page to track progress and communicate with us.
               </p>
             </div>
           </KeepCardShell>
