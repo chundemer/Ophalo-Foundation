@@ -633,10 +633,21 @@ describe("App — V2 top-nav shell covers Getting Started and Settings", () => {
     await user.click(within(header).getByRole("button", { name: /Getting Started/ }));
 
     await screen.findByRole("heading", { name: "Getting started", level: 1 });
+    expect(window.location.hash).toBe("#/getting-started");
     expect(container.querySelector("aside")).toBeNull();
     expect(getDesktopHeader(container)).toBe(header);
     // Global New Request CTA stays available on this route (unlike Price Book).
     expect(within(header).getByRole("button", { name: /New Request/ })).toBeInTheDocument();
+  });
+
+  it("renders Getting Started from its direct URL", async () => {
+    window.location.hash = "#/getting-started";
+    const { container } = renderApp();
+
+    await screen.findByRole("heading", { name: "Getting started", level: 1 });
+    expect(within(getDesktopHeader(container)).getByRole("button", { name: /Getting Started/ })).toHaveClass(
+      "bg-[var(--keep-accent-bg)]",
+    );
   });
 
   it("keeps the desktop top-nav header (and no <aside> sidebar) after navigating to Settings", async () => {
@@ -647,9 +658,22 @@ describe("App — V2 top-nav shell covers Getting Started and Settings", () => {
     await user.click(within(header).getByRole("button", { name: /Settings/ }));
 
     await screen.findByRole("heading", { name: "Settings", level: 1 });
+    expect(window.location.hash).toBe("#/settings");
     expect(container.querySelector("aside")).toBeNull();
     expect(getDesktopHeader(container)).toBe(header);
     expect(within(header).getByRole("button", { name: /New Request/ })).toBeInTheDocument();
+  });
+
+  it("renders a Settings tab from its direct URL and keeps tab changes addressable", async () => {
+    window.location.hash = "#/settings?section=policy";
+    const user = userEvent.setup();
+    renderApp();
+
+    const policyTab = await screen.findByRole("tab", { name: "Response Policy" });
+    expect(policyTab).toHaveAttribute("aria-selected", "true");
+
+    await user.click(screen.getByRole("tab", { name: "Team" }));
+    expect(window.location.hash).toBe("#/settings?section=team");
   });
 });
 

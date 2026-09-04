@@ -74,6 +74,14 @@ export function getRouteFromLocation(): AppRoute {
   // Split the Price Book path from its query string before matching detail routes — otherwise
   // `#/pricebook?tab=assemblies` would fail every `#/pricebook/...` pattern and fall through.
   const [hashPath, hashQuery] = hash.split("?");
+  if (hashPath === "#/getting-started") return { page: "home" };
+  if (hashPath === "#/settings") {
+    const section = new URLSearchParams(hashQuery ?? "").get("section");
+    return {
+      page: "settings",
+      section: section === "public-profile" || section === "policy" || section === "team" ? section : undefined,
+    };
+  }
   // Checked before the generic item-detail pattern below — its broader `(.+)` would otherwise
   // also match "assembly/<id>".
   const assemblyMatch = hashPath.match(/^#\/pricebook\/assembly\/(.+)$/);
@@ -233,6 +241,11 @@ function AppShell() {
       history.pushState(null, "", `${base}${suffix}`);
     } else if (newRoute.page === "pricebook-assembly") {
       history.pushState(null, "", `${base}#/pricebook/assembly/${newRoute.offeringAssemblyId}`);
+    } else if (newRoute.page === "home") {
+      history.pushState(null, "", `${base}#/getting-started`);
+    } else if (newRoute.page === "settings") {
+      const suffix = newRoute.section ? `?section=${newRoute.section}` : "";
+      history.pushState(null, "", `${base}#/settings${suffix}`);
     } else {
       history.pushState(null, "", base);
     }
@@ -553,7 +566,13 @@ function AppShell() {
             onNavigateRequests={navigateToRequests}
           />
         )}
-        {route.page === "settings" && <Settings callerRole={role} scrollToSection={route.section} />}
+        {route.page === "settings" && (
+          <Settings
+            callerRole={role}
+            scrollToSection={route.section}
+            onNavigateSection={(section) => navigate({ page: "settings", section: section === "public-profile" ? undefined : section })}
+          />
+        )}
         {route.page === "pricebook" && (
           <PriceBook
             role={role}

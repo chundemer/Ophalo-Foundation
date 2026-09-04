@@ -235,7 +235,10 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
         </div>
       )}
       {showTwoPaneRequests && (
-        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto">
+        <div
+          data-testid="priority-preview-pane"
+          className="flex-1 min-w-0 min-h-0 overflow-y-auto bg-[var(--keep-request-canvas)]"
+        >
           <PriorityPreview
             snapshot={snapshot}
             onOpenRequest={(requestId) =>

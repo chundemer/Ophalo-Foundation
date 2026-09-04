@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type AccountRole } from "../lib/apiClient";
 import { CompanySection, draftFromSetup, type ProfileDraft } from "./settings/CompanySection";
@@ -23,11 +23,19 @@ const TABS: Array<{ id: SettingsTab; label: string }> = [
 export function Settings({
   callerRole,
   scrollToSection,
+  onNavigateSection,
 }: {
   callerRole: AccountRole;
   scrollToSection?: "public-profile" | "policy" | "team";
+  onNavigateSection?: (section: SettingsTab) => void;
 }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => initialTab(scrollToSection));
+
+  // The shell owns Settings' durable URL. Keep the selected tab synchronized when a direct link
+  // is loaded or browser Back/Forward changes `#/settings?section=…`.
+  useEffect(() => {
+    setActiveTab(initialTab(scrollToSection));
+  }, [scrollToSection]);
 
   const { data: setup, isLoading: setupLoading, isError: setupError } = useQuery({
     queryKey: ["setup"],
@@ -64,7 +72,10 @@ export function Settings({
               type="button"
               role="tab"
               aria-selected={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id);
+                onNavigateSection?.(tab.id);
+              }}
               className={`relative -mb-px px-0.5 py-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
                 activeTab === tab.id
                   ? "border-b-2 border-[var(--keep-accent)] text-[var(--ophalo-navy)]"

@@ -194,6 +194,8 @@ describe("RequestWorkbenchShell", () => {
     // Priority Preview mounts as a second, independent presentation of the applied snapshot —
     // distinguishable here by its "Open request" action, which the Queue-pane row does not render.
     await waitFor(() => expect(screen.getByRole("button", { name: /open request/i })).toBeInTheDocument());
+    // The unselected canvas is part of the Request workspace, not the warm app-level canvas.
+    expect(screen.getByTestId("priority-preview-pane").className).toContain("bg-[var(--keep-request-canvas)]");
   });
 
   it("Open request preserves the applied queue's request-ID navigation context", async () => {
