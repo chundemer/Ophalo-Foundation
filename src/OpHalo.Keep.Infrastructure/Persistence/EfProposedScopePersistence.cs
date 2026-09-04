@@ -135,8 +135,8 @@ public sealed class EfProposedScopePersistence(OpHaloDbContext dbContext) : IPro
                     FROM keep_pricebook_removed_scope_line_snapshots
                     WHERE removed_at_utc < {olderThanUtc}
                     ORDER BY removed_at_utc, id
-                    FOR UPDATE SKIP LOCKED
                     LIMIT {ExpiredSnapshotCleanupBatchSize}
+                    FOR UPDATE SKIP LOCKED
                 )
                 """, ct);
 
