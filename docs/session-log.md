@@ -137,6 +137,14 @@ authenticated `/me` endpoint and belongs in shell chrome, outside Request Anchor
 
 ## Deferred next work
 
+- **Pilot onboarding upgrade:** [ADR-496](decisions/ADR-496-pilot-package-provisioning-and-release-visibility.md)
+  locks automatic Price Book package enrollment for newly provisioned Pilot accounts, separates
+  package entitlement from unreleased Proposed Work/Quote visibility, and replaces checklist-led
+  first-run guidance with a request-first path. Price Book is visible immediately; Proposed Work
+  and Quotes are unavailable until onboarding is complete and signed off. Automated enrollment uses
+  a migration-backed `SystemProvisioning` audit provenance, not a bootstrap pseudo-user or the new
+  customer owner. [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md) is the Gemini-ready
+  session list. Do not start mutation work until its Session 0 release-gate audit is accepted.
 - **4g pilot request-close advisory:** preflight after the above safety/usability sequence. It is an
   advisory on outstanding Actual Work with a structured `Close anyway` pilot exception; it is not a
   hard Resolved→Closed gate. See BL136.
