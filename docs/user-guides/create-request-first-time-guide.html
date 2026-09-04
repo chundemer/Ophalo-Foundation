@@ -136,6 +136,24 @@
   }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
+  .faq-group{margin:24px 0 0}
+  details.faq{border:1px solid var(--line);border-radius:10px;background:var(--surface);margin:0 0 10px;box-shadow:var(--shadow)}
+  details.faq summary{
+    cursor:pointer;padding:14px 16px;font-weight:600;font-size:.98rem;list-style:none;
+    display:flex;justify-content:space-between;gap:12px;color:var(--ink);
+  }
+  details.faq summary::-webkit-details-marker{display:none}
+  details.faq summary::after{content:"+";color:var(--accent);font-family:"IBM Plex Mono",monospace;flex:none}
+  details.faq[open] summary::after{content:"\2013"}
+  details.faq .a{padding:0 16px 16px;font-size:.95rem;color:var(--ink-soft);line-height:1.55}
+  details.faq .a p{margin:0 0 10px}
+  details.faq .a p:last-child{margin:0}
+  details.faq .a ul{margin:0 0 10px;padding-left:20px}
+  details.faq .a li{margin:0 0 4px}
+  details.faq .a blockquote{
+    margin:0 0 10px;padding:10px 14px;border-left:3px solid var(--accent);
+    background:var(--accent-soft);border-radius:0 8px 8px 0;color:var(--ink);
+  }
 </style>
 
 <header class="top">
@@ -145,7 +163,7 @@
   <div class="meta">
     <span>For: office &amp; dispatch staff</span>
     <span>Time: ~2 minutes per request</span>
-    <span>Draft v3 &middot; staff-entered requests</span>
+    <span>Draft v4 &middot; staff-entered requests</span>
   </div>
 </header>
 
@@ -280,8 +298,151 @@
     <li><strong>The short code is yours to use.</strong> Read it out on the phone, write it on a work order &mdash; anyone on the team can pull the request up by it.</li>
   </ul>
 
+  <h2>Questions office and dispatch staff often ask</h2>
+  <p class="sub">Capturing requests, and what to say to customers.</p>
+
+  <div class="faq-group">
+
+    <details class="faq"><summary>What is a request?</summary><div class="a">
+      <p>One customer problem your business is responsible for handling. It gives that problem one home &mdash; the customer details, original need, communication, updates, work history, and eventual outcome.</p>
+      <p>Examples: "No heat since last night." &middot; "Need an estimate for a new water heater." &middot; "The AC is running but not cooling."</p>
+    </div></details>
+
+    <details class="faq"><summary>When should I create a request?</summary><div class="a">
+      <p>As soon as the business is on the hook to respond, investigate, schedule, quote, or follow up.</p>
+      <p>You don't need every detail first. A customer name, phone number, source, and short description are enough to get started.</p>
+    </div></details>
+
+    <details class="faq"><summary>What if the call turns out not to need service?</summary><div class="a">
+      <p>Better to capture the request and cancel or close it than lose the record of the customer contact. It gives the team a clear history of what happened.</p>
+    </div></details>
+
+    <details class="faq"><summary>Should I make one request or two?</summary><div class="a">
+      <p>One request for one customer problem. If the customer has two unrelated issues &mdash; "no heat" and a separate "kitchen faucet leak" &mdash; make two requests. Separate requests keep communication, scheduling, work records, and follow-up clear.</p>
+    </div></details>
+
+    <details class="faq"><summary>What's the fastest way to capture a request?</summary><div class="a">
+      <p>Use <strong>Enter request for customer</strong> when you already have the details from the call. This is the everyday path for office and dispatch staff.</p>
+      <p>Start with the phone number &mdash; if Ophalo recognizes a returning customer, it can fill in known details for you.</p>
+    </div></details>
+
+    <details class="faq"><summary>When should I use Text a Link instead?</summary><div class="a">
+      <p>When the customer can describe the issue directly and you want their own words on the record. Especially helpful when they're already on their phone, can describe it more easily themselves, or you want them to enter the service address and get their own private tracking page.</p>
+    </div></details>
+
+    <details class="faq"><summary>Does Keep send the text message automatically?</summary><div class="a">
+      <p>No. Keep prepares the message and QR code; the text is sent from your own phone and messaging app. Scan the code, review the pre-addressed message, and press Send yourself. Customer communication stays in your normal business messaging process.</p>
+    </div></details>
+
+    <details class="faq"><summary>Why does the QR code open on my phone?</summary><div class="a">
+      <p>The QR code is for the staff member preparing the text. It opens a ready-made message on <em>your</em> phone, addressed to the customer. The customer does not scan it.</p>
+    </div></details>
+
+    <details class="faq"><summary>What happens after I text a customer the request link?</summary><div class="a">
+      <p>The customer opens the form, enters their details, and submits. The request then appears in your queue automatically, and the customer is taken to their private tracking page.</p>
+    </div></details>
+
+    <details class="faq"><summary>What if the customer never completes the form?</summary><div class="a">
+      <p>No request is created until the customer submits. If they don't complete it, follow up through your normal phone or text process, or use <strong>Enter request for customer</strong> to capture the details yourself.</p>
+    </div></details>
+
+    <details class="faq"><summary>What does the phone lookup do?</summary><div class="a">
+      <p>When you enter a complete phone number, Ophalo checks whether the business has helped that customer before. If there's a match, it can prefill their known details &mdash; saving time and keeping repeat customers connected to the right history.</p>
+    </div></details>
+
+    <details class="faq"><summary>What if the lookup doesn't find the customer?</summary><div class="a">
+      <p>Normal for a new customer. Continue entering their details manually and capture the request.</p>
+    </div></details>
+
+    <details class="faq"><summary>What fields are required when I enter a request myself?</summary><div class="a">
+      <ul>
+        <li>Customer name</li>
+        <li>Source</li>
+        <li>Description</li>
+      </ul>
+      <p>The phone number is entered during the customer lookup step. Email and service address can be added when available.</p>
+    </div></details>
+
+    <details class="faq"><summary>Why do we need to choose a Source?</summary><div class="a">
+      <p>Source records how the request reached the business &mdash; phone call, voicemail, text thread, email, walk-in, referral, or other. It helps the business understand where demand comes from and gives future staff useful context when reviewing the request.</p>
+    </div></details>
+
+    <details class="faq"><summary>How detailed should the description be?</summary><div class="a">
+      <p>One or two clear lines in the customer's words whenever possible.</p>
+      <p>Good: "No heat since last night. Furnace is blowing cold air." Avoid vague descriptions like "Needs help." The goal is enough context for the next person to understand why the customer got in touch.</p>
+    </div></details>
+
+    <details class="faq"><summary>Should I enter the service address right away?</summary><div class="a">
+      <p>Enter it if the customer provides it. It's optional when staff capture the request, but adding it early saves follow-up work for dispatch or the assigned team member.</p>
+    </div></details>
+
+    <details class="faq"><summary>Does capturing a request automatically notify the customer?</summary><div class="a">
+      <p>No. A newly captured staff-entered request is private to the team until someone shares the customer's private page link. Creating a request does not text, email, schedule, or notify the customer on its own.</p>
+    </div></details>
+
+    <details class="faq"><summary>How do I share the customer's private page after creating a request?</summary><div class="a">
+      <p>After capture, use the sharing options to send the private page link by text or email. Share it immediately, or return to the request later and share it from the workbench.</p>
+    </div></details>
+
+    <details class="faq"><summary>What should I say when sending the customer page link?</summary><div class="a">
+      <blockquote>"We've logged your request. Use this private link to follow updates and message us if anything changes."</blockquote>
+      <p>Don't promise a response time, appointment, or completed booking unless your business has actually confirmed one.</p>
+    </div></details>
+
+    <details class="faq"><summary>What can the customer see after we share their page?</summary><div class="a">
+      <p>The customer-facing status, business updates you choose to post, their original message, and their own communication with the business.</p>
+      <p>They cannot see internal notes, staff assignments, internal activity, financial details, or internal scheduling information.</p>
+    </div></details>
+
+    <details class="faq"><summary>What if I forget to share the customer page?</summary><div class="a">
+      <p>The request still exists and appears in the team queue. Ophalo highlights that the customer page hasn't been shared and points staff toward the next step. You can share the link later from the request workbench.</p>
+    </div></details>
+
+    <details class="faq"><summary>What is the request code for?</summary><div class="a">
+      <p>Every request has a short reference code. Use it when talking with the customer, writing notes on paper, or helping another team member find the right request quickly.</p>
+    </div></details>
+
+    <details class="faq"><summary>What happens after the request is created?</summary><div class="a">
+      <p>New requests start in a <strong>Received</strong> state and appear in the <strong>Open Work</strong> queue. From the request workbench, the team can contact the customer, share the customer page, post updates, record work, and move the request forward.</p>
+    </div></details>
+
+    <details class="faq"><summary>Do Call, Text, and Email buttons contact the customer automatically?</summary><div class="a">
+      <p>They start the appropriate handoff from your device or normal communication method. Staff should still confirm the contact and record information accurately. Use the request workbench so communication stays connected to the correct customer problem.</p>
+    </div></details>
+
+    <details class="faq"><summary>Can I edit a request after I capture it?</summary><div class="a">
+      <p>Yes. A request is a starting record, not a final work order. Add information as it becomes available, and keep customer-facing updates separate from internal notes.</p>
+    </div></details>
+
+    <details class="faq"><summary>What if I accidentally create a duplicate request?</summary><div class="a">
+      <p>Review the customer phone number, name, description, and recent requests. If it's genuinely a duplicate, follow your team's process to consolidate, cancel, or close the unnecessary record rather than leaving two active requests.</p>
+    </div></details>
+
+    <details class="faq"><summary>What should I avoid putting in a request description?</summary><div class="a">
+      <p>No passwords, full card numbers, banking information, or other sensitive details. Use your normal secure payment or verification process instead.</p>
+    </div></details>
+
+    <details class="faq"><summary>What should I avoid promising during intake?</summary><div class="a">
+      <p>Avoid promising:</p>
+      <ul>
+        <li>A specific appointment time before it is scheduled.</li>
+        <li>A specific price before the business has reviewed the work.</li>
+        <li>Immediate emergency response.</li>
+        <li>Automatic customer notifications.</li>
+        <li>That the request is booked simply because it was captured.</li>
+      </ul>
+      <blockquote>"I've logged your request so the team can review it. We'll follow up with the next step."</blockquote>
+    </div></details>
+
+    <details class="faq"><summary>What's the simplest staff rule to remember?</summary><div class="a">
+      <p><strong>One customer problem, one request, one shared history.</strong></p>
+      <p>Capture it early, write the customer's need clearly, and share the private page when the customer should be able to follow along.</p>
+    </div></details>
+
+  </div>
+
 </div>
 
 <footer>
-  OpHalo Keep &middot; Logging a Customer Request &middot; Draft v3 for review &middot; covers staff-entered requests; customer self-submitted requests are in the companion guide
+  OpHalo Keep &middot; Logging a Customer Request &middot; Draft v4 for review &middot; covers staff-entered requests; customer self-submitted requests are in the companion guide
 </footer>
