@@ -117,11 +117,6 @@ export function Requests({
   const tabs = getTabsForRole(role);
   const [activeTab, setActiveTab] = useState<TabDef>(tabs[0]);
   const allWorkTab = tabs.find((t) => t.id === "default") ?? null;
-  // GAP-057: an explicit queue choice (tab click or keyboard) locks the queue for the rest of
-  // the visit — the initial-landing auto-selection must never override it, and neither may a
-  // later background count refresh. The ref latches once the landing decision has been made.
-  const [queueExplicitlyChosen, setQueueExplicitlyChosen] = useState(false);
-  const initialQueueResolvedRef = useRef(false);
   const [activeModalAction, setActiveModalAction] = useState<{
     row: KeepRequestSummary;
     action: KeepQuickAction;
@@ -147,8 +142,6 @@ export function Requests({
   const isOnFirstPage = cursor === null;
 
   function selectTab(tab: TabDef) {
-    setQueueExplicitlyChosen(true);
-    initialQueueResolvedRef.current = true;
     if (tab.view !== activeTab.view) onUserQueueChange?.();
     setActiveTab(tab);
     setQ("");
@@ -389,21 +382,6 @@ export function Requests({
       onViewCountsUpdate(latestCounts);
     }
   }, [latestCounts, onViewCountsUpdate]);
-
-  // GAP-057: on initial Requests landing only — if the landing Needs Attention queue is empty,
-  // move to All work so the owner sees the real workload (or All work's genuine no-active-work
-  // state) without a click. Runs once, only before any explicit queue choice, never in history
-  // mode. If Needs Attention has items, the attention-first landing stays put.
-  useEffect(() => {
-    if (initialQueueResolvedRef.current || queueExplicitlyChosen || historyMode) return;
-    if (!viewCounts || !allWorkTab || activeTab.id !== "needs_attention") return;
-    initialQueueResolvedRef.current = true;
-    if (viewCounts.needsAttention === 0) {
-      setActiveTab(allWorkTab);
-      setCursor(null);
-      cursorStack.current = [];
-    }
-  }, [viewCounts, queueExplicitlyChosen, historyMode, activeTab.id, allWorkTab]);
 
   const secondaryViews = getSecondaryViewsForRole(role);
   const officeReviewMembers = getOfficeReviewMembersForRole(role);

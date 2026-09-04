@@ -10,11 +10,9 @@ import type {
   KeepRequestViewCounts,
 } from "../../lib/apiClient";
 
-// GAP-057: an empty Needs Attention landing must not imply the system has no active work.
-// On initial landing only, a zero-attention count moves selection to All work; an explicit
-// selection is never overridden by a later count change; a deliberately-selected empty
-// Attention queue shows the truthful "Nothing needs attention" + "View all N" state and
-// never "No active requests".
+// GAP-057: an empty Needs Attention queue must not imply the system has no active work. The
+// Attention queue remains selected, describes its empty state truthfully, and offers All Work as
+// an explicit choice rather than silently redirecting the owner.
 
 const mockGetRequests = vi.fn();
 const mockGetAvailableRequests = vi.fn();
@@ -105,8 +103,8 @@ beforeEach(() => {
   mockGetActualWorkReviewQueueCount.mockReset().mockResolvedValue({ count: 0 });
 });
 
-describe("Requests — GAP-057 initial queue selection", () => {
-  it("zero Attention + active All work: lands on All work and shows its requests without a click", async () => {
+describe("Requests — GAP-057 empty Attention queue", () => {
+  it("zero Attention + active All work: stays on Attention and offers All Work without a redirect", async () => {
     mockGetRequests.mockImplementation((q: { view: string }) =>
       Promise.resolve(
         q.view === "needs_attention"
@@ -117,9 +115,10 @@ describe("Requests — GAP-057 initial queue selection", () => {
     renderRequests("owner");
 
     await waitFor(() =>
-      expect(screen.getByRole("tab", { name: /All Work/ })).toHaveAttribute("aria-selected", "true"),
+      expect(screen.getByRole("tab", { name: /Needs Attention/ })).toHaveAttribute("aria-selected", "true"),
     );
-    expect(await screen.findByText(mockRequestSummaries[0].customerName)).toBeInTheDocument();
+    expect((await screen.findAllByText("Nothing needs attention")).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("button", { name: /View all 4 active requests/ })).toBeInTheDocument();
     expect(screen.queryByText("No active requests")).not.toBeInTheDocument();
   });
 
@@ -135,16 +134,17 @@ describe("Requests — GAP-057 initial queue selection", () => {
     expect(await screen.findByText(mockRequestSummaries[0].customerName)).toBeInTheDocument();
   });
 
-  it("truly empty All work: lands on All work and shows the genuine no-active-work state", async () => {
+  it("truly empty work: keeps Attention selected and does not offer a false All Work recovery", async () => {
     mockGetRequests.mockImplementation((q: { view: string }) =>
       Promise.resolve(listResult(q.view, [], emptyEverything)),
     );
     renderRequests("owner");
 
     await waitFor(() =>
-      expect(screen.getByRole("tab", { name: /All Work/ })).toHaveAttribute("aria-selected", "true"),
+      expect(screen.getByRole("tab", { name: /Needs Attention/ })).toHaveAttribute("aria-selected", "true"),
     );
-    expect((await screen.findAllByText("All promises covered")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Nothing needs attention")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /View all .* active requests/i })).not.toBeInTheDocument();
     expect(screen.queryByText("No active requests")).not.toBeInTheDocument();
   });
 
@@ -177,12 +177,6 @@ describe("Requests — GAP-057 initial queue selection", () => {
       ),
     );
     renderRequests("owner");
-
-    // Landing auto-moves to All Work (attention count 0); user then explicitly returns to Attention.
-    await waitFor(() =>
-      expect(screen.getByRole("tab", { name: /All Work/ })).toHaveAttribute("aria-selected", "true"),
-    );
-    fireEvent.click(screen.getByRole("tab", { name: /Needs Attention/ }));
 
     expect((await screen.findAllByText("Nothing needs attention")).length).toBeGreaterThan(0);
     const viewAll = await screen.findByRole("button", { name: /View all 3 active requests/ });
