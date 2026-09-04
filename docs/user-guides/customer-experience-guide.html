@@ -136,6 +136,24 @@
   }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
+  .faq-group{margin:24px 0 0}
+  details.faq{border:1px solid var(--line);border-radius:10px;background:var(--surface);margin:0 0 10px;box-shadow:var(--shadow)}
+  details.faq summary{
+    cursor:pointer;padding:14px 16px;font-weight:600;font-size:.98rem;list-style:none;
+    display:flex;justify-content:space-between;gap:12px;color:var(--ink);
+  }
+  details.faq summary::-webkit-details-marker{display:none}
+  details.faq summary::after{content:"+";color:var(--accent);font-family:"IBM Plex Mono",monospace;flex:none}
+  details.faq[open] summary::after{content:"\2013"}
+  details.faq .a{padding:0 16px 16px;font-size:.95rem;color:var(--ink-soft);line-height:1.55}
+  details.faq .a p{margin:0 0 10px}
+  details.faq .a p:last-child{margin:0}
+  details.faq .a ul{margin:0 0 10px;padding-left:20px}
+  details.faq .a li{margin:0 0 4px}
+  details.faq .a blockquote{
+    margin:0 0 10px;padding:10px 14px;border-left:3px solid var(--accent);
+    background:var(--accent-soft);border-radius:0 8px 8px 0;color:var(--ink);
+  }
 </style>
 
 <header class="top">
@@ -145,7 +163,7 @@
   <div class="meta">
     <span>For: office staff &amp; owners</span>
     <span>Companion to: "Turning a phone call into a request"</span>
-    <span>Draft v2</span>
+    <span>Draft v3</span>
   </div>
 </header>
 
@@ -239,8 +257,132 @@
     <li><strong>Not for payment details.</strong> The message box warns against it. Take card numbers by phone or your normal invoicing, never in Keep.</li>
   </ul>
 
+  <h2>Questions businesses often ask</h2>
+  <p class="sub">About the customer experience, and what to promise.</p>
+
+  <div class="faq-group">
+
+    <details class="faq"><summary>Do customers need to download an app or create an account?</summary><div class="a">
+      <p>No. Customers use a normal web link &mdash; no username, password, or Ophalo account.</p>
+      <p>They use two links: your public request-page link to start a request, and their private tracking link to follow that specific request.</p>
+    </div></details>
+
+    <details class="faq"><summary>What does a customer see when they open our public request link?</summary><div class="a">
+      <p>A request form branded with your business name and, if configured, your logo and customer-facing phone number.</p>
+      <p>They provide contact information, describe what they need, select an urgency, and enter the service address. After submitting, they go straight to their private tracking page.</p>
+    </div></details>
+
+    <details class="faq"><summary>What information is required from a customer?</summary><div class="a">
+      <p>Name and mobile phone are required, so the business has a reliable way to identify and contact the customer.</p>
+      <p>Email, preferred contact method, ZIP code, and apartment/unit are optional &mdash; unless the customer chooses email as their preferred contact method.</p>
+    </div></details>
+
+    <details class="faq"><summary>Why do we ask for an address if the customer can't see it later?</summary><div class="a">
+      <p>The service address helps your team understand where work is needed and respond appropriately. It is deliberately kept off the customer's tracking page.</p>
+      <p>So if a customer forwards their tracking link, the recipient does not automatically see the service address.</p>
+    </div></details>
+
+    <details class="faq"><summary>Is the customer's information sold or used for marketing?</summary><div class="a">
+      <p>No. The request form states that the information is shared only with the business receiving the request, and is not sold or used for marketing.</p>
+    </div></details>
+
+    <details class="faq"><summary>Can customers choose how we contact them?</summary><div class="a">
+      <p>Yes &mdash; text message, phone call, email, or no preference. This is a helpful instruction for your team, not a guarantee that every communication will use that method.</p>
+    </div></details>
+
+    <details class="faq"><summary>What do Routine, Soon, and Urgent mean?</summary><div class="a">
+      <ul>
+        <li><strong>Routine</strong> &mdash; work that can be scheduled when convenient.</li>
+        <li><strong>Soon</strong> &mdash; the customer would like help in the next day or two.</li>
+        <li><strong>Urgent</strong> &mdash; the customer believes the request needs prompt attention.</li>
+      </ul>
+      <p>Urgency helps your team prioritize. It is not shown on the customer's private tracking page.</p>
+    </div></details>
+
+    <details class="faq"><summary>Does Urgent mean we provide emergency service?</summary><div class="a">
+      <p>Not automatically. Urgent highlights the request for the business, but it does not promise an immediate response or emergency dispatch.</p>
+      <p>For an immediate safety risk, customers should contact emergency services first.</p>
+    </div></details>
+
+    <details class="faq"><summary>What happens immediately after a customer submits a request?</summary><div class="a">
+      <p>Their private tracking page opens right away. No email confirmation to wait for, no account to create.</p>
+      <p>The page shows their request status, reference code, original message, and the business contact information.</p>
+    </div></details>
+
+    <details class="faq"><summary>Do customers get a notification every time we post an update?</summary><div class="a">
+      <p>The update appears on their private tracking page. Keep using your normal text, phone, or email process whenever you need to be sure a customer sees something time-sensitive.</p>
+      <p>Don't promise automatic text or email notifications unless your business has separately confirmed and enabled that process.</p>
+    </div></details>
+
+    <details class="faq"><summary>What can customers do from the private tracking page?</summary><div class="a">
+      <p>Follow the request status, read business updates, send a message, ask for a call, share availability, add useful details, or cancel the request when appropriate.</p>
+      <p>Everything they send is kept with that request's communication history for the business to review.</p>
+    </div></details>
+
+    <details class="faq"><summary>Can customers see our internal notes, prices, or team activity?</summary><div class="a">
+      <p>No. Customers see only customer-facing status and updates the business deliberately posts to the tracking page.</p>
+      <p>Internal notes, staff activity, assignments, urgency, address, and internal financial information stay private to the business.</p>
+    </div></details>
+
+    <details class="faq"><summary>Can a customer see another customer's request?</summary><div class="a">
+      <p>No. Each request has its own private tracking link.</p>
+      <p>Anyone who has that specific link can open that specific request, though &mdash; so the customer should keep it private and avoid forwarding it unless they're comfortable sharing the request details.</p>
+    </div></details>
+
+    <details class="faq"><summary>What if a customer loses their private tracking link?</summary><div class="a">
+      <p>The business can re-send or share the private link from the request record. The customer does not need an account to recover access.</p>
+    </div></details>
+
+    <details class="faq"><summary>Can we use the same public request link everywhere?</summary><div class="a">
+      <p>Yes. It's designed to be reused &mdash; website, email signature, text replies, invoices, QR codes, printed materials, social profiles.</p>
+    </div></details>
+
+    <details class="faq"><summary>What happens if we replace our public request link?</summary><div class="a">
+      <p>The old link stops working. Only replace it if it has been misused or needs to be retired.</p>
+      <p>If you replace it, update every place the old link was shared or printed.</p>
+    </div></details>
+
+    <details class="faq"><summary>Can customers submit more than one request?</summary><div class="a">
+      <p>Yes. Each submission creates its own request and private tracking page. If the requests are related, your team can review them together internally.</p>
+    </div></details>
+
+    <details class="faq"><summary>What if a customer submits a duplicate request by mistake?</summary><div class="a">
+      <p>Your team can compare the name, phone number, description, and service address to spot likely duplicates. Keep preserves every submission so the business decides how to handle it, rather than silently losing a request.</p>
+    </div></details>
+
+    <details class="faq"><summary>Can a customer cancel a request?</summary><div class="a">
+      <p>Customers can use their tracking page to tell the business they no longer need help. The business still controls the internal workflow and confirms the appropriate final status.</p>
+    </div></details>
+
+    <details class="faq"><summary>Can customers send sensitive information through the message box?</summary><div class="a">
+      <p>They should not send passwords, full card numbers, banking information, or other highly sensitive details. The page reminds them of this.</p>
+      <p>Collect payment details through your normal secure process &mdash; by phone, or your existing invoicing/payment system.</p>
+    </div></details>
+
+    <details class="faq"><summary>Does Ophalo replace our phone, text, email, or scheduling system?</summary><div class="a">
+      <p>No. Ophalo gives each request a clear place to start, follow updates, and keep the customer/business conversation connected to that request. Keep using the phone, text, email, calendar, and payment tools you already rely on.</p>
+    </div></details>
+
+    <details class="faq"><summary>What should we tell customers before we share the link?</summary><div class="a">
+      <blockquote>"Use this link to send us the details. After you submit it, you'll get a private page where you can follow updates and message us &mdash; no account needed."</blockquote>
+    </div></details>
+
+    <details class="faq"><summary>What should our team avoid promising?</summary><div class="a">
+      <p>Avoid promising:</p>
+      <ul>
+        <li>A specific response time, unless your business has committed to one.</li>
+        <li>Immediate emergency service.</li>
+        <li>Automatic text or email notifications for every update.</li>
+        <li>Customer-visible pricing, appointments, or payment processing, unless those workflows are separately confirmed.</li>
+        <li>That a customer message alone confirms a booking or scheduled visit.</li>
+      </ul>
+      <p>The safest language: "We received your request," "We'll review it," and "Check your private page for updates."</p>
+    </div></details>
+
+  </div>
+
 </div>
 
 <footer>
-  OpHalo Keep &middot; What Your Customers See &middot; Draft v2 for review &middot; companion to "Turning a phone call into a request"
+  OpHalo Keep &middot; What Your Customers See &middot; Draft v3 for review &middot; companion to "Turning a phone call into a request"
 </footer>
