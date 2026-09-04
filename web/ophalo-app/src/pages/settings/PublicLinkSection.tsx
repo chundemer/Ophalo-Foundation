@@ -129,10 +129,12 @@ function ReplaceLinkDialog({ replacing, error, onConfirm, onClose, triggerRef }:
         <h3 id="replace-link-dialog-title" className="font-serif text-lg font-semibold text-[var(--ophalo-ink)]">
           Replace this link?
         </h3>
-        <p className="text-xs text-[var(--ophalo-attention)]">
-          Your current public link and every previously shared link or link name — including any
-          you emailed or posted — will stop working immediately. This cannot be undone.
-        </p>
+        <div className="rounded-lg border border-[var(--ophalo-attention)]/30 bg-[var(--ophalo-attention-bg)] p-3">
+          <p className="text-xs text-[var(--ophalo-attention)]">
+            Your current public link and every previously shared link or link name — including any
+            you emailed or posted — will stop working immediately. This cannot be undone.
+          </p>
+        </div>
         <div className="space-y-1">
           <label htmlFor="replace-link-confirmation" className="text-xs font-medium text-[var(--ophalo-muted)]">
             Type REPLACE to confirm
@@ -145,7 +147,7 @@ function ReplaceLinkDialog({ replacing, error, onConfirm, onClose, triggerRef }:
             onChange={(e) => setConfirmation(e.target.value)}
             disabled={replacing}
             autoComplete="off"
-            className="w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-1.5 text-sm text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] disabled:opacity-50"
+            className="keep-field w-full disabled:opacity-50"
             onKeyDown={(e) => {
               if (e.key === "Enter" && canConfirm) onConfirm(confirmation);
             }}
@@ -385,7 +387,7 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
                   onChange={(e) => setNameInput(e.target.value)}
                   placeholder="e.g. Acme Plumbing"
                   disabled={savingName}
-                  className="flex-1 min-w-0 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-1.5 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] disabled:opacity-50"
+                  className="keep-field flex-1 min-w-0 placeholder:text-[var(--ophalo-muted)] disabled:opacity-50"
                   onKeyDown={(e) => { if (e.key === "Enter") void handleSaveName(); }}
                 />
                 <button
@@ -433,54 +435,57 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
 
       {error && <p className="text-sm text-[var(--ophalo-danger)]">{error}</p>}
 
-      {/* phone-sized customer preview — reflects unsaved draft, never fetched from the live public page */}
+      {/* phone-sized customer preview — reflects unsaved draft, never fetched from the live
+          public page. Framed as the surface's deliberate Keep-teal moment. */}
       {intake?.hasActiveLink && (
         <div className="pt-2">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Customer preview</p>
-            <p className="text-[11px] text-slate-400">Unsaved changes shown live — save to publish</p>
-          </div>
-          <div className="mx-auto max-w-[300px] rounded-2xl border-2 border-slate-200 bg-white shadow-md overflow-hidden">
-            <div className="bg-slate-800 h-5 flex items-center justify-center">
-              <div className="w-10 h-1 rounded-full bg-slate-600" />
+          <div className="rounded-xl border border-[var(--keep-accent)]/25 bg-[var(--keep-accent-bg)]/30 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--keep-accent)]">Customer preview</p>
+              <p className="text-[11px] text-[var(--ophalo-muted)]">Unsaved changes shown live — save to publish</p>
             </div>
-            <div className="px-4 py-4 space-y-3">
-              <div className="flex items-center gap-2">
-                {logoUrl.trim() && logoUrl.trim() !== failedLogoUrl ? (
-                  <div className="flex h-8 shrink-0 items-center">
-                    <img
-                      src={logoUrl.trim()}
-                      alt={`${businessName.trim() || "Business"} logo`}
-                      className="h-auto w-auto max-h-8 max-w-[96px] object-contain"
-                      onError={() => setFailedLogoUrl(logoUrl.trim())}
-                    />
-                  </div>
-                ) : (
-                  <div className="h-8 w-8 rounded-full bg-slate-200 text-slate-600 text-[10px] font-semibold flex items-center justify-center shrink-0">
-                    {businessInitials(businessName)}
-                  </div>
-                )}
-                <p className="text-xs font-medium text-slate-700 truncate">{businessName.trim() || "Your business"}</p>
+            <div className="mx-auto max-w-[300px] overflow-hidden rounded-2xl border-2 border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-md">
+              <div className="flex h-5 items-center justify-center bg-[var(--ophalo-navy)]">
+                <div className="h-1 w-10 rounded-full bg-white/40" />
               </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">Submit a request</p>
-                <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                  Fill out the form and the business will follow up with you.
-                </p>
-              </div>
-              <div className="space-y-2">
-                {["Your name", "Phone number", "Email (optional)"].map((label) => (
-                  <div key={label}>
-                    <p className="text-[9px] text-slate-400 mb-0.5">{label}</p>
-                    <div className="h-5 rounded border border-slate-200 bg-slate-50" />
-                  </div>
-                ))}
-                <div>
-                  <p className="text-[9px] text-slate-400 mb-0.5">What do you need help with?</p>
-                  <div className="h-10 rounded border border-slate-200 bg-slate-50" />
+              <div className="space-y-3 px-4 py-4">
+                <div className="flex items-center gap-2">
+                  {logoUrl.trim() && logoUrl.trim() !== failedLogoUrl ? (
+                    <div className="flex h-8 shrink-0 items-center">
+                      <img
+                        src={logoUrl.trim()}
+                        alt={`${businessName.trim() || "Business"} logo`}
+                        className="h-auto w-auto max-h-8 max-w-[96px] object-contain"
+                        onError={() => setFailedLogoUrl(logoUrl.trim())}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--keep-accent-bg)] text-[10px] font-semibold text-[var(--keep-accent)]">
+                      {businessInitials(businessName)}
+                    </div>
+                  )}
+                  <p className="truncate text-xs font-medium text-[var(--ophalo-ink)]">{businessName.trim() || "Your business"}</p>
                 </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Submit a request</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-[var(--ophalo-muted)]">
+                    Fill out the form and the business will follow up with you.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {["Your name", "Phone number", "Email (optional)"].map((label) => (
+                    <div key={label}>
+                      <p className="mb-0.5 text-[9px] text-[var(--ophalo-muted)]">{label}</p>
+                      <div className="h-5 rounded border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]" />
+                    </div>
+                  ))}
+                  <div>
+                    <p className="mb-0.5 text-[9px] text-[var(--ophalo-muted)]">What do you need help with?</p>
+                    <div className="h-10 rounded border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]" />
+                  </div>
+                </div>
+                <div className="h-6 rounded bg-[var(--ophalo-navy)]" />
               </div>
-              <div className="h-6 rounded bg-slate-800" />
             </div>
           </div>
         </div>

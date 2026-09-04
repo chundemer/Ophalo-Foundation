@@ -79,3 +79,19 @@ describe("PublicLinkSection customer-preview logo rendering", () => {
     expect(screen.queryByAltText("Apex Home Services logo")).not.toBeInTheDocument();
   });
 });
+
+describe("PublicLinkSection customer-preview V2 treatment", () => {
+  it("frames the preview as the Keep-teal moment and keeps the save-to-publish caption", async () => {
+    const { container } = renderSection("");
+
+    const eyebrow = await screen.findByText("Customer preview");
+    expect(eyebrow.className).toContain("--keep-accent");
+    expect(
+      screen.getByText(/unsaved changes shown live — save to publish/i),
+    ).toBeInTheDocument();
+
+    // No generic Tailwind palette greys survive anywhere in the section.
+    expect(container.querySelector('[class*="slate-"]')).toBeNull();
+    expect(container.querySelector('[class*="gray-"]')).toBeNull();
+  });
+});

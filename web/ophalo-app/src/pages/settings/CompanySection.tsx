@@ -86,7 +86,7 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
       <p className="text-sm text-[var(--ophalo-muted)] mb-4">
         Customers see this business name on their request page. Add the public phone or email you want customers to use, or leave them hidden.
       </p>
-      <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
+      <form onSubmit={handleSubmit} className="space-y-5 max-w-lg">
         <div>
           <label htmlFor="company-business-name" className="block text-sm font-medium text-[var(--ophalo-ink)] mb-1">
             Business name
@@ -97,7 +97,7 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
             value={draft.businessName}
             onChange={(e) => { onDraftChange({ businessName: e.target.value }); setSaved(false); }}
             required
-            className="w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            className="keep-field w-full placeholder:text-[var(--ophalo-muted)]"
           />
         </div>
 
@@ -109,7 +109,7 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
             id="company-timezone"
             value={knownTz ? draft.timeZone : ""}
             onChange={(e) => { onDraftChange({ timeZone: e.target.value }); setSaved(false); }}
-            className="w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            className="keep-field w-full"
           >
             {!knownTz && (
               <option value="" disabled>
@@ -135,7 +135,7 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
             value={formatNaPhone(draft.customerFacingPhone)}
             onChange={(e) => { onDraftChange({ customerFacingPhone: normalizeNaPhoneInput(e.target.value) }); setSaved(false); }}
             placeholder="Optional"
-            className="w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            className="keep-field w-full placeholder:text-[var(--ophalo-muted)]"
           />
         </div>
 
@@ -149,7 +149,7 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
             value={draft.customerFacingEmail}
             onChange={(e) => { onDraftChange({ customerFacingEmail: e.target.value }); setSaved(false); }}
             placeholder="Optional"
-            className="w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            className="keep-field w-full placeholder:text-[var(--ophalo-muted)]"
           />
         </div>
 
@@ -172,7 +172,7 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
               value={draft.logoUrl}
               onChange={(e) => { onDraftChange({ logoUrl: e.target.value }); setSaved(false); }}
               placeholder="https://example.com/logo.png"
-              className="w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+              className="keep-field w-full placeholder:text-[var(--ophalo-muted)]"
             />
           </div>
 
@@ -186,7 +186,7 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
               value={draft.websiteUrl}
               onChange={(e) => { onDraftChange({ websiteUrl: e.target.value }); setSaved(false); }}
               placeholder="https://example.com"
-              className="w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+              className="keep-field w-full placeholder:text-[var(--ophalo-muted)]"
             />
           </div>
         </div>

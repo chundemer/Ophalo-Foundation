@@ -156,8 +156,15 @@ authenticated `/me` endpoint and belongs in shell chrome, outside Request Anchor
   `Settings.tsx` shell on the 880px frame with section-shaped loading/error placeholders;
   `PolicySection.tsx` inputs on `keep-field`. New `Home.readiness.test.tsx` (7 cases, pins the
   no-checklist/no-meter contract); `Settings.v2Shell.test.tsx` updated. Full app suite 1071
-  passed; production build passes. Slices B and C still pending, plus the §5 screenshot-acceptance
-  pass across all three.
+  passed; production build passes.
+  **Slice B delivered** (not yet product-owner visual-accepted): `CompanySection.tsx` inputs/select
+  on `keep-field`; `PublicLinkSection.tsx` — customer preview reframed as the Keep-teal moment and
+  all `slate-*` drift converted to tokens, replace-link warning moved into an attention callout,
+  confirmation + edit-name inputs on `keep-field`. Field sets, "Branding & trust anchors" grouping,
+  Save company, Edit link name, and the Replace-link destructive flow (stale-link warning, one-time
+  raw successor URL) are all logic-unchanged. `PublicLinkSection.logo.test.tsx` gains a preview
+  V2-treatment / no-`slate` assertion. Full app suite 1072 passed; production build passes.
+  Slice C (Team) still pending, plus the §5 screenshot-acceptance pass across all three.
 - **Price Book direct-cost visibility:** next after the Settings & Getting Started V2 UI upgrade.
   The Catalog Items workspace currently exposes current sell price but not current direct cost, so
   an Owner/Admin must open an item to determine whether the price book has a cost. Extend the
