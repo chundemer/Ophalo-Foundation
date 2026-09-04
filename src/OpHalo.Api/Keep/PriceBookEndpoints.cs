@@ -251,6 +251,7 @@ public static class PriceBookEndpoints
         ToResponse(row.Item),
         row.CurrentPriceLine?.PricingMode.ToString(),
         row.CurrentPriceLine?.SellPriceSnapshot,
+        row.CurrentPriceLine?.CostSnapshot,
         row.MatchRank.ToString(),
         row.MatchReason?.ToString());
 
@@ -382,6 +383,7 @@ internal sealed record CatalogItemListRowResponse(
     CatalogItemResponse Item,
     string? CurrentPricingMode,
     decimal? CurrentSellPrice,
+    decimal? CurrentCost,
     string MatchRank,
     string? MatchReason);
 

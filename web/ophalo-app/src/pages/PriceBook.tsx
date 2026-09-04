@@ -61,6 +61,12 @@ function formatPrice(row: { currentPricingMode: string | null; currentSellPrice:
   return row.currentSellPrice.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
+function formatCost(cost: number | null): string {
+  return cost == null
+    ? "—"
+    : cost.toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
+
 function isStandalonePrice(row: { currentPricingMode: string | null; currentSellPrice: number | null }): boolean {
   return row.currentPricingMode !== "NoStandalonePrice" && row.currentSellPrice != null;
 }
@@ -736,7 +742,8 @@ export function PriceBook({
                   <col className="w-[12%]" />
                   <col className="w-[13%]" />
                   <col className="w-[10%]" />
-                  <col className="w-[20%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[14%]" />
                   <col className="w-[13%]" />
                   <col className="w-10" />
                 </colgroup>
@@ -746,6 +753,7 @@ export function PriceBook({
                     <th className="px-4 py-3">SKU</th>
                     <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3">UOM</th>
+                    <th className="px-4 py-3">Cost</th>
                     <th className="px-4 py-3">Sell price</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-3 py-3"><span className="sr-only">Open item</span></th>
@@ -768,6 +776,7 @@ export function PriceBook({
                         {TYPE_LABELS[row.item.type] ?? row.item.type}
                       </td>
                       <td className="px-4 py-3.5 text-[var(--ophalo-muted)]">{row.item.unitOfMeasure}</td>
+                      <td className="px-4 py-3.5 text-[var(--ophalo-muted)]">{formatCost(row.currentCost)}</td>
                       <td className={`px-4 py-3.5 ${isStandalonePrice(row) ? "font-semibold text-[var(--ophalo-ink)]" : "italic text-[var(--ophalo-muted)]"}`}>
                         {formatPrice(row)}
                       </td>
@@ -807,7 +816,7 @@ export function PriceBook({
                       <span className="text-[var(--ophalo-muted)]">
                         {TYPE_LABELS[row.item.type] ?? row.item.type} · {row.item.unitOfMeasure}
                       </span>
-                      <span className={`text-right ${isStandalonePrice(row) ? "font-semibold text-[var(--ophalo-ink)]" : "italic text-[var(--ophalo-muted)]"}`}>{formatPrice(row)}</span>
+                      <span className="text-right text-xs text-[var(--ophalo-muted)]">Cost {formatCost(row.currentCost)} · <span className={isStandalonePrice(row) ? "font-semibold text-[var(--ophalo-ink)]" : "italic"}>Price {formatPrice(row)}</span></span>
                     </div>
                   </button>
                 </li>

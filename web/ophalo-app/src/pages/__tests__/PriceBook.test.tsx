@@ -57,6 +57,7 @@ const oneItem: CatalogItemListResult = {
       },
       currentPricingMode: "StandalonePrice",
       currentSellPrice: 249.99,
+      currentCost: 124.5,
       matchRank: "Exact",
       matchReason: null,
     },
@@ -217,7 +218,8 @@ describe("PriceBook", () => {
     const card = within(screen.getByRole("list"));
     expect(card.getByText("Condensate Pump")).toBeInTheDocument();
     expect(card.getByText(/Material.*each/)).toBeInTheDocument();
-    expect(card.getByText("$249.99")).toBeInTheDocument();
+    expect(card.getByText(/Price \$249\.99/)).toBeInTheDocument();
+    expect(card.getByText(/Cost \$124\.50/)).toBeInTheDocument();
     expect(card.getByText("Active")).toBeInTheDocument();
     // SKU is dropped from the compact mobile card as a low-value/redundant field.
     expect(card.queryByText("COP-34")).not.toBeInTheDocument();

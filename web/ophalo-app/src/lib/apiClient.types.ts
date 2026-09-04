@@ -627,6 +627,7 @@ export interface CatalogItemListRowResponse {
   item: CatalogItemResponse;
   currentPricingMode: string | null;
   currentSellPrice: number | null;
+  currentCost: number | null;
   matchRank: string;
   matchReason: string | null;
 }

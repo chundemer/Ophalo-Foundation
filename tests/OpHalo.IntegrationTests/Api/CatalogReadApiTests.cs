@@ -76,6 +76,24 @@ public sealed class CatalogReadApiTests : IClassFixture<KeepApiWebFactory>, IAsy
     }
 
     [Fact]
+    public async Task List_ReturnsCurrentInternalCostAlongsideSellPrice()
+    {
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("list-current-cost");
+        await EnrollAsync(accountId, ownerId);
+
+        var itemId = await CreateItemAsync(cookie, "Costed Widget", sellPrice: 240m);
+
+        var response = await AuthRequest(cookie).GetAsync("/keep/pricebook/catalog-items");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var row = Assert.Single(body.GetProperty("items").EnumerateArray());
+        Assert.Equal(itemId, row.GetProperty("item").GetProperty("id").GetGuid());
+        Assert.Equal(120m, row.GetProperty("currentCost").GetDecimal());
+        Assert.Equal(240m, row.GetProperty("currentSellPrice").GetDecimal());
+    }
+
+    [Fact]
     public async Task List_SearchBySku_CanonicalNormalizationMatchesPunctuationVariant()
     {
         var (accountId, ownerId, cookie) = await SeedAccountAsync("search-sku-normalize");

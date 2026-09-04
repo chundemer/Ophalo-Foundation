@@ -48,6 +48,7 @@ const catalogPage: CatalogItemListResult = {
       item: { id: "item-alt", type: "Service", displayName: "Boiler Inspection", externalKey: null, categoryId: null, unitOfMeasure: "each", currency: "USD", isCommonItem: false, activeState: "Active", concurrencyVersion: "v1" },
       currentPricingMode: "StandalonePrice",
       currentSellPrice: 120,
+      currentCost: 60,
       matchRank: "DisplayName",
       matchReason: null,
     },
