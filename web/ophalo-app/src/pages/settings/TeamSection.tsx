@@ -471,7 +471,7 @@ function InviteForm({ atLimit, maxSeats, limitApplies, onSuccess }: InviteFormPr
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="email"
           value={email}
@@ -479,13 +479,13 @@ function InviteForm({ atLimit, maxSeats, limitApplies, onSuccess }: InviteFormPr
           placeholder="Email address"
           required
           disabled={atLimit}
-          className="flex-1 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] disabled:opacity-50"
+          className="keep-field w-full sm:flex-1 sm:min-w-0 placeholder:text-[var(--ophalo-muted)] disabled:opacity-50"
         />
         <select
           value={role}
           onChange={(e) => setRole(e.target.value)}
           disabled={atLimit}
-          className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-2 py-2 text-sm text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] disabled:opacity-50"
+          className="keep-field w-full sm:w-auto disabled:opacity-50"
         >
           <option value="admin">Admin</option>
           <option value="operator">Operator</option>
@@ -495,7 +495,7 @@ function InviteForm({ atLimit, maxSeats, limitApplies, onSuccess }: InviteFormPr
           type="submit"
           variant="primary"
           disabled={submitting || atLimit}
-          className="whitespace-nowrap"
+          className="w-full whitespace-nowrap sm:w-auto"
         >
           {atLimit ? "Team limit reached" : (submitting ? "Inviting…" : "Invite team member")}
         </KeepButton>

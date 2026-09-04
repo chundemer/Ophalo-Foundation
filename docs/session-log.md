@@ -164,7 +164,15 @@ authenticated `/me` endpoint and belongs in shell chrome, outside Request Anchor
   Save company, Edit link name, and the Replace-link destructive flow (stale-link warning, one-time
   raw successor URL) are all logic-unchanged. `PublicLinkSection.logo.test.tsx` gains a preview
   V2-treatment / no-`slate` assertion. Full app suite 1072 passed; production build passes.
-  Slice C (Team) still pending, plus the §5 screenshot-acceptance pass across all three.
+  **Slice C delivered** (not yet product-owner visual-accepted): `TeamSection.tsx` invite row
+  (email input + role select + button) moved to the shared `keep-field` recipe with 44px targets
+  and clean narrow stacking (`flex-col sm:flex-row`, full-width controls below `sm`). Member rows,
+  the serif `keep-row-title` `<h2>`, the solo-owner reassurance copy, `seatUsage` server display,
+  and every roster/invite/role/resend/suspend/remove flow are logic-unchanged. New
+  `TeamSection.recipe.test.tsx` (4 cases: invite-row `keep-field`, tokenized list-row container /
+  no `slate`-`emerald`, solo-owner copy, server seat-usage value). Focused settings + Home suites
+  38 passed; production build passes.
+  The §5 screenshot-acceptance pass across all three slices is still pending.
 - **Price Book direct-cost visibility:** next after the Settings & Getting Started V2 UI upgrade.
   The Catalog Items workspace currently exposes current sell price but not current direct cost, so
   an Owner/Admin must open an item to determine whether the price book has a cost. Extend the
