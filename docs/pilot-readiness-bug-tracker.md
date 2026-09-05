@@ -2,7 +2,7 @@
 
 **Purpose:** The live, forward-looking backlog for unresolved pilot-readiness work.
 
-**Last triaged:** 2026-09-01
+**Last triaged:** 2026-09-05
 
 Historical findings, resolved work, and superseded implementation notes were removed from this document. They remain in [the session log](session-log.md) and the relevant `docs/build-log/` records. A tracker item belongs here only while it has remaining work or an unresolved decision.
 
@@ -73,6 +73,40 @@ An email with two or more active `AccountUser` memberships never receives a magi
 **Delivered:** Steps 1–2 — the API telemetry boundary (`SentryTelemetryScrubber` allowlist rebuild with residual-token discard), the `Sentry.AspNetCore` integration, the authenticated-only `account_id` / correlation-id tags, and the `Sentry__Dsn` production startup requirement — are implemented and accepted ([BL141](build-log/141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md), 2026-09-03). Steps 3–5 remain.
 
 **Done when:** Controlled server and browser failures arrive in Sentry with useful release/correlation context and no protected data; founder email alerting works; readiness/availability monitoring is verified; invalid required public configuration fails safely; and the runbook is usable by the founder.
+
+### GAP-069 — Production API container does not yet persist Data Protection keys or recognize its TLS-terminating proxy
+
+**Status:** Open
+**Severity:** P1
+**Area:** Railway production API deployment hardening
+
+The production API starts with two actionable ASP.NET Core warnings: its Data Protection key ring
+is written to the container-local `/root/.aspnet/DataProtection-Keys` directory and has no
+at-rest encryptor, while `UseHttpsRedirection()` cannot determine an HTTPS port after Railway
+terminates TLS upstream. The explicit Railway `PORT`/`URLS` binding message is expected and is not
+part of this gap.
+
+The application currently uses opaque, database-validated session cookies rather than framework
+cookie authentication, so a restarted container does not by itself invalidate an existing OpHalo
+session. Even so, Data Protection is initialized by the host; future protected cookies,
+antiforgery, or other framework consumers must not lose their ability to unprotect data after a
+restart or across instances. Separately, the API must receive the original HTTPS scheme before
+middleware makes redirect or link-generation decisions.
+
+**Locked direction:** Treat both warnings as production hardening, in a bounded implementation
+separate from GAP-068. Persist a dedicated Data Protection key ring outside the ephemeral container
+and protect it at rest; use a Railway-compatible persistent volume or an external key store, with
+the final storage/encryption choice recorded in a runbook. Configure narrowly trusted forwarded
+headers (at least `X-Forwarded-Proto`, and only from known Railway ingress/proxy sources) before
+`UseHttpsRedirection()`. Do not broadly trust client-supplied forwarded headers or merely suppress
+either warning.
+
+**Done when:** A redeploy/container replacement preserves the key ring; the stored key material has
+documented at-rest protection and rotation/restore ownership; the API correctly recognizes a
+trusted proxied HTTPS request before HTTPS-redirection middleware; an untrusted forwarded header
+cannot spoof the scheme/client address; and the two warnings no longer appear in a production
+startup log. Record the Railway mount/external-store configuration and proxy trust boundary in the
+operational runbook.
 
 ### GAP-033 — Public intake does not establish sufficient customer trust or return continuity
 
