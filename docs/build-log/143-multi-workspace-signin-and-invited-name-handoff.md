@@ -176,3 +176,36 @@ User). Replaced the prior `AcceptInvite_ValidToken_SetsCookieAndAllowsAuthMe`, w
 asserted an immediate session cookie for a name-blank invitee — that was the bug this slice fixes.
 28/28 `InviteTests`, 155/155 auth integration, 78/78 unit, 14/14 architecture pass. 4 production
 files + 1 test file changed, one handler family, within the batch gate.
+
+## Slice 4 — done, accepted (`755c7eaf`)
+
+`ExchangeClient.tsx` and `AcceptClient.tsx` (`ophalo-web`) now parse the `200` response body for
+`requiresContinuation` before redirecting into the app, instead of assuming every `200` is a
+completed session. New shared `src/components/auth/CompleteSignInScreen.tsx` renders the name
+field and/or workspace-radio selector (both can be required at once — multi-membership + blank
+name), posts `{ name?, accountUserId? }` to `/auth/continue` with `credentials: "include"` (the
+`ophalo.continuation` cookie is already set from the same-origin exchange/accept response — no
+token ever reaches client-side JS or JSON), and branches on status: `400` is retryable (shows
+`problem.detail`, cookie/form stay live), `503` with `Account.SessionCreationFailed` routes to
+`?reason=session_creation_failed`, everything else terminal routes to `?reason=invalid` or
+`?reason=service_unavailable` on the caller's existing error page (`/auth/exchange/error` or
+`/invite/accept/error` — no new error pages needed). Confirmed `ophalo-app` has no duplicate
+auth-exchange logic of its own (`redirectToSignIn.ts` only bounces to `ophalo-web`'s `/signin`),
+closing the one open Slice 4 preflight question from Session 0 — no PWA changes needed.
+
+`ophalo-web` has no frontend test harness (no vitest/jest, `typecheck`/`build` scripts only);
+verified via `tsc --noEmit` and `next build` (clean, all routes compile). **Manual
+browser/network verification is still owed before this ships to production** — record results
+against this checklist:
+
+- Name-only sign-in (`ExistingMember`, blank name) completes and lands in the app.
+- Multi-membership selection (`MultipleMembers`, named user) completes to the selected workspace.
+- Multi-membership + blank name in one submit (both fields at once) completes correctly.
+- Invite acceptance name handoff (`AcceptInvite`, blank name) completes to the invited workspace.
+- Retryable validation: blank name and no-workspace-selected each surface the `problem.detail`
+  message inline without navigating away or clearing the cookie.
+- Terminal expired and terminal replayed (re-submit after a prior success) continuations both
+  land on the `invalid` error page.
+- Network tab: the raw continuation token never appears in any `/auth/exchange`,
+  `/accounts/invite/accept`, or `/auth/continue` JSON response or request body — only in the
+  `ophalo.continuation` `Set-Cookie`/`Cookie` header, and it is `HttpOnly`.
