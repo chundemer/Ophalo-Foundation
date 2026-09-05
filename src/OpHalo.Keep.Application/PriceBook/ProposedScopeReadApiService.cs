@@ -19,9 +19,11 @@ public sealed record CurrentProposedScopeForRequestResult(bool HasScope, Propose
 /// technician-reachable capture entry point's entitlement probe (build-log/118, decision 1): a 403
 /// from <see cref="AuthorizeAsync"/> means the caller renders nothing, so no separate
 /// <c>CanCaptureProposedScope</c> flag is added to <c>AvailableActionsMetadata</c>. Gate 2 (Price
-/// Book entitlement) and gate 3 (<c>RequestsOperate</c> AND <c>ScopeCapture</c>) mirror
-/// <see cref="ProposedScopeApiService"/> exactly; gate 1 is read-only (Blocked-only denies —
-/// <c>ReadOnly</c>, e.g. OffSeason, may still read), unlike the mutation gate.
+/// Book entitlement), the BL142 Session 1 server-owned release gate
+/// (<see cref="IReleaseGatePolicy"/>, ADR-496), and gate 3 (<c>RequestsOperate</c> AND
+/// <c>ScopeCapture</c>) mirror <see cref="ProposedScopeApiService"/> exactly; gate 1 is read-only
+/// (Blocked-only denies — <c>ReadOnly</c>, e.g. OffSeason, may still read), unlike the mutation
+/// gate.
 /// </summary>
 public sealed class ProposedScopeReadApiService(
     IProposedScopePersistence persistence,
@@ -30,6 +32,7 @@ public sealed class ProposedScopeReadApiService(
     ICurrentUser currentUser,
     IAccountAccessPolicy accountAccessPolicy,
     IAccountFeatureAccessResolver featureAccessResolver,
+    IReleaseGatePolicy releaseGatePolicy,
     IUserAccessPolicy userAccessPolicy,
     IClock clock)
 {
@@ -105,6 +108,12 @@ public sealed class ProposedScopeReadApiService(
         var enabled = await featureAccessResolver.IsEnabledAsync(
             currentUser.AccountId, featureContext, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, ct);
         if (!enabled)
+            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+
+        // Gate 2b — server-owned release gate (BL142 Session 1, ADR-496): entitlement alone never
+        // exposes Proposed Work before it is explicitly released. Fails closed independently of
+        // gate 2 above.
+        if (!releaseGatePolicy.IsProposedWorkReleased())
             return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
 
         // Gate 3 — user permissions: RequestsOperate (B2 operator gate) AND ScopeCapture (ADR-480).

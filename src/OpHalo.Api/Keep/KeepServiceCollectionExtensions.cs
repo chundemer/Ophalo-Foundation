@@ -9,6 +9,7 @@ using OpHalo.Keep.Application.Setup;
 using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Infrastructure.Cursors;
 using OpHalo.Keep.Infrastructure.Persistence;
+using OpHalo.Keep.Infrastructure.PriceBook;
 
 namespace OpHalo.Api.Keep;
 
@@ -121,6 +122,11 @@ public static class KeepServiceCollectionExtensions
         // Price Book, Quotes & Materials — offering/assembly bounded reads (Session 3.2a.2).
         // Reuses IKeepRequestListCursorProtector (registered above).
         services.AddScoped<OfferingAssemblyReadApiService>();
+
+        // Price Book, Quotes & Materials — server-owned release gate (BL142 Session 1, ADR-496).
+        // Independent of package entitlement; consumed by ProposedScopeApiService/
+        // ProposedScopeReadApiService below. Fails closed with no checked-in override.
+        services.AddSingleton<IReleaseGatePolicy, ConfigurationReleaseGatePolicy>();
 
         // Price Book, Quotes & Materials — proposed-scope create/edit/submit API (Session 3.3b).
         // IProposedScopePersistence/IProposedScopeSubmissionPersistence/SubmitProposedScopeService
