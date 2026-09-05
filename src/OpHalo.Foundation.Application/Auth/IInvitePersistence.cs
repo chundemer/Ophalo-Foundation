@@ -62,5 +62,8 @@ public sealed record SendInviteContext(
     int OccupiedSeats,
     AccountUser? ExistingMembership);
 
-/// <summary>Returned from CommitAcceptInviteAsync on success. Used to create the session.</summary>
-public sealed record AcceptedInvite(Guid AccountId, Guid AccountUserId);
+/// <summary>
+/// Returned from CommitAcceptInviteAsync on success. UserId/IsNameBlank let the service decide
+/// between an immediate session and a post-auth continuation for the name gate (ADR-497).
+/// </summary>
+public sealed record AcceptedInvite(Guid AccountId, Guid AccountUserId, Guid UserId, bool IsNameBlank);

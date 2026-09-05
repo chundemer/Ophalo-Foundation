@@ -450,10 +450,13 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
     }
 
     [Fact]
-    public async Task AcceptInvite_ValidToken_SetsCookieAndAllowsAuthMe()
+    public async Task AcceptInvite_NameBlankInvitee_ReturnsContinuationInsteadOfSession()
     {
+        // A newly-invited email has no prior User row — User.CreateVerified(name: null) leaves
+        // Name blank, so acceptance must route through the continuation name gate (ADR-497
+        // Slice 3) rather than issuing a session directly.
         const string inviteeEmail = "invitee@example.com";
-        var (_, _, cookie) = await SeedAccountAsync();
+        var (accountId, ownerAccountUserId, cookie) = await SeedAccountAsync();
 
         await AuthRequest(cookie).PostAsJsonAsync("/accounts/me/invite",
             new { email = inviteeEmail, role = "operator" });
@@ -467,15 +470,93 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
 
         Assert.Equal(HttpStatusCode.OK, acceptResponse.StatusCode);
 
-        // Cookie must be present.
+        var body = await acceptResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("requiresContinuation").GetBoolean());
+        Assert.True(body.GetProperty("requiresName").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("workspaces").ValueKind);
+
         Assert.True(acceptResponse.Headers.TryGetValues("Set-Cookie", out var cookies));
-        var sidCookie = cookies!.FirstOrDefault(c => c.StartsWith("ophalo.sid=", StringComparison.Ordinal));
+        var continuationCookie = cookies!.FirstOrDefault(c => c.StartsWith("ophalo.continuation=", StringComparison.Ordinal));
+        Assert.NotNull(continuationCookie);
+        Assert.False(cookies.Any(c => c.StartsWith("ophalo.sid=", StringComparison.Ordinal)),
+            "A name-blank invitee must not receive a session cookie before completing /auth/continue");
+
+        var continuationToken = continuationCookie!.Split(';')[0]["ophalo.continuation=".Length..];
+
+        // The invite's own AccountUser row (activated by CommitAcceptInviteAsync) is the only
+        // workspace this continuation may ever resolve to — capture it to assert against below.
+        Guid inviteeAccountUserId;
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var invitee = await db.AccountUsers.SingleAsync(au =>
+                au.AccountId == accountId && au.NormalizedEmail == inviteeEmail);
+            inviteeAccountUserId = invitee.Id;
+        }
+
+        // Attempt to smuggle a different membership (the inviting owner's) into the request body.
+        // Invite-acceptance continuations carry a fixed TargetAccountUserId (ADR-497 Slice 3) —
+        // the body's accountUserId must be ignored, exactly like clientType/deviceName are ignored
+        // for sign-in continuations.
+        using var continueRequest = new HttpRequestMessage(HttpMethod.Post, "/auth/continue")
+        {
+            Content = JsonContent.Create(new { name = "Invitee Name", accountUserId = ownerAccountUserId })
+        };
+        continueRequest.Headers.Add("Cookie", $"ophalo.continuation={continuationToken}");
+        var continueResponse = await _client.SendAsync(continueRequest);
+
+        Assert.Equal(HttpStatusCode.OK, continueResponse.StatusCode);
+        Assert.True(continueResponse.Headers.TryGetValues("Set-Cookie", out var continueCookies));
+        var sidCookie = continueCookies!.FirstOrDefault(c => c.StartsWith("ophalo.sid=", StringComparison.Ordinal));
         Assert.NotNull(sidCookie);
 
-        // Using the cookie must allow /auth/me.
-        var cookieValue = sidCookie!.Split(';')[0]["ophalo.sid=".Length..];
-        var meResponse = await AuthRequest($"ophalo.sid={cookieValue}").GetAsync("/auth/me");
+        // The session must land in the exact workspace the invite targeted — never the
+        // attacker-supplied accountUserId from the request body.
+        var sidValue = sidCookie!.Split(';')[0]["ophalo.sid=".Length..];
+        var meResponse = await AuthRequest($"ophalo.sid={sidValue}").GetAsync("/auth/me");
         Assert.Equal(HttpStatusCode.OK, meResponse.StatusCode);
+
+        var me = await meResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(accountId, me.GetProperty("accountId").GetGuid());
+        Assert.Equal(inviteeAccountUserId, me.GetProperty("accountUserId").GetGuid());
+        Assert.NotEqual(ownerAccountUserId, me.GetProperty("accountUserId").GetGuid());
+    }
+
+    [Fact]
+    public async Task AcceptInvite_AlreadyNamedInvitee_SetsSessionCookieDirectly()
+    {
+        // A User who already has a Name (e.g. invited to a second account) is unaffected by the
+        // name gate — acceptance still issues a session directly, no continuation.
+        var (_, _, ownerCookie) = await SeedAccountAsync();
+
+        var now = DateTime.UtcNow;
+        var namedUser = User.CreateVerified("named-invitee@example.com", "Already Named", now);
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            db.Users.Add(namedUser);
+            await db.SaveChangesAsync();
+        }
+
+        await AuthRequest(ownerCookie).PostAsJsonAsync("/accounts/me/invite",
+            new { email = namedUser.Email, role = "operator" });
+
+        var rawToken = _factory.EmailSender.SentEmails
+            .Single(e => e.To == namedUser.Email)
+            .ExtractInviteToken()!;
+
+        var acceptResponse = await _client.PostAsJsonAsync("/accounts/invite/accept",
+            new { token = rawToken });
+
+        Assert.Equal(HttpStatusCode.OK, acceptResponse.StatusCode);
+
+        var body = await acceptResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("accepted", body.GetProperty("status").GetString());
+
+        Assert.True(acceptResponse.Headers.TryGetValues("Set-Cookie", out var cookies));
+        Assert.Contains(cookies!, c => c.StartsWith("ophalo.sid=", StringComparison.Ordinal));
+        Assert.DoesNotContain(cookies, c => c.StartsWith("ophalo.continuation=", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -160,7 +160,8 @@ public sealed class EfInvitePersistence(OpHaloDbContext db) : IInvitePersistence
             return Result<AcceptedInvite>.Failure(InviteErrors.InvalidToken);
 
         await tx.CommitAsync(cancellationToken);
-        return Result<AcceptedInvite>.Success(new AcceptedInvite(invite.AccountId, invite.Id));
+        return Result<AcceptedInvite>.Success(
+            new AcceptedInvite(invite.AccountId, invite.Id, user!.Id, string.IsNullOrWhiteSpace(user!.Name)));
     }
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>

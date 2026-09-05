@@ -87,12 +87,27 @@ public static class AccountEndpoints
         if (result.IsFailure)
             return ErrorHttpMapper.ToHttpResult(result.Error);
 
-        var token = result.Value;
+        var outcome = result.Value;
+
+        if (outcome.RequiresContinuation)
+        {
+            httpContext.Response.Cookies.Append(
+                AuthConstants.ContinuationCookieName,
+                outcome.ContinuationRawToken!,
+                cookieFactory.ForCreate(outcome.ContinuationExpiresAtUtc!.Value));
+
+            return Results.Ok(new
+            {
+                requiresContinuation = true,
+                requiresName = true,
+                workspaces = (object?)null
+            });
+        }
 
         httpContext.Response.Cookies.Append(
             AuthConstants.CookieName,
-            token.RawToken,
-            cookieFactory.ForCreate(token.ExpiresAtUtc));
+            outcome.SessionRawToken!,
+            cookieFactory.ForCreate(outcome.SessionExpiresAtUtc!.Value));
 
         return Results.Ok(new { status = "accepted", destination = "/keep" });
     }
