@@ -6,6 +6,8 @@ interface MobileNavMenuProps {
   activeId: NavItem["id"];
   roleLabel: string;
   onNavigate: (id: NavItem["id"]) => void;
+  onSignOut: () => void;
+  isSigningOut: boolean;
   onClose: () => void;
 }
 
@@ -16,7 +18,15 @@ interface MobileNavMenuProps {
  * role-filtered `items` the desktop sidebar/top nav already compute; adds no routing or
  * entitlement logic of its own.
  */
-export function MobileNavMenu({ items, activeId, roleLabel, onNavigate, onClose }: MobileNavMenuProps) {
+export function MobileNavMenu({
+  items,
+  activeId,
+  roleLabel,
+  onNavigate,
+  onSignOut,
+  isSigningOut,
+  onClose,
+}: MobileNavMenuProps) {
   return (
     <KeepModal
       onClose={onClose}
@@ -46,6 +56,16 @@ export function MobileNavMenu({ items, activeId, roleLabel, onNavigate, onClose 
           <p className="text-xs text-[var(--ophalo-muted)]">{roleLabel}</p>
         </div>
       )}
+      <div className="px-3 py-3 border-t border-[var(--ophalo-border)]">
+        <button
+          type="button"
+          onClick={onSignOut}
+          disabled={isSigningOut}
+          className="w-full rounded-md px-3 py-2.5 text-left text-sm font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+        >
+          {isSigningOut ? "Signing out…" : "Sign out"}
+        </button>
+      </div>
     </KeepModal>
   );
 }

@@ -25,6 +25,7 @@ const mockGetCatalogItem = vi.fn();
 const mockGetOfferingAssembly = vi.fn();
 const mockGetOfferingAssemblies = vi.fn();
 const mockPublishCatalogItemPrice = vi.fn();
+const mockLogout = vi.fn();
 
 vi.mock("./lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("./lib/apiClient")>("./lib/apiClient");
@@ -40,6 +41,7 @@ vi.mock("./lib/apiClient", async () => {
       getOfferingAssembly: (...args: unknown[]) => mockGetOfferingAssembly(...args),
       getOfferingAssemblies: (...args: unknown[]) => mockGetOfferingAssemblies(...args),
       publishCatalogItemPrice: (...args: unknown[]) => mockPublishCatalogItemPrice(...args),
+      logout: (...args: unknown[]) => mockLogout(...args),
     },
   };
 });
@@ -76,6 +78,7 @@ describe("App — desktop New Request CTA on Price Book routes", () => {
     mockGetCatalogCategories.mockReset().mockResolvedValue({ categories: [] });
     mockGetCatalogItem.mockReset().mockReturnValue(new Promise(() => {}));
     mockGetOfferingAssembly.mockReset().mockReturnValue(new Promise(() => {}));
+    mockLogout.mockReset().mockReturnValue(new Promise(() => {}));
   });
 
   it("is present on the Requests desktop workbench route", async () => {
@@ -142,7 +145,7 @@ describe("App — signed-in user name beside role", () => {
     );
   });
 
-  it("falls back to role only when no name exists", async () => {
+  it("falls back to the business workspace name when an invited member has no name", async () => {
     mockGetMe.mockReset().mockResolvedValue({
       accountUserId: "u1",
       accountId: "a1",
@@ -154,9 +157,28 @@ describe("App — signed-in user name beside role", () => {
     });
     const { container } = renderApp();
     await waitFor(() =>
-      expect(within(getDesktopHeader(container)).getByText("Owner")).toBeInTheDocument(),
+      expect(within(getDesktopHeader(container)).getByText("Acme HVAC · Owner")).toBeInTheDocument(),
     );
-    expect(within(getDesktopHeader(container)).queryByText(/·/)).not.toBeInTheDocument();
+  });
+
+  it("offers a desktop sign-out control and invokes the logout endpoint", async () => {
+    mockGetMe.mockReset().mockResolvedValue({
+      accountUserId: "u1",
+      accountId: "a1",
+      isAuthenticated: true,
+      isVerified: true,
+      accountRole: "owner",
+      businessName: "Acme HVAC",
+      userName: "Christian",
+    });
+    const user = userEvent.setup();
+    const { container } = renderApp();
+    const header = await waitFor(() => getDesktopHeader(container));
+
+    await user.click(within(header).getByRole("button", { name: "Sign out" }));
+
+    expect(mockLogout).toHaveBeenCalledTimes(1);
+    expect(within(header).getByRole("button", { name: "Signing out…" })).toBeDisabled();
   });
 });
 

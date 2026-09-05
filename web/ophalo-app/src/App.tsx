@@ -14,8 +14,9 @@ import { CatalogItemDetail } from "./pages/CatalogItemDetail";
 import { OfferingAssemblyDetail } from "./pages/OfferingAssemblyDetail";
 import { MobileNavMenu } from "./components/layout/MobileNavMenu";
 import { LiveAnnouncerRegion } from "./components/a11y/LiveAnnouncerRegion";
-import { Plus, Inbox, Settings as SettingsIcon, Tag, Menu } from "lucide-react";
+import { Plus, Inbox, Settings as SettingsIcon, Tag, Menu, LogOut } from "lucide-react";
 import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClient";
+import { redirectToSignInOnce } from "./lib/redirectToSignIn";
 
 // ADR-462: AccountCapabilityPackageEnrollment.FeatureKeys.PriceBookQuotesMaterials.
 const PRICE_BOOK_FEATURE_KEY = "keep.price_book_quotes_materials";
@@ -192,6 +193,7 @@ function AppShell() {
   const navItems = getNavItems(role, priceBookEntitled);
   const phoneNavItems = navItems.filter((item) => !PHONE_OMITTED_NAV_IDS.has(item.id));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   // Incremented only by an explicit Requests navigation. The wide workbench consumes this as a
   // fresh-entry intent without remounting its Queue pane (so filters and scroll still persist).
   const [requestEntryIntent, setRequestEntryIntent] = useState(0);
@@ -266,6 +268,19 @@ function AppShell() {
     navigate({ page: "requests" });
     setNavContext(null);
   }
+
+  const signOut = useCallback(async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await api.logout();
+      redirectToSignInOnce();
+    } catch {
+      // Keep the current workspace intact if the server could not revoke the session.
+      // A 401 has already redirected through apiFetchVoid's shared handler.
+      setIsSigningOut(false);
+    }
+  }, [isSigningOut]);
 
   function selectRequest(requestId: string, context?: RequestNavContext, focus?: string) {
     navigate({ page: "detail", requestId, focusPanel: focus });
@@ -471,9 +486,22 @@ function AppShell() {
           <div className="ml-auto flex items-center gap-3">
             {role !== "unknown" && (
               <span className="text-xs text-[var(--ophalo-muted)] font-medium">
-                {me?.userName ? `${me.userName} · ${roleLabel(role)}` : roleLabel(role)}
+                {me?.userName
+                  ? `${me.userName} · ${roleLabel(role)}`
+                  : me?.businessName
+                    ? `${me.businessName} · ${roleLabel(role)}`
+                    : roleLabel(role)}
               </span>
             )}
+            <button
+              type="button"
+              onClick={signOut}
+              disabled={isSigningOut}
+              className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              {isSigningOut ? "Signing out…" : "Sign out"}
+            </button>
             {/* PWA UI-quality correction (2026-08-12): Price Book, Catalog Item Detail, and
                 Offering/Assembly Detail each carry their own dominant contextual CTA — a second
                 global "New Request" competes with it, so it's dropped only on those three routes.
@@ -664,6 +692,8 @@ function AppShell() {
           activeId={activeNavId}
           roleLabel={roleLabel(role)}
           onNavigate={(id) => id === "requests" ? navigateToRequests() : navigate({ page: id })}
+          onSignOut={signOut}
+          isSigningOut={isSigningOut}
           onClose={() => setMobileMenuOpen(false)}
         />
       )}

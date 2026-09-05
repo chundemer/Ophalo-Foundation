@@ -418,6 +418,7 @@ export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiC
 
 export const api = {
   getMe: () => apiFetch<MeResponse>("/auth/me"),
+  logout: () => apiFetchVoid("/auth/logout", { method: "POST" }),
   getOnboardingChecklist: () =>
     apiFetch<OnboardingChecklist>("/keep/setup/onboarding"),
   lookupRequestByPhone: (phone: string) =>
