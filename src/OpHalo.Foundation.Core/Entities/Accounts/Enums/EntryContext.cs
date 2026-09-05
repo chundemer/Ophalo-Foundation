@@ -14,4 +14,9 @@ public enum EntryContext
 
     /// <summary>Invited member accepting via raw token — not routed through /auth/exchange (ADR-074).</summary>
     InvitedUser = 3,
+
+    /// <summary>2+ active AccountUsers across accounts for the same email — workspace selection is
+    /// resolved at /exchange via a live query (later slice); AccountId/TargetAccountUserId are
+    /// always null at issuance, matching NewAccount's deferred-target shape.</summary>
+    MultipleMembers = 4,
 }

@@ -15,8 +15,10 @@ namespace OpHalo.Foundation.Application.Auth;
 ///
 /// Classification (D5/D6):
 /// - Exactly one active member → issue ExistingMember code (same as /auth/signin).
+/// - 2+ active members across accounts → issue MultipleMembers code (workspace selection
+///   deferred to /exchange, a later slice).
 /// - No existing identity → issue NewAccount code with business-name/time-zone snapshots.
-/// - Any other state (ambiguous, invited, suspended, removed, existing User without active
+/// - Any other state (invited, suspended, removed, existing User without active
 ///   membership) → neutral 200, no code issued (enumeration protection).
 ///
 /// Pilot cap (D3): when Classification=Pilot and MaxPilotAccounts is set, check capacity
@@ -63,6 +65,9 @@ public sealed class StartAuthService(
                     existing.AccountId, existing.AccountUserId,
                     normalizedEmail, nowUtc, cancellationToken);
 
+            case StartAsMultipleMembers:
+                return await IssueMultipleMembersCodeAsync(normalizedEmail, nowUtc, cancellationToken);
+
             case StartAsNewAccount:
                 return await IssueNewAccountCodeAsync(
                     normalizedEmail, businessName, name, timeZone,
@@ -91,6 +96,49 @@ public sealed class StartAuthService(
             expiresAtUtc: nowUtc.AddHours(24),
             deliveryEmailSnapshot: normalizedEmail,
             entryContext: EntryContext.ExistingMember);
+
+        await persistence.CommitStartCodeAsync(code, cancellationToken);
+
+        var magicLink = $"{magicLinkSettings.Value.PublicBaseUrl}/auth/exchange?code={rawCode}";
+
+        try
+        {
+            var sendResult = await emailSender.SendAsync(
+                normalizedEmail,
+                MagicLinkEmailTemplate.Subject,
+                MagicLinkEmailTemplate.BuildHtmlBody(magicLink),
+                MagicLinkEmailTemplate.BuildTextBody(magicLink),
+                cancellationToken);
+
+            if (sendResult.IsFailure)
+            {
+                logger.LogWarning(
+                    "Magic link email delivery failed for code {CodeId}: {ErrorCode}.",
+                    code.Id,
+                    sendResult.Error.Code);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Magic link email delivery failed for code {CodeId}.", code.Id);
+        }
+
+        return Result.Success();
+    }
+
+    private async Task<Result> IssueMultipleMembersCodeAsync(
+        string normalizedEmail,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var rawCode = MagicLinkCodeGenerator.GenerateRawCode();
+        var codeHash = MagicLinkCodeGenerator.HashCode(rawCode);
+
+        var code = AccountAuthCode.CreateForMultipleMembers(
+            codeHash: codeHash,
+            issuedAtUtc: nowUtc,
+            expiresAtUtc: nowUtc.AddHours(24),
+            deliveryEmailSnapshot: normalizedEmail);
 
         await persistence.CommitStartCodeAsync(code, cancellationToken);
 

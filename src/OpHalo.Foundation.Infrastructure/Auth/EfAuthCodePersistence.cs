@@ -15,12 +15,12 @@ namespace OpHalo.Foundation.Infrastructure.Auth;
 /// </summary>
 public sealed class EfAuthCodePersistence(OpHaloDbContext db) : IAuthCodePersistence
 {
-    public async Task<EligibleSignInMember?> FindEligibleSignInMemberByEmailAsync(
+    public async Task<SignInClassification> FindEligibleSignInMemberByEmailAsync(
         string normalizedEmail,
         CancellationToken cancellationToken)
     {
-        // Take(2) detects ambiguity — more than one active membership across accounts
-        // for the same email returns null (defer account-selection UX to a later phase).
+        // Take(2) distinguishes 0 / 1 / 2+ active memberships across accounts for the
+        // same email without an unbounded count query.
         var candidates = await db.AccountUsers
             .AsNoTracking()
             .Where(au =>
@@ -31,25 +31,46 @@ public sealed class EfAuthCodePersistence(OpHaloDbContext db) : IAuthCodePersist
             .Select(au => new { au.AccountId, AccountUserId = au.Id })
             .ToListAsync(cancellationToken);
 
-        return candidates.Count == 1
-            ? new EligibleSignInMember(candidates[0].AccountId, candidates[0].AccountUserId)
-            : null;
+        if (candidates.Count == 1)
+            return new SignInAsExistingMember(candidates[0].AccountId, candidates[0].AccountUserId);
+
+        return candidates.Count >= 2
+            ? new SignInAsMultipleMembers()
+            : new SignInAsNeutral();
     }
 
     public async Task CommitSignInCodeAsync(AccountAuthCode code, CancellationToken cancellationToken)
     {
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
 
-        // Invalidate all prior unconsumed/non-invalidated codes for this AccountUser.
-        // Uses code.IssuedAtUtc as the supersession timestamp.
-        await db.AccountAuthCodes
-            .Where(c =>
-                c.TargetAccountUserId == code.TargetAccountUserId &&
-                c.ConsumedAtUtc == null &&
-                c.InvalidatedAtUtc == null)
-            .ExecuteUpdateAsync(
-                s => s.SetProperty(c => c.InvalidatedAtUtc, code.IssuedAtUtc),
-                cancellationToken);
+        if (code.EntryContext == EntryContext.MultipleMembers)
+        {
+            // TargetAccountUserId is null for MultipleMembers codes — invalidate prior active
+            // MultipleMembers codes for the same email instead (must not touch other emails'
+            // null-target NewAccount/MultipleMembers codes).
+            await db.AccountAuthCodes
+                .Where(c =>
+                    c.DeliveryEmailSnapshot == code.DeliveryEmailSnapshot &&
+                    c.EntryContext == EntryContext.MultipleMembers &&
+                    c.ConsumedAtUtc == null &&
+                    c.InvalidatedAtUtc == null)
+                .ExecuteUpdateAsync(
+                    s => s.SetProperty(c => c.InvalidatedAtUtc, code.IssuedAtUtc),
+                    cancellationToken);
+        }
+        else
+        {
+            // Invalidate all prior unconsumed/non-invalidated codes for this AccountUser.
+            // Uses code.IssuedAtUtc as the supersession timestamp.
+            await db.AccountAuthCodes
+                .Where(c =>
+                    c.TargetAccountUserId == code.TargetAccountUserId &&
+                    c.ConsumedAtUtc == null &&
+                    c.InvalidatedAtUtc == null)
+                .ExecuteUpdateAsync(
+                    s => s.SetProperty(c => c.InvalidatedAtUtc, code.IssuedAtUtc),
+                    cancellationToken);
+        }
 
         db.AccountAuthCodes.Add(code);
         await db.SaveChangesAsync(cancellationToken);
@@ -81,7 +102,7 @@ public sealed class EfAuthCodePersistence(OpHaloDbContext db) : IAuthCodePersist
         string normalizedEmail,
         CancellationToken cancellationToken)
     {
-        // 1. Check for active members (Take(2) detects ambiguity).
+        // 1. Check for active members (Take(2) distinguishes 0 / 1 / 2+).
         var activeMembers = await db.AccountUsers
             .AsNoTracking()
             .Where(au =>
@@ -96,7 +117,7 @@ public sealed class EfAuthCodePersistence(OpHaloDbContext db) : IAuthCodePersist
             return new StartAsExistingMember(activeMembers[0].AccountId, activeMembers[0].AccountUserId);
 
         if (activeMembers.Count >= 2)
-            return new StartAsNeutral(); // ambiguous
+            return new StartAsMultipleMembers();
 
         // 2. Any AccountUser row (any status) means the email is already part of a membership.
         var hasAnyAccountUser = await db.AccountUsers
@@ -132,11 +153,13 @@ public sealed class EfAuthCodePersistence(OpHaloDbContext db) : IAuthCodePersist
         }
         else
         {
-            // NewAccount: invalidate prior active NewAccount codes for the same email.
+            // NewAccount/MultipleMembers: both have a null TargetAccountUserId, so invalidate
+            // prior active codes of the *same* EntryContext for the same email — must not
+            // cross-invalidate the other null-target EntryContext for the same email.
             await db.AccountAuthCodes
                 .Where(c =>
                     c.DeliveryEmailSnapshot == code.DeliveryEmailSnapshot &&
-                    c.EntryContext == EntryContext.NewAccount &&
+                    c.EntryContext == code.EntryContext &&
                     c.ConsumedAtUtc == null &&
                     c.InvalidatedAtUtc == null)
                 .ExecuteUpdateAsync(

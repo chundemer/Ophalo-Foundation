@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Entities.Accounts;
@@ -465,6 +466,80 @@ public sealed class AuthStartTests : IClassFixture<KeepApiWebFactory>, IAsyncLif
         var setCookie = exchangeResponse.Headers.GetValues("Set-Cookie").FirstOrDefault();
         Assert.NotNull(setCookie);
         Assert.Contains("ophalo.sid", setCookie);
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /auth/start — multiple active memberships (GAP-068 Slice 2a)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Start_TwoActiveMemberships_Returns200AndSendsExactlyOneEmailLikeSingleMembership()
+    {
+        await AddSecondActiveMembershipForExistingOwnerAsync();
+
+        var response = await _client.PostAsJsonAsync("/auth/start", new
+        {
+            email = ExistingOwnerEmail,
+            businessName = "Acme",
+            timeZone = "America/Chicago"
+        });
+
+        // Public response is identical to the single-membership case — no count disclosure.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Single(_factory.EmailSender.SentEmails);
+        Assert.Equal(ExistingOwnerEmail, _factory.EmailSender.SentEmails[0].To);
+    }
+
+    [Fact]
+    public async Task Start_TwoActiveMemberships_IssuesMultipleMembersCodeWithNullTargets()
+    {
+        await AddSecondActiveMembershipForExistingOwnerAsync();
+
+        await _client.PostAsJsonAsync("/auth/start", new
+        {
+            email = ExistingOwnerEmail,
+            businessName = "Acme",
+            timeZone = "America/Chicago"
+        });
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var issuedCode = db.AccountAuthCodes
+            .Single(c => c.DeliveryEmailSnapshot == EmailNormalizer.Normalize(ExistingOwnerEmail));
+
+        Assert.Equal(EntryContext.MultipleMembers, issuedCode.EntryContext);
+        Assert.Null(issuedCode.AccountId);
+        Assert.Null(issuedCode.TargetAccountUserId);
+    }
+
+    private async Task AddSecondActiveMembershipForExistingOwnerAsync()
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+
+        var existingOwner = await db.AccountUsers.SingleAsync(au => au.Id == _existingOwnerAccountUserId);
+        var userId = existingOwner.UserId!.Value;
+
+        var secondAccount = Account.CreateVerified("Second Co", AccountPurpose.Business, "America/Chicago");
+        db.Accounts.Add(secondAccount);
+
+        var secondEntitlements = AccountEntitlements.Create(
+            secondAccount.Id, AccountPlan.Trial, maxUserSeats: 1,
+            trialEndsAtUtc: DateTime.UtcNow.AddDays(30), classification: AccountClassification.Production);
+        db.AccountEntitlements.Add(secondEntitlements);
+
+        var secondOwner = AccountUser.CreateOwner(
+            secondAccount.Id, userId, ExistingOwnerEmail, EmailNormalizer.Normalize(ExistingOwnerEmail));
+        db.AccountUsers.Add(secondOwner);
+
+        var ownerFk = db.Entry(secondAccount).Property(a => a.PrimaryOwnerAccountUserId);
+        ownerFk.CurrentValue = null;
+        await db.SaveChangesAsync();
+
+        ownerFk.CurrentValue = secondOwner.Id;
+        await db.SaveChangesAsync();
+
+        _factory.EmailSender.Clear();
     }
 
     // -------------------------------------------------------------------------

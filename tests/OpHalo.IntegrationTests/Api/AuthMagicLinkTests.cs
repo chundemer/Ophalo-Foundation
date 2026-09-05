@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
+using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
 
@@ -127,6 +129,64 @@ public sealed class AuthMagicLinkTests : IClassFixture<KeepApiWebFactory>, IAsyn
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Empty(_factory.EmailSender.SentEmails);
+    }
+
+    [Fact]
+    public async Task SignIn_TwoActiveMemberships_Returns200AndSendsExactlyOneEmailLikeSingleMembership()
+    {
+        await AddSecondActiveMembershipForOwnerAsync();
+
+        var response = await _client.PostAsJsonAsync("/auth/signin", new { email = OwnerEmail });
+
+        // Public response is identical to the single-membership case — no count disclosure.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Single(_factory.EmailSender.SentEmails);
+        Assert.Equal(OwnerEmail, _factory.EmailSender.SentEmails[0].To);
+    }
+
+    [Fact]
+    public async Task SignIn_TwoActiveMemberships_IssuesMultipleMembersCodeWithNullTargets()
+    {
+        await AddSecondActiveMembershipForOwnerAsync();
+
+        await _client.PostAsJsonAsync("/auth/signin", new { email = OwnerEmail });
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var issuedCode = db.AccountAuthCodes.Single(c => c.DeliveryEmailSnapshot == OwnerEmail);
+
+        Assert.Equal(EntryContext.MultipleMembers, issuedCode.EntryContext);
+        Assert.Null(issuedCode.AccountId);
+        Assert.Null(issuedCode.TargetAccountUserId);
+    }
+
+    [Fact]
+    public async Task SignIn_OneVersusTwoActiveMemberships_ProducesByteIdenticalResponse()
+    {
+        // Single membership (as seeded by InitializeAsync) — capture the complete response.
+        var singleResponse = await _client.PostAsJsonAsync("/auth/signin", new { email = OwnerEmail });
+        var singleStatus = singleResponse.StatusCode;
+        var singleBody = await singleResponse.Content.ReadAsStringAsync();
+        var singleContentType = singleResponse.Content.Headers.ContentType?.ToString();
+        var singleHasSetCookie = singleResponse.Headers.Contains("Set-Cookie");
+
+        // Now escalate to two active memberships and capture the complete response again.
+        await AddSecondActiveMembershipForOwnerAsync();
+        var multiResponse = await _client.PostAsJsonAsync("/auth/signin", new { email = OwnerEmail });
+        var multiStatus = multiResponse.StatusCode;
+        var multiBody = await multiResponse.Content.ReadAsStringAsync();
+        var multiContentType = multiResponse.Content.Headers.ContentType?.ToString();
+        var multiHasSetCookie = multiResponse.Headers.Contains("Set-Cookie");
+
+        // The public response must not disclose membership count — status, body, content type,
+        // and cookie presence must be identical between the single- and multi-membership cases.
+        Assert.Equal(HttpStatusCode.OK, singleStatus);
+        Assert.Equal(singleStatus, multiStatus);
+        Assert.Equal(string.Empty, singleBody);
+        Assert.Equal(singleBody, multiBody);
+        Assert.Equal(singleContentType, multiContentType);
+        Assert.False(singleHasSetCookie);
+        Assert.Equal(singleHasSetCookie, multiHasSetCookie);
     }
 
     [Fact]
@@ -384,6 +444,35 @@ public sealed class AuthMagicLinkTests : IClassFixture<KeepApiWebFactory>, IAsyn
         var accountUser = await db.AccountUsers.FindAsync(_ownerAccountUserId);
         accountUser!.Suspend();
         await db.SaveChangesAsync();
+    }
+
+    private async Task AddSecondActiveMembershipForOwnerAsync()
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+
+        var existingOwner = await db.AccountUsers.SingleAsync(au => au.Id == _ownerAccountUserId);
+        var userId = existingOwner.UserId!.Value;
+
+        var secondAccount = Account.CreateVerified("Second Co", AccountPurpose.Business, "America/Chicago");
+        db.Accounts.Add(secondAccount);
+
+        var secondEntitlements = AccountEntitlements.Create(
+            secondAccount.Id, AccountPlan.Trial, maxUserSeats: 1,
+            trialEndsAtUtc: DateTime.UtcNow.AddDays(30), classification: AccountClassification.Production);
+        db.AccountEntitlements.Add(secondEntitlements);
+
+        var secondOwner = AccountUser.CreateOwner(secondAccount.Id, userId, OwnerEmail, OwnerEmail);
+        db.AccountUsers.Add(secondOwner);
+
+        var ownerFk = db.Entry(secondAccount).Property(a => a.PrimaryOwnerAccountUserId);
+        ownerFk.CurrentValue = null;
+        await db.SaveChangesAsync();
+
+        ownerFk.CurrentValue = secondOwner.Id;
+        await db.SaveChangesAsync();
+
+        _factory.EmailSender.Clear();
     }
 
     private async Task RemoveOwnerAsync()

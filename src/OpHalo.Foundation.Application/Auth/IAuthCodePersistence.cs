@@ -11,14 +11,14 @@ namespace OpHalo.Foundation.Application.Auth;
 public interface IAuthCodePersistence
 {
     /// <summary>
-    /// Returns the AccountId and AccountUserId for the active member whose normalized email
-    /// matches, or null if no eligible active member exists.
+    /// Classifies a /auth/signin request for the normalized email:
+    /// SignInAsExistingMember (exactly one active AccountUser), SignInAsMultipleMembers
+    /// (2+ active AccountUsers across accounts — workspace selection deferred to /exchange,
+    /// a later slice), or SignInAsNeutral (no eligible active member — enumeration protection).
     ///
     /// Eligibility: AccountUser.MembershipStatus == Active and UserId is set.
-    /// Multi-membership: if the email maps to active memberships in more than one account,
-    /// returns null — account-selection UX is deferred to a later phase.
     /// </summary>
-    Task<EligibleSignInMember?> FindEligibleSignInMemberByEmailAsync(
+    Task<SignInClassification> FindEligibleSignInMemberByEmailAsync(
         string normalizedEmail,
         CancellationToken cancellationToken);
 
@@ -46,8 +46,9 @@ public interface IAuthCodePersistence
 
     /// <summary>
     /// Classifies a /auth/start request for the normalized email:
-    /// ExistingMember (exactly one active AccountUser), NewAccount (no identity exists),
-    /// or Neutral (ambiguous/invited/suspended/removed/existing User without active membership).
+    /// ExistingMember (exactly one active AccountUser), MultipleMembers (2+ active AccountUsers
+    /// across accounts), NewAccount (no identity exists), or Neutral (invited/suspended/removed/
+    /// existing User without active membership).
     /// </summary>
     Task<StartClassification> ClassifyStartRequestAsync(
         string normalizedEmail,
@@ -85,12 +86,17 @@ public interface IAuthCodePersistence
         CancellationToken cancellationToken);
 }
 
-/// <summary>Snapshot returned from FindEligibleSignInMemberByEmailAsync.</summary>
-public sealed record EligibleSignInMember(Guid AccountId, Guid AccountUserId);
+// --- Sign-in classification ---
+
+public abstract record SignInClassification;
+public sealed record SignInAsExistingMember(Guid AccountId, Guid AccountUserId) : SignInClassification;
+public sealed record SignInAsMultipleMembers : SignInClassification;
+public sealed record SignInAsNeutral : SignInClassification;
 
 // --- Start classification ---
 
 public abstract record StartClassification;
 public sealed record StartAsExistingMember(Guid AccountId, Guid AccountUserId) : StartClassification;
+public sealed record StartAsMultipleMembers : StartClassification;
 public sealed record StartAsNewAccount : StartClassification;
 public sealed record StartAsNeutral : StartClassification;

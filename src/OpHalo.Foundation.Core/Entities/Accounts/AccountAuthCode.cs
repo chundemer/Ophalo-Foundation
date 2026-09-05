@@ -163,6 +163,45 @@ public sealed class AccountAuthCode
         };
     }
 
+    /// <summary>
+    /// Creates a MultipleMembers code when a sign-in/start email resolves to 2+ active
+    /// memberships. Mirrors <see cref="CreateForNewAccount"/>'s shape — AccountId and
+    /// TargetAccountUserId are always null; workspace resolution happens at /exchange via a
+    /// live query (later slice).
+    /// </summary>
+    public static AccountAuthCode CreateForMultipleMembers(
+        string codeHash,
+        DateTime issuedAtUtc,
+        DateTime expiresAtUtc,
+        string deliveryEmailSnapshot)
+    {
+        if (string.IsNullOrWhiteSpace(codeHash))
+            throw new ArgumentException("CodeHash is required.", nameof(codeHash));
+        if (issuedAtUtc == default)
+            throw new ArgumentException("IssuedAtUtc must not be default.", nameof(issuedAtUtc));
+        if (issuedAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("IssuedAtUtc must be UTC.", nameof(issuedAtUtc));
+        if (expiresAtUtc == default)
+            throw new ArgumentException("ExpiresAtUtc must not be default.", nameof(expiresAtUtc));
+        if (expiresAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("ExpiresAtUtc must be UTC.", nameof(expiresAtUtc));
+        if (expiresAtUtc <= issuedAtUtc)
+            throw new ArgumentException("ExpiresAtUtc must be after IssuedAtUtc.", nameof(expiresAtUtc));
+        if (string.IsNullOrWhiteSpace(deliveryEmailSnapshot))
+            throw new ArgumentException("DeliveryEmailSnapshot is required.", nameof(deliveryEmailSnapshot));
+
+        return new AccountAuthCode
+        {
+            AccountId = null,
+            TargetAccountUserId = null,
+            CodeHash = codeHash,
+            IssuedAtUtc = issuedAtUtc,
+            ExpiresAtUtc = expiresAtUtc,
+            DeliveryEmailSnapshot = deliveryEmailSnapshot,
+            EntryContext = Enums.EntryContext.MultipleMembers,
+        };
+    }
+
     // --- Domain methods ---
 
     /// <summary>

@@ -10,7 +10,9 @@ using OpHalo.SharedKernel.Results;
 namespace OpHalo.Foundation.Application.Auth;
 
 /// <summary>
-/// Issues a magic link for existing active members.
+/// Issues a magic link for existing active members, including the 2+-active-membership case
+/// (workspace selection deferred to /exchange, a later slice — the code itself carries no
+/// membership-count signal).
 ///
 /// Behavior (D8): unknown email, invited-only, suspended/removed membership, or any
 /// other ineligible state all return Result.Success with no code issued and no email
@@ -34,25 +36,35 @@ public sealed class SignInAuthService(
         var nowUtc = clock.UtcNow;
         var normalizedEmail = EmailNormalizer.Normalize(email);
 
-        var member = await persistence.FindEligibleSignInMemberByEmailAsync(normalizedEmail, cancellationToken);
+        var classification = await persistence.FindEligibleSignInMemberByEmailAsync(normalizedEmail, cancellationToken);
 
         // Unknown/ineligible email — neutral success, no code issued (D8).
-        if (member is null)
+        if (classification is SignInAsNeutral)
             return Result.Success();
 
         var rawCode = MagicLinkCodeGenerator.GenerateRawCode();
         var codeHash = MagicLinkCodeGenerator.HashCode(rawCode);
 
-        var code = AccountAuthCode.Create(
-            accountId: member.AccountId,
-            targetAccountUserId: member.AccountUserId,
-            codeHash: codeHash,
-            issuedAtUtc: nowUtc,
-            expiresAtUtc: nowUtc.AddHours(24),
-            deliveryEmailSnapshot: normalizedEmail,
-            entryContext: EntryContext.ExistingMember);
+        var code = classification switch
+        {
+            SignInAsExistingMember existing => AccountAuthCode.Create(
+                accountId: existing.AccountId,
+                targetAccountUserId: existing.AccountUserId,
+                codeHash: codeHash,
+                issuedAtUtc: nowUtc,
+                expiresAtUtc: nowUtc.AddHours(24),
+                deliveryEmailSnapshot: normalizedEmail,
+                entryContext: EntryContext.ExistingMember),
+            SignInAsMultipleMembers => AccountAuthCode.CreateForMultipleMembers(
+                codeHash: codeHash,
+                issuedAtUtc: nowUtc,
+                expiresAtUtc: nowUtc.AddHours(24),
+                deliveryEmailSnapshot: normalizedEmail),
+            _ => throw new InvalidOperationException(
+                $"Unhandled {nameof(SignInClassification)}: {classification.GetType().Name}."),
+        };
 
-        // Atomic: invalidates prior codes for this AccountUser + persists the new code.
+        // Atomic: invalidates prior codes for this classification + persists the new code.
         await persistence.CommitSignInCodeAsync(code, cancellationToken);
 
         var mobileSuffix = string.Equals(clientHint, "mobile", StringComparison.OrdinalIgnoreCase)

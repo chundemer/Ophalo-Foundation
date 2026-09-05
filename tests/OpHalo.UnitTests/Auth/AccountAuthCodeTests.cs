@@ -100,6 +100,53 @@ public class AccountAuthCodeTests
             "hash", ValidIssuedAt, ValidIssuedAt, "owner@example.com",
             "Acme", null, "America/Chicago"));
 
+    // --- CreateForMultipleMembers: happy path + guards ---
+
+    [Fact]
+    public void CreateForMultipleMembers_sets_correct_entry_context_and_null_targets()
+    {
+        var code = AccountAuthCode.CreateForMultipleMembers(
+            codeHash: "abc123",
+            issuedAtUtc: ValidIssuedAt,
+            expiresAtUtc: ValidExpiresAt,
+            deliveryEmailSnapshot: "owner@example.com");
+
+        Assert.Equal(EntryContext.MultipleMembers, code.EntryContext);
+        Assert.Null(code.AccountId);
+        Assert.Null(code.TargetAccountUserId);
+        Assert.Equal("owner@example.com", code.DeliveryEmailSnapshot);
+        Assert.Null(code.BusinessNameSnapshot);
+        Assert.Null(code.NameSnapshot);
+        Assert.Null(code.TimeZoneSnapshot);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void CreateForMultipleMembers_requires_code_hash(string codeHash) =>
+        Assert.Throws<ArgumentException>(() => AccountAuthCode.CreateForMultipleMembers(
+            codeHash, ValidIssuedAt, ValidExpiresAt, "owner@example.com"));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void CreateForMultipleMembers_requires_delivery_email(string email) =>
+        Assert.Throws<ArgumentException>(() => AccountAuthCode.CreateForMultipleMembers(
+            "hash", ValidIssuedAt, ValidExpiresAt, email));
+
+    [Fact]
+    public void CreateForMultipleMembers_requires_utc_issued_at() =>
+        Assert.Throws<ArgumentException>(() => AccountAuthCode.CreateForMultipleMembers(
+            "hash",
+            new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Local),
+            ValidExpiresAt,
+            "owner@example.com"));
+
+    [Fact]
+    public void CreateForMultipleMembers_requires_expires_after_issued() =>
+        Assert.Throws<ArgumentException>(() => AccountAuthCode.CreateForMultipleMembers(
+            "hash", ValidIssuedAt, ValidIssuedAt, "owner@example.com"));
+
     // --- Create: rejects NewAccount context ---
 
     [Fact]
