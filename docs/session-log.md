@@ -4,12 +4,15 @@
 All GAP-039 code slices and the BL140 Batch 3 production console configuration are complete;
 Batch 4 production-candidate verification is founder-owned and currently paused before controlled
 error generation.** Pilot Onboarding Upgrade Session 0 (release-gate/surface audit) and Session 1
-(server-owned Proposed Work release gate) are **complete** — implemented, tested, and pushed to
-`feat/gap-pilot-release-gate` (commit `d23e0bac` + follow-up) — **not yet merged, not yet
-deployed.** See the Deferred next work bullet below for the merge/deploy step still required.
-Next Claude implementation batch after that branch is merged and deployed is **Session 2 —
+(server-owned Proposed Work release gate) are **complete** — implemented, tested, and merged to
+`main` (`eb33f6a5`, plus follow-up `226778af`) — **not yet deployed.** See the Deferred next work
+bullet below for the deploy step still required.
+Next Claude implementation batch after that merge is deployed is **Session 2 —
 automatic Pilot package provisioning** (ADR-496); GAP-033 is not next unless Christian explicitly
-reprioritizes it. Request
+reprioritizes it. **GAP-068 (multi-workspace sign-in dead end + invited-user display name, P0) has
+completed Session 0 discovery — [ADR-497](decisions/ADR-497-post-auth-continuation-multi-workspace-signin-and-display-name.md)
+and [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md) are written and awaiting
+Christian's approval to begin Slice 1; not yet started.** Request
 UI Upgrade 1.1 implementation is complete (locked contract
 [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), delivery evidence
 [BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)); its product-owner visual
@@ -152,7 +155,7 @@ authenticated `/me` endpoint and belongs in shell chrome, outside Request Anchor
   now locked to release-gate-first sequencing (renumbered Session 1 = server-owned release gate,
   Session 2 = automatic Pilot provisioning; deploying provisioning before the gate is complete and
   deployed would breach ADR-496).
-  **Session 0 (read-only audit): done. Session 1: complete, not yet merged/deployed.**
+  **Session 0 (read-only audit): done. Session 1: complete, merged to `main`, not yet deployed.**
   `IReleaseGatePolicy`/`ConfigurationReleaseGatePolicy` (global config gate, fail-closed via
   `bool.TryParse`, no checked-in override) gates `ProposedScopeApiService`,
   `ProposedScopeReadApiService`, `FieldProposedScopeSelectionApiService` (field-select),
@@ -165,15 +168,15 @@ authenticated `/me` endpoint and belongs in shell chrome, outside Request Anchor
   ActualWorkCapture`, so it is the shared, price-free catalog/assembly search behind both the
   Proposed Work composer and the already-released Actual Work capture flow, and creates no
   Proposed Work state itself (the state-changing endpoints it feeds are the now-gated field-select/
-  expand-assembly). Not yet merged (`feat/gap-pilot-release-gate`). 6/6 focused release-gate
+  expand-assembly). Merged to `main` (`eb33f6a5`); not yet deployed. 6/6 focused release-gate
   integration tests pass; 90/90 pre-existing ProposedScope/ScopeNudge/QuickScopeAction/
   FieldScopeSearch integration tests unaffected; 14/14 architecture tests pass. Do not start
-  Session 2 (provisioning) mutation work until this branch is merged and deployed.
+  Session 2 (provisioning) mutation work until this merge is deployed.
 - **4g pilot request-close advisory:** preflight after the above safety/usability sequence. It is an
   advisory on outstanding Actual Work with a structured `Close anyway` pilot exception; it is not a
   hard Resolved→Closed gate. See BL136.
 - **Pilot/release gates:** production observability (GAP-039, complete), pilot onboarding upgrade
-  Session 1 merge/deploy then Session 2 automatic Pilot provisioning (ADR-496, next), public-intake
+  Session 1 deploy then Session 2 automatic Pilot provisioning (ADR-496, next), public-intake
   trust (GAP-033), phone integrity (GAP-016/021/051), then the remaining tracker order.
 - **Minimum Office Closeout:** Billing Revision, handoff, and correction/adjustment design resume
   only after the controlled-pilot and rehearsal gates; see [BL135](build-log/135-minimum-office-closeout-mechanical-preflight.md).

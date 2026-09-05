@@ -20,6 +20,7 @@ These are not an instruction to ship every remaining item before a supervised pi
 | Item | Gate condition |
 | --- | --- |
 | GAP-039 | Required before any customer-facing production pilot. |
+| GAP-068 | Required before pilot launch — a founder/owner with two+ active memberships cannot currently sign in at all. |
 | GAP-033 | Required before enabling public customer intake. |
 | GAP-048 | Required before using email to share private customer request pages. |
 | GAP-047 | Required if staff relies on Internal priority for operational triage. |
@@ -38,6 +39,20 @@ Complete each numbered slice with focused automated coverage and a production-ca
 6. **Pilot operating loop and final usability review:** GAP-064 (after GAP-039), GAP-037, GAP-038, and GAP-054. Establish a reliable new-customer-request alert path before relying on intake to create live work, then deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
 
 ## Active Work
+
+### GAP-068 — Multi-workspace sign-in is a dead end; invited users have no display name
+
+**Status:** Open
+**Severity:** P0
+**Area:** Foundation auth (`/auth/signin`, `/auth/start`, `/auth/exchange`, invite acceptance)
+
+An email with two or more active `AccountUser` memberships never receives a magic link — `FindEligibleSignInMemberByEmailAsync`/`ClassifyStartRequestAsync` collapse ambiguity to "no eligible member," and `SignInAuthService` treats that as ordinary enumeration-safe neutral success with no code issued. This is a real, permanent lock-out (the founder's own account is currently affected), not a deferred UX nicety. Separately, invite acceptance creates a global `User` with `Name = string.Empty`; `/auth/me` surfaces that as `userName: null`, leaving invited users with no attributable identity in the workspace header or customer-facing activity.
+
+**Locked decision:** [ADR-497](decisions/ADR-497-post-auth-continuation-multi-workspace-signin-and-display-name.md). A single server-owned, single-use, ~10-minute `PostAuthContinuation` row covers name-blank sign-in, multi-membership sign-in, and name-blank invite acceptance; redeemed via new `POST /auth/continue`, which live-reverifies membership Active-ness and name-blankness rather than trusting a snapshot. `/auth/start`/`/auth/signin` responses stay enumeration-safe throughout.
+
+**Implementation order:** see [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md) — Slice 1 (`PostAuthContinuation` foundation, additive), Slice 2 (multi-membership selector + name gate at `/auth/exchange` + `/auth/continue`), Slice 3 (invite acceptance name gate), Slice 4 (`ophalo-web` frontend).
+
+**Done when:** A person with two active memberships can sign in and choose a workspace without a second email or a destructive membership edit; an invited user with no name is prompted once, and that name reaches `/auth/me` and attribution; all acceptance cases in ADR-497 are covered by automated tests.
 
 ### GAP-039 — Production failures and pilot health are not observable enough to earn trust
 
