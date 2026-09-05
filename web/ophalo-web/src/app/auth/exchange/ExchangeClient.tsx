@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthShell, AuthLead } from "@/components/auth/AuthShell";
+import {
+  CompleteSignInScreen,
+  type ContinuationWorkspace,
+} from "@/components/auth/CompleteSignInScreen";
+
+type ContinuationState = {
+  requiresName: boolean;
+  workspaces: ContinuationWorkspace[] | null;
+};
 
 export default function ExchangeClient({ code }: { code: string }) {
   const hasExchanged = useRef(false);
+  const [continuation, setContinuation] = useState<ContinuationState | null>(null);
 
   useEffect(() => {
     if (hasExchanged.current) return;
@@ -30,6 +40,20 @@ export default function ExchangeClient({ code }: { code: string }) {
       }
 
       if (res.ok) {
+        const body = await res.json().catch(() => null) as {
+          requiresContinuation?: boolean;
+          requiresName?: boolean;
+          workspaces?: ContinuationWorkspace[] | null;
+        } | null;
+
+        if (body?.requiresContinuation) {
+          setContinuation({
+            requiresName: !!body.requiresName,
+            workspaces: body.workspaces ?? null,
+          });
+          return;
+        }
+
         window.location.assign(
           process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:5173",
         );
@@ -100,6 +124,18 @@ export default function ExchangeClient({ code }: { code: string }) {
 
     exchange();
   }, [code]);
+
+  if (continuation) {
+    return (
+      <AuthShell>
+        <CompleteSignInScreen
+          requiresName={continuation.requiresName}
+          workspaces={continuation.workspaces}
+          errorBasePath="/auth/exchange/error"
+        />
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell>

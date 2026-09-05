@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthShell, AuthLead } from "@/components/auth/AuthShell";
+import { CompleteSignInScreen } from "@/components/auth/CompleteSignInScreen";
 
 export default function AcceptClient({ token }: { token: string }) {
   const hasAccepted = useRef(false);
+  const [requiresContinuation, setRequiresContinuation] = useState(false);
 
   useEffect(() => {
     if (hasAccepted.current) return;
@@ -28,6 +30,15 @@ export default function AcceptClient({ token }: { token: string }) {
       }
 
       if (res.ok) {
+        const body = await res.json().catch(() => null) as {
+          requiresContinuation?: boolean;
+        } | null;
+
+        if (body?.requiresContinuation) {
+          setRequiresContinuation(true);
+          return;
+        }
+
         window.location.assign(
           process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:5173",
         );
@@ -100,6 +111,18 @@ export default function AcceptClient({ token }: { token: string }) {
 
     accept();
   }, [token]);
+
+  if (requiresContinuation) {
+    return (
+      <AuthShell>
+        <CompleteSignInScreen
+          requiresName={true}
+          workspaces={null}
+          errorBasePath="/invite/accept/error"
+        />
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell>
