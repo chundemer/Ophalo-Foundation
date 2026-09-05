@@ -199,7 +199,12 @@ browser/network verification is still owed before this ships to production** —
 against this checklist:
 
 - Name-only sign-in (`ExistingMember`, blank name) completes and lands in the app.
-- Multi-membership selection (`MultipleMembers`, named user) completes to the selected workspace.
+- [x] Multi-membership selection (`MultipleMembers`, named user) completes to the selected
+  workspace — verified in production 2026-09-05. First attempt skipped the picker and signed
+  straight into one workspace (`/auth/exchange` returned a plain session cookie, no
+  `ophalo.continuation`); root cause was a data issue in `AccountUsers.MembershipStatus`/
+  `NormalizedEmail` for that email, not a Slice 4 defect — `EfAuthCodePersistence.
+  FindEligibleSignInMemberByEmailAsync` only counts `Active` rows. Resolved and re-verified.
 - Multi-membership + blank name in one submit (both fields at once) completes correctly.
 - Invite acceptance name handoff (`AcceptInvite`, blank name) completes to the invited workspace.
 - Retryable validation: blank name and no-workspace-selected each surface the `problem.detail`
