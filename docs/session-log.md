@@ -14,9 +14,10 @@ completed Session 0 discovery — [ADR-497](decisions/ADR-497-post-auth-continua
 and [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md) are written. Slice 1
 (`PostAuthContinuation` foundation, additive-only) is complete and accepted; Slice 2a
 (MultipleMembers code issuance at `/auth/signin`/`/auth/start`, enumeration-safe) is complete and
-accepted (`5403f445`) — a redeemed MultipleMembers code still fails closed at `/exchange` until
-Slice 2b lands, so this is not independently deployable end-to-end. Slice 2b (exchange branching +
-`/auth/continue` + `CompleteAuthContinuationService`) is next.** Request
+accepted (`5403f445`); Slice 2b (`/auth/exchange` name-blank/MultipleMembers branching,
+`POST /auth/continue`, `CompleteAuthContinuationService`, shared `AuthSessionIssuer`) is complete
+and accepted — full end-to-end continuation redemption now works; see BL143 for delivery evidence.
+Slice 3 (invite acceptance name gate) is next.** Request
 UI Upgrade 1.1 implementation is complete (locked contract
 [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), delivery evidence
 [BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)); its product-owner visual

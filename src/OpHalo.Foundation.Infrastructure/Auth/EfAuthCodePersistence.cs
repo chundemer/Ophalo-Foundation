@@ -230,4 +230,84 @@ public sealed class EfAuthCodePersistence(OpHaloDbContext db) : IAuthCodePersist
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException pgEx && pgEx.SqlState == PostgresErrorCodes.UniqueViolation;
+
+    // --- ADR-497: post-auth continuation resolution ---
+
+    public async Task<ExistingMemberNameCheck?> GetExistingMemberNameCheckAsync(
+        Guid accountUserId,
+        CancellationToken cancellationToken)
+    {
+        var row = await db.AccountUsers
+            .AsNoTracking()
+            .Where(au => au.Id == accountUserId && au.UserId != null)
+            .Select(au => new { UserId = au.UserId!.Value, au.User!.Name })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return row is null ? null : new ExistingMemberNameCheck(row.UserId, row.Name);
+    }
+
+    public async Task<MultipleMembersResolution?> GetMultipleMembersResolutionAsync(
+        string deliveryEmailSnapshot,
+        CancellationToken cancellationToken)
+    {
+        var user = await db.Users
+            .AsNoTracking()
+            .Where(u => u.Email == deliveryEmailSnapshot)
+            .Select(u => new { u.Id, u.Name })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (user is null)
+            return null;
+
+        var memberships = await db.AccountUsers
+            .AsNoTracking()
+            .Where(au =>
+                au.UserId == user.Id &&
+                au.MembershipStatus == MembershipStatus.Active)
+            .Select(au => new ActiveMembershipOption(au.Id, au.Account.BusinessName, au.Role))
+            .ToListAsync(cancellationToken);
+
+        return new MultipleMembersResolution(user.Id, user.Name, memberships);
+    }
+
+    public async Task<Result> SetUserNameAsync(
+        Guid userId,
+        string name,
+        CancellationToken cancellationToken)
+    {
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+        if (user is null)
+            return Result.Failure(AccountErrors.InconsistentState);
+
+        var result = user.SetName(name);
+        if (result.IsFailure)
+            return result;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return Result.Success();
+    }
+
+    public Task<string?> GetUserNameAsync(Guid userId, CancellationToken cancellationToken) =>
+        db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => (string?)u.Name)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<AccountUserActiveCheck?> VerifyActiveMembershipAsync(
+        Guid accountUserId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var row = await db.AccountUsers
+            .AsNoTracking()
+            .Where(au =>
+                au.Id == accountUserId &&
+                au.UserId == userId &&
+                au.MembershipStatus == MembershipStatus.Active)
+            .Select(au => new { au.AccountId })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return row is null ? null : new AccountUserActiveCheck(row.AccountId);
+    }
 }

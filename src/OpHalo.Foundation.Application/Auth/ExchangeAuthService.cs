@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
@@ -27,13 +26,37 @@ namespace OpHalo.Foundation.Application.Auth;
 /// </summary>
 public sealed class ExchangeAuthService(
     IAuthCodePersistence persistence,
-    IMobileHandoffCodePersistence mobileHandoffPersistence,
-    IAccountSessionService sessionService,
+    IPostAuthContinuationPersistence continuationPersistence,
+    AuthSessionIssuer sessionIssuer,
     AccountProvisioningService provisioning,
     IClock clock,
-    IOptions<SignupDefaultsSettings> signupDefaults,
-    ILogger<ExchangeAuthService> logger)
+    IOptions<SignupDefaultsSettings> signupDefaults)
 {
+    private static readonly TimeSpan ContinuationLifetime = TimeSpan.FromMinutes(10);
+
+    private async Task<Result<ExchangeSuccessResult>> CreateContinuationAsync(
+        Guid userId,
+        Guid? targetAccountUserId,
+        bool requiresName,
+        IReadOnlyList<ActiveMembershipOption>? workspaces,
+        SessionClientType clientType,
+        string? deviceName,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var rawToken = MagicLinkCodeGenerator.GenerateRawCode();
+        var tokenHash = MagicLinkCodeGenerator.HashCode(rawToken);
+        var expiresAtUtc = nowUtc.Add(ContinuationLifetime);
+
+        var continuation = PostAuthContinuation.Create(
+            tokenHash, userId, targetAccountUserId, clientType, deviceName, nowUtc, expiresAtUtc);
+
+        await continuationPersistence.CreateAsync(continuation, cancellationToken);
+
+        return Result<ExchangeSuccessResult>.Success(
+            new ExchangeContinuationResult(rawToken, requiresName, workspaces, expiresAtUtc));
+    }
+
     public async Task<ExchangeResult> HandleAsync(
         string rawCode,
         SessionClientType clientType,
@@ -68,6 +91,9 @@ public sealed class ExchangeAuthService(
             EntryContext.NewAccount =>
                 Wrap(await HandleNewAccountAsync(code, clientType, deviceName, nowUtc, cancellationToken)),
 
+            EntryContext.MultipleMembers =>
+                Wrap(await HandleMultipleMembersAsync(code, clientType, deviceName, nowUtc, cancellationToken)),
+
             _ => Fail(AccountErrors.InconsistentState, null)
         };
 
@@ -94,13 +120,49 @@ public sealed class ExchangeAuthService(
         if (!consumed)
             return Result<ExchangeSuccessResult>.Failure(AccountAuthCodeErrors.AlreadyConsumed);
 
+        var nameCheck = await persistence.GetExistingMemberNameCheckAsync(
+            code.TargetAccountUserId.Value, cancellationToken);
+        if (nameCheck is null)
+            return Result<ExchangeSuccessResult>.Failure(AccountErrors.InconsistentState);
+
+        if (string.IsNullOrWhiteSpace(nameCheck.Name))
+        {
+            return await CreateContinuationAsync(
+                nameCheck.UserId, code.TargetAccountUserId, requiresName: true, workspaces: null,
+                clientType, deviceName, nowUtc, cancellationToken);
+        }
+
         if (clientType == SessionClientType.MobileApp)
-            return await CreateMobileHandoffAsync(
+            return await sessionIssuer.CreateMobileHandoffAsync(
                 code.AccountId.Value, code.TargetAccountUserId.Value, nowUtc, cancellationToken);
 
-        return await CreateSessionAsync(
+        return await sessionIssuer.CreateSessionAsync(
             code.AccountId.Value, code.TargetAccountUserId.Value,
             clientType, deviceName, code.Id, cancellationToken);
+    }
+
+    private async Task<Result<ExchangeSuccessResult>> HandleMultipleMembersAsync(
+        AccountAuthCode code,
+        SessionClientType clientType,
+        string? deviceName,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
+    {
+        // Atomic consume — returns false if another concurrent request won the race.
+        var consumed = await persistence.ConsumeCodeAsync(code.Id, nowUtc, cancellationToken);
+        if (!consumed)
+            return Result<ExchangeSuccessResult>.Failure(AccountAuthCodeErrors.AlreadyConsumed);
+
+        var resolution = await persistence.GetMultipleMembersResolutionAsync(
+            code.DeliveryEmailSnapshot, cancellationToken);
+        if (resolution is null)
+            return Result<ExchangeSuccessResult>.Failure(AccountErrors.InconsistentState);
+
+        return await CreateContinuationAsync(
+            resolution.UserId, targetAccountUserId: null,
+            requiresName: string.IsNullOrWhiteSpace(resolution.Name),
+            workspaces: resolution.Memberships,
+            clientType, deviceName, nowUtc, cancellationToken);
     }
 
     private async Task<Result<ExchangeSuccessResult>> HandleNewAccountAsync(
@@ -157,67 +219,15 @@ public sealed class ExchangeAuthService(
             return Result<ExchangeSuccessResult>.Failure(commitResult.Error);
 
         if (clientType == SessionClientType.MobileApp)
-            return await CreateMobileHandoffAsync(
+            return await sessionIssuer.CreateMobileHandoffAsync(
                 graph.Account.Id, graph.Owner.Id, nowUtc, cancellationToken);
 
         // Session creation is outside the transaction — failure leaves the graph committed.
-        return await CreateSessionAsync(
+        return await sessionIssuer.CreateSessionAsync(
             graph.Account.Id, graph.Owner.Id,
             clientType, deviceName, code.Id, cancellationToken);
     }
 
-    private async Task<Result<ExchangeSuccessResult>> CreateSessionAsync(
-        Guid accountId,
-        Guid accountUserId,
-        SessionClientType clientType,
-        string? deviceName,
-        Guid codeId,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var session = await sessionService.CreateSession(
-                accountId, accountUserId, clientType, deviceName, cancellationToken);
-
-            return Result<ExchangeSuccessResult>.Success(
-                new ExchangeTokenResult(session.RawToken, session.ExpiresAtUtc));
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex,
-                "Session creation failed after code exchange. AccountId={AccountId} AccountUserId={AccountUserId} AccountAuthCodeId={AccountAuthCodeId}",
-                accountId, accountUserId, codeId);
-
-            return Result<ExchangeSuccessResult>.Failure(AccountErrors.SessionCreationFailed);
-        }
-    }
-
-    private async Task<Result<ExchangeSuccessResult>> CreateMobileHandoffAsync(
-        Guid accountId,
-        Guid accountUserId,
-        DateTime nowUtc,
-        CancellationToken cancellationToken)
-    {
-        var rawCode = MagicLinkCodeGenerator.GenerateRawCode();
-        var codeHash = MagicLinkCodeGenerator.HashCode(rawCode);
-        var expiresAtUtc = nowUtc.AddMinutes(10);
-
-        var handoffCode = MobileHandoffCode.Create(
-            codeHash,
-            accountId,
-            accountUserId,
-            nowUtc,
-            expiresAtUtc);
-
-        await mobileHandoffPersistence.CreateAsync(handoffCode, cancellationToken);
-
-        return Result<ExchangeSuccessResult>.Success(
-            new ExchangeHandoffCodeResult(rawCode, expiresAtUtc));
-    }
 }
 
 public sealed record ExchangeResult(
@@ -229,3 +239,15 @@ public sealed record ExchangeTokenResult(string RawToken, DateTime ExpiresAtUtc)
     : ExchangeSuccessResult(ExpiresAtUtc);
 public sealed record ExchangeHandoffCodeResult(string HandoffCode, DateTime ExpiresAtUtc)
     : ExchangeSuccessResult(ExpiresAtUtc);
+
+/// <summary>
+/// A partial outcome (ADR-497): email proof succeeded but a session cannot yet be created — a
+/// missing display name and/or an ambiguous membership must be resolved via POST /auth/continue.
+/// RawContinuationToken travels only via the ophalo.continuation cookie — the endpoint layer
+/// must never place it in a JSON response body.
+/// </summary>
+public sealed record ExchangeContinuationResult(
+    string RawContinuationToken,
+    bool RequiresName,
+    IReadOnlyList<ActiveMembershipOption>? Workspaces,
+    DateTime ExpiresAtUtc) : ExchangeSuccessResult(ExpiresAtUtc);

@@ -107,3 +107,41 @@ guards), 3 new integration against real Postgres (`PostAuthContinuationPersisten
 `ConsumeAsync` race, terminal `DeleteAsync`, and the corrected bounded-cleanup predicate covering
 recently-consumed-survives / stale-consumed-deleted / stale-expired-deleted / live-survives). 14/14
 architecture tests pass. 8 production files changed, within the batch gate.
+
+## Slice 2b — done, accepted
+
+Delivered as scoped above: `/auth/exchange`'s `ExistingMember` (name-blank) and `MultipleMembers`
+branches now create a `PostAuthContinuation` instead of a session, set `ophalo.continuation`
+(`AuthCookieOptionsFactory.ForCreate`, 10-minute expiry), and return
+`{ requiresContinuation, requiresName, workspaces }` — the raw token never leaves the Set-Cookie
+header. New `POST /auth/continue` (`CompleteAuthContinuationService`) implements the full ADR-497
+redemption sequence: read token from cookie only, live name-completion via `User.SetName`
+(retryable on a missing/blank name), live membership resolution (fixed `TargetAccountUserId` for
+name-blank sign-in, caller-supplied `accountUserId` re-verified live for `MultipleMembers`),
+atomic consume, then session/mobile-handoff creation.
+
+`IAuthCodePersistence` gained four narrowly auth-shaped continuation-resolution methods
+(`GetExistingMemberNameCheckAsync`, `GetMultipleMembersResolutionAsync`, `SetUserNameAsync`,
+`VerifyActiveMembershipAsync`, `GetUserNameAsync`) rather than a new general-purpose
+`IUserPersistence` seam — confirmed with Christian as the right boundary for auth-specific identity
+resolution and live membership verification. `SetUserNameAsync` loads the `User`, calls the domain
+`SetName`, and saves only on success — it never bypasses the one-time-name invariant.
+
+The two session-issuance primitives (`CreateSessionAsync`/`CreateMobileHandoffAsync`) were
+extracted from `ExchangeAuthService` into a shared `AuthSessionIssuer` so `/auth/continue` reuses
+them exactly rather than duplicating session/handoff creation — this is the one file added beyond
+BL143's original file list, landing the slice at 9 production files (approved as an intentional
+overage: keeping issuance authoritative and shared outweighs the 8-file gate by one file). A new
+`PostAuthContinuationErrors.Invalid`/`SelectionRequired` (Core) and `UserErrors.NameRequired`
+replace reusing `AccountAuthCodeErrors` for continuation failures, so `ErrorHttpMapper`'s
+suffix-based routing and telemetry don't mislabel continuation outcomes as auth-code outcomes.
+Terminal failures (expired/consumed/cross-user/suspended/removed/replayed) all resolve to the same
+`404 PostAuthContinuation.NotFound` and clear the cookie; retryable failures (missing name, missing
+`accountUserId` when ambiguous) return `400` and leave the cookie/continuation intact.
+
+Tests: 14 new integration (`AuthContinueTests`, real Postgres) covering name-blank completion,
+missing-name retry, multi-membership selection and cross-user/suspended/removed rejection, replay
+rejection, continuation-token absence from every exchange/continue response body, and
+clientType/deviceName in the `/auth/continue` body being ignored in favor of the continuation's
+stored values (verified against the persisted `AccountSession.DeviceName`). Full unit suite
+(1788/1788), architecture (14/14), and full auth integration suite (156/156) pass.

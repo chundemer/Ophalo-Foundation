@@ -1,5 +1,6 @@
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Entities.Accounts;
+using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Foundation.Application.Auth;
@@ -84,7 +85,69 @@ public interface IAuthCodePersistence
         AccountProvisioningResult graph,
         DateTime consumedAtUtc,
         CancellationToken cancellationToken);
+
+    // --- ADR-497: post-auth continuation resolution ---
+
+    /// <summary>
+    /// Loads the User's identity for an ExistingMember code's known TargetAccountUserId, to
+    /// decide whether /auth/exchange must route through a name-completion continuation.
+    /// Returns null only if the AccountUser or its linked User is missing (InconsistentState).
+    /// </summary>
+    Task<ExistingMemberNameCheck?> GetExistingMemberNameCheckAsync(
+        Guid accountUserId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Live-resolves the User and all currently Active memberships for a MultipleMembers code's
+    /// DeliveryEmailSnapshot — used to build the workspace selector at /auth/exchange. Returns
+    /// null only if the email no longer resolves to a User (InconsistentState; membership
+    /// eligibility may have changed since code issuance).
+    /// </summary>
+    Task<MultipleMembersResolution?> GetMultipleMembersResolutionAsync(
+        string deliveryEmailSnapshot,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Loads the User by Id, calls the domain SetName (fails without saving if already
+    /// non-blank), and saves only on success. Returns Failure(UserErrors.NameAlreadySet) if the
+    /// name was already set, and a not-found failure if the User no longer exists.
+    /// </summary>
+    Task<Result> SetUserNameAsync(
+        Guid userId,
+        string name,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Live-reads the User's current Name (empty string if not yet set) — used by
+    /// /auth/continue to decide whether a supplied name is required before resolving the
+    /// continuation's target membership. Returns null only if the User no longer exists.
+    /// </summary>
+    Task<string?> GetUserNameAsync(Guid userId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Live-verifies that an AccountUser is owned by the given User and still Active — used by
+    /// /auth/continue to re-check a stored or caller-supplied membership at redemption time
+    /// (ADR-497 rule 4). Returns null if the AccountUser is missing, owned by a different User,
+    /// or not Active.
+    /// </summary>
+    Task<AccountUserActiveCheck?> VerifyActiveMembershipAsync(
+        Guid accountUserId,
+        Guid userId,
+        CancellationToken cancellationToken);
 }
+
+// --- ADR-497 continuation resolution shapes ---
+
+public sealed record ExistingMemberNameCheck(Guid UserId, string Name);
+
+public sealed record MultipleMembersResolution(
+    Guid UserId,
+    string Name,
+    IReadOnlyList<ActiveMembershipOption> Memberships);
+
+public sealed record ActiveMembershipOption(Guid AccountUserId, string BusinessName, AccountUserRole Role);
+
+public sealed record AccountUserActiveCheck(Guid AccountId);
 
 // --- Sign-in classification ---
 

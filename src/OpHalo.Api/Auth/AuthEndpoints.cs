@@ -5,6 +5,7 @@ using OpHalo.Foundation.Application.Auth;
 using OpHalo.Foundation.Application.Members;
 using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
+using OpHalo.Foundation.Core.Entities.Accounts.Errors;
 using OpHalo.Foundation.Infrastructure.Security;
 
 namespace OpHalo.Api.Auth;
@@ -17,6 +18,7 @@ public static class AuthEndpoints
         group.MapPost("/start", Start);
         group.MapPost("/signin", SignIn);
         group.MapPost("/exchange", Exchange);
+        group.MapPost("/continue", Continue);
         group.MapPost("/mobile-handoff/redeem", RedeemMobileHandoff);
         group.MapGet("/me", Me).RequireAuthorization();
         group.MapPost("/logout", Logout).RequireAuthorization();
@@ -93,6 +95,23 @@ public static class AuthEndpoints
 
         var result = exchangeResult.Result.Value;
 
+        if (result is ExchangeContinuationResult continuation)
+        {
+            httpContext.Response.Cookies.Append(
+                AuthConstants.ContinuationCookieName,
+                continuation.RawContinuationToken,
+                cookieFactory.ForCreate(continuation.ExpiresAtUtc));
+
+            return Results.Ok(new
+            {
+                requiresContinuation = true,
+                requiresName = continuation.RequiresName,
+                workspaces = continuation.Workspaces?
+                    .Select(w => new { accountUserId = w.AccountUserId, businessName = w.BusinessName, role = ToRoleString(w.Role) })
+                    .ToList()
+            });
+        }
+
         // Mobile: return raw token in response body for Bearer transport.
         // Browser: set HttpOnly cookie only — raw token must not appear in the response body.
         if (result is ExchangeHandoffCodeResult handoff)
@@ -107,6 +126,53 @@ public static class AuthEndpoints
 
         return Results.Ok();
     }
+
+    private static async Task<IResult> Continue(
+        ContinueBody body,
+        CompleteAuthContinuationService service,
+        HttpContext httpContext,
+        AuthCookieOptionsFactory cookieFactory,
+        CancellationToken ct)
+    {
+        if (!httpContext.Request.Cookies.TryGetValue(AuthConstants.ContinuationCookieName, out var rawContinuationToken)
+            || string.IsNullOrWhiteSpace(rawContinuationToken))
+        {
+            httpContext.Response.Cookies.Delete(AuthConstants.ContinuationCookieName, cookieFactory.ForDelete());
+            return ErrorHttpMapper.ToHttpResult(PostAuthContinuationErrors.Invalid);
+        }
+
+        var result = await service.HandleAsync(rawContinuationToken, body.Name, body.AccountUserId, ct);
+
+        if (result.ClearCookie)
+            httpContext.Response.Cookies.Delete(AuthConstants.ContinuationCookieName, cookieFactory.ForDelete());
+
+        if (!result.IsSuccess)
+            return ErrorHttpMapper.ToHttpResult(result.Error!);
+
+        var success = result.Result!.Value;
+
+        if (success is ExchangeHandoffCodeResult handoff)
+            return Results.Ok(new { handoffCode = handoff.HandoffCode, expiresAtUtc = handoff.ExpiresAtUtc });
+
+        var token = (ExchangeTokenResult)success;
+
+        httpContext.Response.Cookies.Append(
+            AuthConstants.CookieName,
+            token.RawToken,
+            cookieFactory.ForCreate(token.ExpiresAtUtc));
+
+        return Results.Ok();
+    }
+
+    private static string ToRoleString(AccountUserRole role) =>
+        role switch
+        {
+            AccountUserRole.Owner => "owner",
+            AccountUserRole.Admin => "admin",
+            AccountUserRole.Operator => "operator",
+            AccountUserRole.Viewer => "viewer",
+            _ => "unknown"
+        };
 
     private static async Task<IResult> RedeemMobileHandoff(
         MobileHandoffRedeemBody body,
@@ -202,6 +268,7 @@ public static class AuthEndpoints
         {
             EntryContext.NewAccount => "new_account",
             EntryContext.ExistingMember => "existing_member",
+            EntryContext.MultipleMembers => "multiple_members",
             _ => null
         };
 
@@ -220,4 +287,5 @@ public static class AuthEndpoints
 internal sealed record StartBody(string? Email, string? BusinessName, string? Name, string? TimeZone);
 internal sealed record SignInBody(string? Email, string? ClientHint);
 internal sealed record ExchangeBody(string? Code, string? ClientType, string? DeviceName);
+internal sealed record ContinueBody(string? Name, Guid? AccountUserId);
 internal sealed record MobileHandoffRedeemBody(string? HandoffCode, string? DeviceName);
