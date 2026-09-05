@@ -18,10 +18,12 @@ public sealed record UpdateProposedScopeLineApiCommand(decimal Quantity, bool Is
 
 /// <summary>
 /// API-facing orchestration for create/update-line/remove-line/submit on <see cref="ProposedScope"/>
-/// (Session 3.3b) — the single ADR-480 three-gate owner for those mutations:
+/// (Session 3.3b) — the single ADR-480 gate owner for those mutations: account access +
 /// <c>RequestsOperate</c> (B2 operator gate) + Price Book entitlement (ADR-462) +
+/// the BL142 Session 1 server-owned release gate (<see cref="IReleaseGatePolicy"/>, ADR-496) +
 /// <c>ScopeCapture</c> (ADR-480). Gate 1/2 mirror <see cref="OfferingAssemblyApiService"/> exactly;
-/// gate 3 checks two permissions instead of one, since ProposedScope capture is gated on both the
+/// the release gate has no counterpart there — catalog is released, Proposed Work is not; gate 3
+/// checks two permissions instead of one, since ProposedScope capture is gated on both the
 /// general operator-write permission and the dedicated scope-capture permission.
 /// <see cref="SubmitProposedScopeService"/> stays exactly as Session 3.3a.2 left it — thin, auth-free
 /// — so gates are never evaluated twice. Line-add is not here: the raw, caller-trusted add was
@@ -37,6 +39,7 @@ public sealed class ProposedScopeApiService(
     ICurrentUser currentUser,
     IAccountAccessPolicy accountAccessPolicy,
     IAccountFeatureAccessResolver featureAccessResolver,
+    IReleaseGatePolicy releaseGatePolicy,
     IUserAccessPolicy userAccessPolicy,
     IClock clock)
 {
@@ -146,6 +149,12 @@ public sealed class ProposedScopeApiService(
         var enabled = await featureAccessResolver.IsEnabledAsync(
             currentUser.AccountId, featureContext, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, ct);
         if (!enabled)
+            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+
+        // Gate 2b — server-owned release gate (BL142 Session 1, ADR-496): entitlement alone never
+        // exposes Proposed Work before it is explicitly released. Fails closed independently of
+        // gate 2 above.
+        if (!releaseGatePolicy.IsProposedWorkReleased())
             return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
 
         // Gate 3 — user permissions: RequestsOperate (B2 operator-write gate) AND ScopeCapture

@@ -73,7 +73,10 @@ const mockBusinessSetup: KeepSetupResult = {
   },
 };
 
-function renderRequests(role: "owner" | "admin" | "operator" | "viewer" = "owner") {
+function renderRequests(
+  role: "owner" | "admin" | "operator" | "viewer" = "owner",
+  paneMode = false,
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const onNavigateSettings = vi.fn();
   const onStartCapture = vi.fn();
@@ -86,6 +89,7 @@ function renderRequests(role: "owner" | "admin" | "operator" | "viewer" = "owner
         onSelectRequest={() => {}}
         onNavigateSettings={onNavigateSettings}
         onStartCapture={onStartCapture}
+        paneMode={paneMode}
       />
     </QueryClientProvider>,
   );
@@ -163,5 +167,21 @@ describe("Requests onboarding banner", () => {
 
     await waitFor(() => expect(mockGetGuidedSetup).toHaveBeenCalled());
     expect(screen.queryByText("Set up your customer request page")).not.toBeInTheDocument();
+  });
+
+  // Layout glitch reported from the pilot demo: pane mode's request-list column is a fixed
+  // 360px, so the default full-width banner (built around `sm:` breakpoints) never resolved
+  // to its wide layout there and rendered squeezed into the list column. The compact banner
+  // is the purpose-built stack-only layout for that column.
+  it("renders the compact banner (not the full-width one) in pane mode", async () => {
+    mockGetGuidedSetup.mockResolvedValue(incompleteSetup);
+    renderRequests("owner", true);
+
+    expect(await screen.findByText("Set up your request page")).toBeInTheDocument();
+    expect(screen.queryByText("Set up your customer request page")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Give customers a clear place to start a request and keep work from slipping through."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set up request page" })).toBeInTheDocument();
   });
 });

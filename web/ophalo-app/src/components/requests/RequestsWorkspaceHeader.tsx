@@ -41,6 +41,7 @@ export function RequestsWorkspaceHeader({
               setup={setup}
               onNavigateSettings={onNavigateSettings}
               onStartCapture={onStartCapture}
+              compact
             />
           </div>
         )}

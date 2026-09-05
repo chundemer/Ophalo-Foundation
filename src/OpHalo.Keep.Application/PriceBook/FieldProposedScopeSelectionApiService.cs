@@ -30,8 +30,9 @@ public sealed record FieldSelectProposedScopeLineApiCommand(
 /// 3.3b is not enough" #2), and derives the off-catalog <c>DisplayNameSnapshot</c> server-side from
 /// <c>OffCatalogDescription</c> (decision 6). Sits beside <see cref="ProposedScopeApiService"/> as the
 /// sole allowed path to append a line - the raw <c>POST .../lines</c> endpoint this replaces is
-/// retired in the same commit, not re-gated. Gate composition and row-visibility ordering match
-/// <see cref="ProposedScopeApiService"/> exactly, except visibility is checked (via
+/// retired in the same commit, not re-gated. Gate composition (including the BL142 Session 1
+/// server-owned release gate, <see cref="IReleaseGatePolicy"/>, ADR-496) and row-visibility
+/// ordering match <see cref="ProposedScopeApiService"/> exactly, except visibility is checked (via
 /// <see cref="EditProposedScopeService.VerifyRequestVisibleAsync"/>) before any catalog-item
 /// resolution, so an invisible scope 404s before a referenced item's existence/active state is ever
 /// evaluated - build-log/118's locked gates -> request visibility -> act ordering.
@@ -43,6 +44,7 @@ public sealed class FieldProposedScopeSelectionApiService(
     ICurrentUser currentUser,
     IAccountAccessPolicy accountAccessPolicy,
     IAccountFeatureAccessResolver featureAccessResolver,
+    IReleaseGatePolicy releaseGatePolicy,
     IUserAccessPolicy userAccessPolicy,
     IClock clock)
 {
@@ -162,6 +164,12 @@ public sealed class FieldProposedScopeSelectionApiService(
         var enabled = await featureAccessResolver.IsEnabledAsync(
             currentUser.AccountId, featureContext, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, ct);
         if (!enabled)
+            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+
+        // Gate 2b - server-owned release gate (BL142 Session 1, ADR-496): entitlement alone never
+        // exposes Proposed Work before it is explicitly released. Fails closed independently of
+        // gate 2 above.
+        if (!releaseGatePolicy.IsProposedWorkReleased())
             return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
 
         // Gate 3 - user permissions: RequestsOperate (B2 operator-write gate) AND ScopeCapture

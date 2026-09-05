@@ -54,7 +54,11 @@ public sealed class KeepApiWebFactory : WebApplicationFactory<Program>, IAsyncLi
                 ["App:PublicBaseUrl"] = "https://test.ophalo.com",
                 // Deterministic 32-byte test key for HmacKeepRequestListCursorProtector.
                 // Must be base64-encoded. 32 zero bytes = 256-bit key, sufficient for HMAC-SHA256.
-                ["Keep:RequestListCursorSigningKey"] = Convert.ToBase64String(new byte[32])
+                ["Keep:RequestListCursorSigningKey"] = Convert.ToBase64String(new byte[32]),
+                // Default this shared factory to released so existing Proposed Work tests exercise
+                // their intended behavior, not the BL142 Session 1 release gate. Gate-closed
+                // behavior has its own dedicated test with its own configuration override.
+                ["Keep:ReleaseGates:ProposedWorkQuotes"] = "true"
             });
         });
 
@@ -188,6 +192,92 @@ public sealed class PilotCapWebFactory : WebApplicationFactory<Program>, IAsyncL
                 services.Remove(descriptor);
             services.AddSingleton<IEmailSender>(EmailSender);
         });
+    }
+
+    public async Task ResetDatabaseAsync()
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        await db.Database.ExecuteSqlRawAsync("DROP SCHEMA IF EXISTS public CASCADE");
+        await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA public");
+        await db.Database.MigrateAsync();
+    }
+
+    public AsyncServiceScope CreateScope() => Services.CreateAsyncScope();
+
+    public async Task InitializeAsync()
+    {
+        await _container.StartAsync();
+        await ResetDatabaseAsync();
+    }
+
+    public new async Task DisposeAsync()
+    {
+        await _container.DisposeAsync();
+        await base.DisposeAsync();
+    }
+}
+
+/// <summary>
+/// WebApplicationFactory that deliberately omits Keep:ReleaseGates:ProposedWorkQuotes, so
+/// IReleaseGatePolicy fails closed. Used by ProposedScopeReleaseGateTests (BL142 Session 1,
+/// ADR-496) to prove entitlement alone never exposes Proposed Work before an explicit release
+/// decision — unlike KeepApiWebFactory, which opens the gate for its unrelated ProposedScope tests.
+/// </summary>
+public sealed class ReleaseGateClosedWebFactory : WebApplicationFactory<Program>, IAsyncLifetime
+{
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:17.5-alpine")
+        .Build();
+
+    public readonly CapturingEmailSender EmailSender = new();
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Testing");
+        builder.ConfigureAppConfiguration(config =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = _container.GetConnectionString(),
+                ["App:PublicBaseUrl"] = "https://test.ophalo.com",
+                ["Keep:RequestListCursorSigningKey"] = Convert.ToBase64String(new byte[32])
+                // Keep:ReleaseGates:ProposedWorkQuotes intentionally absent.
+            });
+        });
+
+        builder.ConfigureServices(services =>
+        {
+            var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IEmailSender));
+            if (descriptor is not null)
+                services.Remove(descriptor);
+            services.AddSingleton<IEmailSender>(EmailSender);
+        });
+    }
+
+    /// <summary>Mirrors <see cref="KeepApiWebFactory.SeedSessionAsync"/> exactly.</summary>
+    public async Task<string> SeedSessionAsync(
+        Guid accountUserId,
+        Guid accountId,
+        SessionClientType clientType = SessionClientType.Browser,
+        DateTime? overrideCreatedAt = null)
+    {
+        var now = overrideCreatedAt ?? DateTime.UtcNow;
+        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        var tokenHash = SessionHasher.HashToken(rawToken);
+        var session = AccountSession.Create(
+            accountId,
+            accountUserId,
+            tokenHash,
+            clientType,
+            null,
+            now,
+            now.AddDays(AuthConstants.SessionAbsoluteExpiryDays));
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.AccountSessions.Add(session);
+        await db.SaveChangesAsync();
+        return rawToken;
     }
 
     public async Task ResetDatabaseAsync()
