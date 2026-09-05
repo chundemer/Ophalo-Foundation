@@ -108,3 +108,74 @@ Do not mark GAP-039 complete merely because packages compile. It completes only 
 tests, unchanged safe API behavior, production configuration checks, private source maps, a live
 founder alert, verified Railway readiness monitoring, and recorded production-candidate evidence.
 
+## Delivery record
+
+Batch 1 (API boundary and error capture) is delivered — see
+[BL141](141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md) for full evidence.
+
+### Batch 2a — `VITE_PUBLIC_BASE_URL` shared accessor — done, accepted
+
+New `src/lib/publicBaseUrl.ts` (throw-free; `publicBaseUrlResult` typed valid/invalid +
+`getPublicBaseUrl()`) and `src/components/ConfigurationError.tsx` (static safe screen). `main.tsx`
+renders it before mocks or `<App>` load when config is invalid. Converted `lib/redirectToSignIn.ts`,
+`pages/settings/PublicLinkSection.tsx`, `components/ShareLinkModal.tsx`, `components/QuickCapture.tsx`.
+`env.d.ts` marks `VITE_PUBLIC_BASE_URL` optional. Tests: accessor
+(valid/trailing-slash/base-path/missing/malformed/bad-scheme), `main.tsx` gate. Full app suite 1040
+passed; production build passes.
+
+### Batch 2b — request-detail consumer conversions — done, accepted
+
+Converted `pages/RequestDetail.tsx` (2 uses), `pages/request-detail/DetailPanels.tsx`,
+`DetailHero.tsx`, `NotifyCustomerPanel.tsx` to `getPublicBaseUrl()`. The request-detail test env
+stubs (`NotifyCustomerPanel.test.tsx`, `CallHandoffQr.test.tsx`) now `vi.mock` the accessor rather
+than `vi.stubEnv` (the accessor parses at module load). No raw
+`import.meta.env.VITE_PUBLIC_BASE_URL` read remains outside `publicBaseUrl.ts`. Full app suite 1040
+passed; production build passes.
+
+### Batch 2c — `@sentry/react` init + private source-map upload — done, accepted
+
+`@sentry/react` 10.73.0 + `@sentry/vite-plugin` 5.4.0 (exact pins). `src/lib/sentry.ts`
+`initSentry()` runs before render in `main.tsx` — errors-only, no tracing/replay,
+`maxBreadcrumbs: 0`; a no-op without `VITE_SENTRY_DSN`. `src/lib/sentryScrub.ts` is the browser
+`beforeSend`: a fresh allowlisted event (release, environment, safe pathname, exception type +
+sanitized frame metadata) with opaque-token/query/fragment detection scoped to the retained
+pathname and frame filename/function only (never the Sentry event id or release SHA), discarding
+the whole event if the invariant fails. `ErrorBoundary` forwards React-caught render errors through
+that path; the user-facing fallback is unchanged. `scripts/resolveDeployment.ts` is the fail-closed
+build gate: `OPHALO_DEPLOY_ENV` (`production`/`preview` only, else the build throws) is
+authoritative and independent of Vercel System Environment Variables; a classified build requires
+`VERCEL_ENV` to match and a non-local `VERCEL_GIT_COMMIT_SHA`, production additionally requires DSN
++ `SENTRY_AUTH_TOKEN`/`ORG`/`PROJECT`. Source-map upload runs only for a classified build with
+complete upload config (`build.sourcemap: "hidden"` + `filesToDeleteAfterUpload:
+["./dist/**/*.map"]`, no `errorHandler`); a local build generates no maps. Local build verified:
+`dist` has zero `.map` files and no `sourceMappingURL` comments. Full app suite 1064 passed.
+
+The two preflight questions from the original handoff are resolved: (1) environment/release come
+from `OPHALO_DEPLOY_ENV` (explicit, system-var-independent) corroborated by `VERCEL_ENV` +
+`VERCEL_GIT_COMMIT_SHA`, never `import.meta.env.PROD`; (2) `filesToDeleteAfterUpload` physically
+removes every `.map` from the build output after upload — proven locally by `dist` containing zero
+`.map` files.
+
+### Batch 3 — founder console configuration — done (founder-owned, no code)
+
+Credentials are recorded only in provider consoles: separate `ophalo-api` and `workbench-pwa`
+Sentry projects exist; Railway Production has `Sentry__Dsn` and healthcheck path `/health/ready`;
+Vercel Production has the Workbench DSN, organization CI token, organization/project identifiers,
+explicit `OPHALO_DEPLOY_ENV=production`, and System Environment Variables enabled. The first
+classified Workbench deployment succeeded and its Vercel log confirmed upload of two source-map
+artifacts to Sentry release `c37542adb4a8875fc209edd17ce2896757dfb73b`; Sentry shows that release.
+New-issue and resolved-issue-regression founder-email alert rules are live for both projects, and
+each alert's test notification reached the founder inbox. The non-secret configuration/rotation
+record is [Sentry Configuration Runbook](../runbook/sentry-configuration.md).
+
+### Batch 4 — production-candidate verification — paused (founder-owned)
+
+Paused at the safe smoke-login provision step: `support@ophalo.com` is available as the dedicated
+alias, but must be explicitly invited as a lowest-permission member of the founder's internal-only
+account before use. After that: verify a controlled browser error and a deliberately safe
+authenticated API error; inspect release/environment/correlation/redaction and founder-email
+delivery; prove deployed source maps are absent; exercise the invalid-public-base-URL fail-safe;
+test preview separation if preview capture is enabled; and record the evidence plus named incident
+roles in the runbook. The API controlled-error route remains an explicit implementation/operational
+decision: there is no permanent production failure endpoint. This gate precedes GAP-033.
+

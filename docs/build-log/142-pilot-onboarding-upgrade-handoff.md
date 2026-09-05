@@ -2,16 +2,17 @@
 
 **Status:** Session 0 release-gate audit complete (read-only). Locked sequencing (2026-09-04):
 server-owned release gate (Session 1, formerly "Session 2") before automatic Pilot package
-provisioning (Session 2, formerly "Session 1"). **Session 1 is complete** (2026-09-04): the full
-technician-reachable Proposed Work HTTP surface (create/update/remove/restore/submit/read,
-field-select, expand-assembly, Paired-Nudges field read, field quick-scope-action read) is gated,
-implemented, and verified locally — not yet merged or deployed.
+provisioning (Session 2, formerly "Session 1"). **Session 1 is complete and deployed** (merged
+`eb33f6a5`, follow-up `226778af`, deployment verified 2026-09-05): the full technician-reachable
+Proposed Work HTTP surface (create/update/remove/restore/submit/read, field-select,
+expand-assembly, Paired-Nudges field read, field quick-scope-action read) is gated, implemented,
+and live in production.
 `QuickScopeActionConfigApiService`/`ScopeNudgeRuleConfigApiService` are locked catalog-only
 (unchanged). `FieldScopeSearchApiService` is locked ungated (Christian's call, 2026-09-04) — it is
 the shared, price-free catalog/assembly search behind both the Proposed Work composer and the
 already-released Actual Work capture flow, and creates no Proposed Work state itself; the
-state-changing endpoints it feeds (field-select, expand-assembly) are gated. Remaining before
-Session 2 begins: merge and deploy this branch.
+state-changing endpoints it feeds (field-select, expand-assembly) are gated. **Session 2 is now
+unblocked and in progress.**
 **Date:** 2026-09-04
 **Authority:** [ADR-496](../decisions/ADR-496-pilot-package-provisioning-and-release-visibility.md),
 [ADR-428](../decisions/ADR-428-day-zero-settings-getting-started-redesign.md), and ADR-454.
@@ -197,13 +198,12 @@ unaffected; 14/14 architecture tests pass; no checked-in appsettings sets the ke
 
 ### Session 2 — atomic pilot package provisioning
 
-**Prerequisite:** Session 1's release gate is implemented, verified, and deployed. Session 1 is
-complete as of 2026-09-04 — the full technician-reachable, state-changing/scope-exposing Proposed
-Work surface (create/update/remove/restore/submit/read, field-select, expand-assembly, Paired
-Nudges field read, field quick-scope-action read) is gated, implemented, and verified locally.
-`FieldScopeSearchApiService` is locked ungated by design (see Session 1 above). Remaining before
-this session begins or its migration/provisioning change deploys: merge and deploy Session 1's
-branch.
+**Prerequisite — satisfied:** Session 1's release gate is implemented, verified, merged
+(`eb33f6a5`, `226778af`), and deployed (verified 2026-09-05). The full technician-reachable,
+state-changing/scope-exposing Proposed Work surface (create/update/remove/restore/submit/read,
+field-select, expand-assembly, Paired Nudges field read, field quick-scope-action read) is gated
+and live in production. `FieldScopeSearchApiService` is locked ungated by design (see Session 1
+above). Session 2 may begin.
 
 **Goal:** migrate the enrollment audit model, then ensure every newly provisioned
 `AccountClassification.Pilot` gets one system-provisioned enrolled package row in the same
