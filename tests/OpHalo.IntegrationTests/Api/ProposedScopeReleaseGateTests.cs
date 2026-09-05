@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OpHalo.Api.Keep;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
@@ -60,6 +61,97 @@ public sealed class ProposedScopeReleaseGateTests : IClassFixture<ReleaseGateClo
             $"/keep/pricebook/proposed-scopes/by-request/{requestId}");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task FieldSelect_EntitledButGateClosed_Returns403()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("gate-closed-field-select");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(
+            HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/field-select")
+        {
+            Content = JsonContent.Create(new
+            {
+                lineType = "OffCatalogItem",
+                catalogItemId = (Guid?)null,
+                quantity = 1m,
+                offCatalogDescription = "Gate closed test",
+                note = (string?)null,
+            }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_EntitledButGateClosed_Returns403()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("gate-closed-expand-assembly");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(
+            HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new
+            {
+                offeringAssemblyId = Guid.NewGuid(),
+                excludedOptionalItemIds = Array.Empty<Guid>(),
+            }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task NudgeSuggestions_EntitledButGateClosed_Returns403()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("gate-closed-nudge-suggestions");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, _) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var response = await AuthRequest(cookie).GetAsync(
+            $"/keep/pricebook/proposed-scopes/{scopeId}/nudge-suggestions?triggerCatalogItemId={Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task QuickScopeActionsFieldRead_EntitledButGateClosed_Returns403()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("gate-closed-quick-scope-actions");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+
+        var response = await AuthRequest(cookie).GetAsync("/keep/pricebook/field/quick-scope-actions");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    private async Task<(Guid ScopeId, Guid ConcurrencyVersion)> SeedDraftScopeAsync(Guid accountId, Guid createdByUserId)
+    {
+        var requestId = await SeedRequestAsync(accountId);
+        var createResult = ProposedScope.Create(accountId, requestId, createdByUserId);
+        Assert.True(createResult.IsSuccess);
+        var scope = createResult.Value;
+
+        await using var dbScope = _factory.CreateScope();
+        var db = dbScope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Set<ProposedScope>().Add(scope);
+        await db.SaveChangesAsync();
+        return (scope.Id, scope.ConcurrencyVersion);
     }
 
     private async Task<(Guid AccountId, Guid OwnerAccountUserId, string OwnerCookie)> SeedAccountAsync(string slug)

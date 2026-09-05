@@ -1,10 +1,15 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-03 — **GAP-039 Batches 1, 2a, 2b, and 2c are implemented and accepted.
+**Last updated:** 2026-09-04 — **GAP-039 Batches 1, 2a, 2b, and 2c are implemented and accepted.
 All GAP-039 code slices and the BL140 Batch 3 production console configuration are complete;
 Batch 4 production-candidate verification is founder-owned and currently paused before controlled
-error generation. Next Claude implementation batch is GAP-033 — public-intake trust and tracker
-access truthfulness.** Request
+error generation.** Pilot Onboarding Upgrade Session 0 (release-gate/surface audit) and Session 1
+(server-owned Proposed Work release gate) are **complete** — implemented, tested, and pushed to
+`feat/gap-pilot-release-gate` (commit `d23e0bac` + follow-up) — **not yet merged, not yet
+deployed.** See the Deferred next work bullet below for the merge/deploy step still required.
+Next Claude implementation batch after that branch is merged and deployed is **Session 2 —
+automatic Pilot package provisioning** (ADR-496); GAP-033 is not next unless Christian explicitly
+reprioritizes it. Request
 UI Upgrade 1.1 implementation is complete (locked contract
 [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), delivery evidence
 [BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)); its product-owner visual
@@ -143,13 +148,33 @@ authenticated `/me` endpoint and belongs in shell chrome, outside Request Anchor
   first-run guidance with a request-first path. Price Book is visible immediately; Proposed Work
   and Quotes are unavailable until onboarding is complete and signed off. Automated enrollment uses
   a migration-backed `SystemProvisioning` audit provenance, not a bootstrap pseudo-user or the new
-  customer owner. [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md) is the Gemini-ready
-  session list. Do not start mutation work until its Session 0 release-gate audit is accepted.
+  customer owner. [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md) is the session list —
+  now locked to release-gate-first sequencing (renumbered Session 1 = server-owned release gate,
+  Session 2 = automatic Pilot provisioning; deploying provisioning before the gate is complete and
+  deployed would breach ADR-496).
+  **Session 0 (read-only audit): done. Session 1: complete, not yet merged/deployed.**
+  `IReleaseGatePolicy`/`ConfigurationReleaseGatePolicy` (global config gate, fail-closed via
+  `bool.TryParse`, no checked-in override) gates `ProposedScopeApiService`,
+  `ProposedScopeReadApiService`, `FieldProposedScopeSelectionApiService` (field-select),
+  `FieldExpandAssemblyApiService` (expand-assembly), `ScopeNudgeFieldReadApiService` (Paired
+  Nudges field read), and `QuickScopeActionFieldReadApiService` (field quick-scope-action read) —
+  every state-changing/scope-exposing Proposed Work HTTP route. Locked classification (2026-09-04):
+  `QuickScopeActionConfigApiService`/`ScopeNudgeRuleConfigApiService` stay catalog-only (Owner/Admin
+  config, `PriceBookCatalogManage`-gated, same pre-release-visible posture as Price Book catalog
+  itself); `FieldScopeSearchApiService` stays ungated — its gate 3 is `ScopeCapture OR
+  ActualWorkCapture`, so it is the shared, price-free catalog/assembly search behind both the
+  Proposed Work composer and the already-released Actual Work capture flow, and creates no
+  Proposed Work state itself (the state-changing endpoints it feeds are the now-gated field-select/
+  expand-assembly). Not yet merged (`feat/gap-pilot-release-gate`). 6/6 focused release-gate
+  integration tests pass; 90/90 pre-existing ProposedScope/ScopeNudge/QuickScopeAction/
+  FieldScopeSearch integration tests unaffected; 14/14 architecture tests pass. Do not start
+  Session 2 (provisioning) mutation work until this branch is merged and deployed.
 - **4g pilot request-close advisory:** preflight after the above safety/usability sequence. It is an
   advisory on outstanding Actual Work with a structured `Close anyway` pilot exception; it is not a
   hard Resolved→Closed gate. See BL136.
-- **Pilot/release gates:** production observability (GAP-039), public-intake trust (GAP-033), phone
-  integrity (GAP-016/021/051), then the remaining tracker order.
+- **Pilot/release gates:** production observability (GAP-039, complete), pilot onboarding upgrade
+  Session 1 merge/deploy then Session 2 automatic Pilot provisioning (ADR-496, next), public-intake
+  trust (GAP-033), phone integrity (GAP-016/021/051), then the remaining tracker order.
 - **Minimum Office Closeout:** Billing Revision, handoff, and correction/adjustment design resume
   only after the controlled-pilot and rehearsal gates; see [BL135](build-log/135-minimum-office-closeout-mechanical-preflight.md).
 - **Settings & Getting Started V2 UI upgrade:** pure visual restyle of the Owner/Admin Getting

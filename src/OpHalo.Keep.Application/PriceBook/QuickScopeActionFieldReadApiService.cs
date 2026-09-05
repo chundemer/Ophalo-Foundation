@@ -26,7 +26,10 @@ public sealed record QuickScopeActionFieldRow(
 /// beside <see cref="FieldCatalogReadApiService"/>/<see cref="FieldOfferingAssemblyReadApiService"/>
 /// rather than reusing <see cref="QuickScopeActionConfigApiService"/> — gate 3 is
 /// <c>RequestsOperate</c> AND <c>ScopeCapture</c> (ADR-480), not <c>PriceBookCatalogManage</c>, and
-/// <see cref="QuickScopeActionFieldRow"/> structurally carries no price field.
+/// <see cref="QuickScopeActionFieldRow"/> structurally carries no price field. Gate composition
+/// also includes the BL142 Session 1 server-owned release gate (<see cref="IReleaseGatePolicy"/>,
+/// ADR-496) — unlike <see cref="QuickScopeActionConfigApiService"/>, which stays catalog-only
+/// (Owner/Admin configuration is not the released-work exposure ADR-496 gates).
 /// </summary>
 public sealed class QuickScopeActionFieldReadApiService(
     IQuickScopeActionPersistence persistence,
@@ -36,6 +39,7 @@ public sealed class QuickScopeActionFieldReadApiService(
     ICurrentUser currentUser,
     IAccountAccessPolicy accountAccessPolicy,
     IAccountFeatureAccessResolver featureAccessResolver,
+    IReleaseGatePolicy releaseGatePolicy,
     IUserAccessPolicy userAccessPolicy,
     IClock clock)
 {
@@ -109,6 +113,12 @@ public sealed class QuickScopeActionFieldReadApiService(
         var enabled = await featureAccessResolver.IsEnabledAsync(
             currentUser.AccountId, featureContext, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, ct);
         if (!enabled)
+            return Result.Failure(Forbidden);
+
+        // Gate 2b — server-owned release gate (BL142 Session 1, ADR-496): entitlement alone never
+        // exposes Proposed Work before it is explicitly released. Fails closed independently of
+        // gate 2 above.
+        if (!releaseGatePolicy.IsProposedWorkReleased())
             return Result.Failure(Forbidden);
 
         // Gate 3 — RequestsOperate (B2 operator gate) AND ScopeCapture (ADR-480), not

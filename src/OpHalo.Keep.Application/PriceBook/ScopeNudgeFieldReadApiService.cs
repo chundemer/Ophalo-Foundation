@@ -40,7 +40,9 @@ public sealed record ScopeNudgeFieldResult(
 /// suggestions for the caller's open <c>ProposedScope</c>. Gate composition and the load-scope-then-
 /// verify-request-visibility ordering mirror <see cref="ProposedScopeReadApiService.GetByIdAsync"/>
 /// exactly (read-only gate 1 — Blocked-only denies — not the mutation Blocked||ReadOnly posture).
-/// Read-only: no concurrency token, no terminal-state gate, no Draft mutation.
+/// Gate composition also includes the BL142 Session 1 server-owned release gate
+/// (<see cref="IReleaseGatePolicy"/>, ADR-496). Read-only: no concurrency token, no terminal-state
+/// gate, no Draft mutation.
 /// </summary>
 public sealed class ScopeNudgeFieldReadApiService(
     IProposedScopePersistence proposedScopePersistence,
@@ -52,6 +54,7 @@ public sealed class ScopeNudgeFieldReadApiService(
     ICurrentUser currentUser,
     IAccountAccessPolicy accountAccessPolicy,
     IAccountFeatureAccessResolver featureAccessResolver,
+    IReleaseGatePolicy releaseGatePolicy,
     IUserAccessPolicy userAccessPolicy,
     IClock clock)
 {
@@ -214,6 +217,12 @@ public sealed class ScopeNudgeFieldReadApiService(
         var enabled = await featureAccessResolver.IsEnabledAsync(
             currentUser.AccountId, featureContext, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, ct);
         if (!enabled)
+            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+
+        // Gate 2b - server-owned release gate (BL142 Session 1, ADR-496): entitlement alone never
+        // exposes Proposed Work before it is explicitly released. Fails closed independently of
+        // gate 2 above.
+        if (!releaseGatePolicy.IsProposedWorkReleased())
             return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
 
         var roleSnapshot = await snapshotPersistence.GetAccountUserRoleSnapshotAsync(

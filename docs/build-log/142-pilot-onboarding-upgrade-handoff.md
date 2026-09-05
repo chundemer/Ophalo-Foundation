@@ -2,11 +2,16 @@
 
 **Status:** Session 0 release-gate audit complete (read-only). Locked sequencing (2026-09-04):
 server-owned release gate (Session 1, formerly "Session 2") before automatic Pilot package
-provisioning (Session 2, formerly "Session 1"). Session 1's core Proposed Work surface (create/
-update/remove/restore/submit/read) is implemented and verified locally (2026-09-04), not yet
-deployed. `field-select`/`expand-assembly`/Paired-Nudges-field-read coverage and the
-QuickScopeAction/ScopeNudgeRuleConfig/FieldScopeSearch scope classification remain outstanding
-before Session 1 is complete.
+provisioning (Session 2, formerly "Session 1"). **Session 1 is complete** (2026-09-04): the full
+technician-reachable Proposed Work HTTP surface (create/update/remove/restore/submit/read,
+field-select, expand-assembly, Paired-Nudges field read, field quick-scope-action read) is gated,
+implemented, and verified locally — not yet merged or deployed.
+`QuickScopeActionConfigApiService`/`ScopeNudgeRuleConfigApiService` are locked catalog-only
+(unchanged). `FieldScopeSearchApiService` is locked ungated (Christian's call, 2026-09-04) — it is
+the shared, price-free catalog/assembly search behind both the Proposed Work composer and the
+already-released Actual Work capture flow, and creates no Proposed Work state itself; the
+state-changing endpoints it feeds (field-select, expand-assembly) are gated. Remaining before
+Session 2 begins: merge and deploy this branch.
 **Date:** 2026-09-04
 **Authority:** [ADR-496](../decisions/ADR-496-pilot-package-provisioning-and-release-visibility.md),
 [ADR-428](../decisions/ADR-428-day-zero-settings-getting-started-redesign.md), and ADR-454.
@@ -156,33 +161,49 @@ that own every Proposed Work HTTP route today: `ProposedScopeApiService` (create
 remove-line/restore-line/submit) and `ProposedScopeReadApiService` (by-request/by-id reads). Price
 Book catalog services are untouched — they keep only the entitlement check.
 
-Deferred to a later, independently compiling slice (not yet gated, flagged rather than silently
-included): `FieldProposedScopeSelectionApiService` (field-select), `FieldExpandAssemblyApiService`
-(expand-assembly), and `ScopeNudgeFieldReadApiService` (confirmed scope-bound to an open
-`ProposedScope`) — all reachable Proposed Work HTTP surface, so this must land before automatic
-Pilot enrollment (Session 2) deploys. `QuickScopeActionFieldReadApiService`,
-`QuickScopeActionConfigApiService`, `ScopeNudgeRuleConfigApiService`, and `FieldScopeSearchApiService`
-remain unclassified (Price-Book-catalog-configuration-shaped, not clearly Proposed-Work-capture-
-shaped) and need an explicit scope call, not a default assumption either way.
+**Remaining Session 1 surface closed 2026-09-04.** Gate 2b (same slot, after package entitlement,
+before role permissions) added to the four technician-reachable, `ScopeCapture`-gated field
+services that feed the live scope composer: `FieldProposedScopeSelectionApiService` (field-select),
+`FieldExpandAssemblyApiService` (expand-assembly), `ScopeNudgeFieldReadApiService` (Paired Nudges
+field read, confirmed scope-bound to an open `ProposedScope`), and `QuickScopeActionFieldReadApiService`
+(field quick-scope-action read). Classified catalog-only, left unchanged (gated on
+`PriceBookCatalogManage`, same pre-release-visible posture as Price Book catalog configuration
+itself per ADR-496 — Owner/Admin may configure ahead of release):
+`QuickScopeActionConfigApiService`, `ScopeNudgeRuleConfigApiService`.
+
+**Locked classification — `FieldScopeSearchApiService` stays ungated (Christian, 2026-09-04).** Its
+gate 3 is `RequestsOperate AND (ScopeCapture OR ActualWorkCapture)` — it is the shared, price-free
+catalog/assembly lookup behind both the Proposed Work composer and the already-released Actual
+Work capture flow (build-log/121, ADR-486). Decision: leave ungated. Rationale — it is required by
+released Actual Work capture and creates no Proposed Work state itself; the state-changing Proposed
+Work endpoints it feeds (field-select, expand-assembly) are release-gated, which is the correct
+boundary. Wiring `IsProposedWorkReleased()` onto this shared search surface would 403 Actual Work
+technicians who have `ActualWorkCapture` but not `ScopeCapture` — a regression to a released
+feature, not a scope tightening — so it is excluded by design, not left open.
 
 Files: `IReleaseGatePolicy.cs` (new), `ConfigurationReleaseGatePolicy.cs` (new),
 `KeepServiceCollectionExtensions.cs` (DI), `ProposedScopeApiService.cs`,
-`ProposedScopeReadApiService.cs` — 5 production files. Tests: `KeepApiWebFactory.cs` (added
-`ReleaseGateClosedWebFactory` + opened the gate for the existing shared factory so its unrelated
-ProposedScope tests are unaffected), new `ProposedScopeReleaseGateTests.cs` (gate-closed-despite-
-entitlement, create + read), new `ConfigurationReleaseGatePolicyTests.cs` (missing key → closed,
-malformed value → closed with no exception, explicit `"true"` → open, explicit `"false"` → closed).
-4/4 new policy unit tests pass; 42/42 focused ProposedScope integration tests pass (2 new + 40
-pre-existing unaffected); 14/14 architecture tests pass; no checked-in appsettings sets the key.
-5 production files, 9 total changed files including tests and this document — both within gate.
+`ProposedScopeReadApiService.cs`, `FieldProposedScopeSelectionApiService.cs`,
+`FieldExpandAssemblyApiService.cs`, `ScopeNudgeFieldReadApiService.cs`,
+`QuickScopeActionFieldReadApiService.cs` — 9 production files across both slices. Tests:
+`KeepApiWebFactory.cs` (added `ReleaseGateClosedWebFactory` + opened the gate for the existing
+shared factory so its unrelated ProposedScope tests are unaffected), `ProposedScopeReleaseGateTests.cs`
+(gate-closed-despite-entitlement: create, read, field-select, expand-assembly, nudge-suggestions,
+field quick-scope-actions — 6 cases total), `ConfigurationReleaseGatePolicyTests.cs` (missing key →
+closed, malformed value → closed with no exception, explicit `"true"` → open, explicit `"false"` →
+closed). 4/4 policy unit tests pass; 6/6 focused release-gate integration tests pass; 90/90
+pre-existing ProposedScope/ScopeNudge/QuickScopeAction/FieldScopeSearch integration tests
+unaffected; 14/14 architecture tests pass; no checked-in appsettings sets the key.
 
 ### Session 2 — atomic pilot package provisioning
 
-**Prerequisite:** Session 1's release gate is implemented, verified, and deployed. As of
-2026-09-04, the core create/update/remove/restore/submit/read surface is implemented and verified
-locally (not yet deployed); `field-select`, `expand-assembly`, and the Paired Nudges field read
-remain ungated — all reachable Proposed Work HTTP surface, so they must be closed and deployed
-before this session begins or its migration/provisioning change deploys.
+**Prerequisite:** Session 1's release gate is implemented, verified, and deployed. Session 1 is
+complete as of 2026-09-04 — the full technician-reachable, state-changing/scope-exposing Proposed
+Work surface (create/update/remove/restore/submit/read, field-select, expand-assembly, Paired
+Nudges field read, field quick-scope-action read) is gated, implemented, and verified locally.
+`FieldScopeSearchApiService` is locked ungated by design (see Session 1 above). Remaining before
+this session begins or its migration/provisioning change deploys: merge and deploy Session 1's
+branch.
 
 **Goal:** migrate the enrollment audit model, then ensure every newly provisioned
 `AccountClassification.Pilot` gets one system-provisioned enrolled package row in the same
