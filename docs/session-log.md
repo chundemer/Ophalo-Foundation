@@ -17,7 +17,10 @@ and [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md) ar
 accepted (`5403f445`); Slice 2b (`/auth/exchange` name-blank/MultipleMembers branching,
 `POST /auth/continue`, `CompleteAuthContinuationService`, shared `AuthSessionIssuer`) is complete
 and accepted — full end-to-end continuation redemption now works; see BL143 for delivery evidence.
-Slice 3 (invite acceptance name gate) is next.** Request
+Slice 3 (invite acceptance name gate: `AcceptInviteService` routes a name-blank invitee through
+the existing continuation with `TargetAccountUserId` fixed to the invited membership, no new
+endpoint/cookie) is complete and accepted (`ca994ec6`). Slice 4 (frontend, `ophalo-web`) is next,
+separate session.** Request
 UI Upgrade 1.1 implementation is complete (locked contract
 [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), delivery evidence
 [BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)); its product-owner visual

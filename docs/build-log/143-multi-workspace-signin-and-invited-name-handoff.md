@@ -145,3 +145,34 @@ rejection, continuation-token absence from every exchange/continue response body
 clientType/deviceName in the `/auth/continue` body being ignored in favor of the continuation's
 stored values (verified against the persisted `AccountSession.DeviceName`). Full unit suite
 (1788/1788), architecture (14/14), and full auth integration suite (156/156) pass.
+
+## Slice 3 — done, accepted (`ca994ec6`)
+
+Delivered as scoped above, no new endpoint or cookie — reuses Slice 1/2's `PostAuthContinuation`,
+`ophalo.continuation`, and `/auth/continue` entirely. `AcceptedInvite` (Application) gained
+`UserId`/`IsNameBlank`, populated by `EfInvitePersistence.CommitAcceptInviteAsync` from the `User`
+row it already loads. `AcceptInviteService` branches on `IsNameBlank`: a name-blank invitee gets a
+`PostAuthContinuation` with `TargetAccountUserId` fixed to the just-activated `AccountUser.Id`
+(membership is already known at invite-accept time, unlike ambiguous sign-in) instead of an
+immediate session; `AcceptInviteResult` was renamed `AcceptInviteOutcome` to carry the
+session-XOR-continuation shape. `AccountEndpoints.AcceptInvite` sets the continuation cookie and
+returns `{ requiresContinuation: true, requiresName: true, workspaces: null }` on that path;
+already-named invitees keep the unchanged `{ status: "accepted", destination: "/keep" }` session
+response. `CompleteAuthContinuationService` needed no changes — it was already generic over
+continuation origin.
+
+Because `TargetAccountUserId` is fixed at issuance, `/auth/continue`'s existing
+caller-supplied-`accountUserId`-is-ignored-when-fixed behavior (from Slice 2b) automatically closes
+off invite acceptance from turning into general workspace selection — confirmed by test rather than
+by inspection alone (see below).
+
+Tests: `InviteTests` gained `AcceptInvite_NameBlankInvitee_ReturnsContinuationInsteadOfSession`
+(continuation response shape, no session cookie before `/auth/continue`, full redemption round
+trip asserting the resulting session's `accountId`/`accountUserId` match the invited membership
+exactly — and that a different `accountUserId` smuggled into the `/auth/continue` body is ignored
+in favor of the stored `TargetAccountUserId`) and
+`AcceptInvite_AlreadyNamedInvitee_SetsSessionCookieDirectly` (unchanged path for a pre-named
+User). Replaced the prior `AcceptInvite_ValidToken_SetsCookieAndAllowsAuthMe`, which incorrectly
+asserted an immediate session cookie for a name-blank invitee — that was the bug this slice fixes.
+28/28 `InviteTests`, 155/155 auth integration, 78/78 unit, 14/14 architecture pass. 4 production
+files + 1 test file changed, one handler family, within the batch gate.
