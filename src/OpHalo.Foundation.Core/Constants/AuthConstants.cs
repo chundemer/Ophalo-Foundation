@@ -22,6 +22,13 @@ public static class AuthConstants
     public const string SessionSchemeName = "OpHaloSession";
 
     /// <summary>
+    /// Cookie name carrying the raw PostAuthContinuation token (ADR-497). Server-owned —
+    /// never returned in a JSON response body. Set/cleared only by /auth/continue and its
+    /// producers (Slice 2+); this constant exists ahead of that wiring.
+    /// </summary>
+    public const string ContinuationCookieName = "ophalo.continuation";
+
+    /// <summary>
     /// The HttpOnly cookie that carries the opaque session token for browser clients.
     /// Must match exactly across: cookie write, cookie read (handler + logout), cookie clear (logout).
     /// </summary>

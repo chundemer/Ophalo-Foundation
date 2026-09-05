@@ -40,6 +40,7 @@ public sealed class OpHaloDbContext(
     public DbSet<AccountSession> AccountSessions => Set<AccountSession>();
     public DbSet<AccountAuthCode> AccountAuthCodes => Set<AccountAuthCode>();
     public DbSet<MobileHandoffCode> MobileHandoffCodes => Set<MobileHandoffCode>();
+    public DbSet<PostAuthContinuation> PostAuthContinuations => Set<PostAuthContinuation>();
     public DbSet<AccountUserDevice> AccountUserDevices => Set<AccountUserDevice>();
     public DbSet<User> Users => Set<User>();
     public DbSet<AccountEntitlements> AccountEntitlements => Set<AccountEntitlements>();

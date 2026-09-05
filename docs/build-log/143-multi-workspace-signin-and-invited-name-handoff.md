@@ -74,3 +74,36 @@ Each slice is independently compiling and separately gated. Respect the hard bat
 ## Stop point
 
 Session 0 stops here for approval. Recommended order: Slice 1 → Slice 2 (or 2a/2b if it overflows the limit) → Slice 3 → Slice 4, one Claude session each.
+
+## Slice 1 — done, accepted
+
+Delivered as scoped above, additive only, no route/endpoint wiring. `PostAuthContinuation` (Core),
+`User.SetName` + `UserErrors.NameAlreadySet` (Core), `AuthConstants.ContinuationCookieName` (Core),
+`IPostAuthContinuationPersistence` (Application), `EfPostAuthContinuationPersistence` +
+`PostAuthContinuationConfiguration` + `OpHaloDbContext.PostAuthContinuations` (Infrastructure), and
+migration `20260905204136_AddPostAuthContinuation` (new table only).
+
+Schema follows the `AccountAuthCode`/`AccountSession` precedent rather than introducing new
+patterns: unique index on `TokenHash`, index on `ExpiresAtUtc` for cleanup, index on `UserId`,
+cascade FK to `User` (ephemeral user-scoped artifact, matching `AccountSession`'s cascade rather
+than `AccountUser`'s restrictive FK to `User`). No DB check constraint for the
+`ExpiresAtUtc > IssuedAtUtc` invariant — Foundation auth entities enforce this in the Core factory
+only (`AccountAuthCode` does the same); check constraints in this codebase are a Keep
+pricing/financial convention, not a Foundation auth one. Target-membership ownership verification
+(`TargetAccountUserId` belongs to `UserId`) is deferred to Slice 2, where continuations are
+actually created.
+
+`EfPostAuthContinuationPersistence.CreateAsync`'s opportunistic cleanup sweeps a row only when
+`ConsumedAtUtc` itself is more than 24h old, or `ExpiresAtUtc` is more than 24h old — not merely
+because `ConsumedAtUtc` is set. A row left behind by an interrupted Slice-2 completion must survive
+until it is actually stale; Slice 2's normal path still deletes a spent continuation immediately via
+`DeleteAsync`.
+
+DI registration (`Program.cs`) is deferred to Slice 2 — nothing consumes
+`IPostAuthContinuationPersistence` yet.
+
+Tests: 18 new unit (`PostAuthContinuationTests` factory guards, `UserTests` `SetName` blank/overwrite
+guards), 3 new integration against real Postgres (`PostAuthContinuationPersistenceTests` — atomic
+`ConsumeAsync` race, terminal `DeleteAsync`, and the corrected bounded-cleanup predicate covering
+recently-consumed-survives / stale-consumed-deleted / stale-expired-deleted / live-survives). 14/14
+architecture tests pass. 8 production files changed, within the batch gate.

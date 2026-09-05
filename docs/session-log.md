@@ -11,8 +11,9 @@ Next Claude implementation batch after that merge is deployed is **Session 2 —
 automatic Pilot package provisioning** (ADR-496); GAP-033 is not next unless Christian explicitly
 reprioritizes it. **GAP-068 (multi-workspace sign-in dead end + invited-user display name, P0) has
 completed Session 0 discovery — [ADR-497](decisions/ADR-497-post-auth-continuation-multi-workspace-signin-and-display-name.md)
-and [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md) are written and awaiting
-Christian's approval to begin Slice 1; not yet started.** Request
+and [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md) are written. Slice 1
+(`PostAuthContinuation` foundation, additive-only) is complete and accepted; Slice 2 (multi-membership
+selector + name gate) is next.** Request
 UI Upgrade 1.1 implementation is complete (locked contract
 [Request UI Upgrade 1.1](ux-design/v2/request-ui-upgrade-1.1.md), delivery evidence
 [BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)); its product-owner visual

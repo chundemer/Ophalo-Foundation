@@ -1,5 +1,7 @@
 using OpHalo.Foundation.Core.Entities.Shared;
+using OpHalo.Foundation.Core.Entities.Users.Errors;
 using OpHalo.Foundation.Core.Helpers;
+using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Foundation.Core.Entities.Users;
 
@@ -56,5 +58,23 @@ public sealed class User : BaseEntity
             throw new ArgumentException("loginAtUtc must be UTC.", nameof(loginAtUtc));
 
         LastLoginAtUtc = loginAtUtc;
+    }
+
+    /// <summary>
+    /// Sets Name once, for a User whose Name is currently blank (invited users, and NewAccount
+    /// codes issued without an operator-provided name). Fails if a non-blank Name is already set —
+    /// this is a one-time completion step (ADR-497 name-blank sign-in / invite-accept continuation),
+    /// not a general rename.
+    /// </summary>
+    public Result SetName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Name is required.", nameof(name));
+
+        if (!string.IsNullOrWhiteSpace(Name))
+            return Result.Failure(UserErrors.NameAlreadySet);
+
+        Name = name.Trim();
+        return Result.Success();
     }
 }

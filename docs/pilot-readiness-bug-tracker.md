@@ -50,7 +50,7 @@ An email with two or more active `AccountUser` memberships never receives a magi
 
 **Locked decision:** [ADR-497](decisions/ADR-497-post-auth-continuation-multi-workspace-signin-and-display-name.md). A single server-owned, single-use, ~10-minute `PostAuthContinuation` row covers name-blank sign-in, multi-membership sign-in, and name-blank invite acceptance; redeemed via new `POST /auth/continue`, which live-reverifies membership Active-ness and name-blankness rather than trusting a snapshot. `/auth/start`/`/auth/signin` responses stay enumeration-safe throughout.
 
-**Implementation order:** see [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md) — Slice 1 (`PostAuthContinuation` foundation, additive), Slice 2 (multi-membership selector + name gate at `/auth/exchange` + `/auth/continue`), Slice 3 (invite acceptance name gate), Slice 4 (`ophalo-web` frontend).
+**Implementation order:** see [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md) — Slice 1 (`PostAuthContinuation` foundation, additive) **done, accepted**, Slice 2 (multi-membership selector + name gate at `/auth/exchange` + `/auth/continue`) next, Slice 3 (invite acceptance name gate), Slice 4 (`ophalo-web` frontend).
 
 **Done when:** A person with two active memberships can sign in and choose a workspace without a second email or a destructive membership edit; an invited user with no name is prompted once, and that name reaches `/auth/me` and attribution; all acceptance cases in ADR-497 are covered by automated tests.
 
