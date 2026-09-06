@@ -32,16 +32,20 @@ public class KeepCustomerTests
     }
 
     [Theory]
-    [InlineData("123456789")] // 9 digits — below 10
+    [InlineData("123456789")] // 9 digits — below the canonical 10
     [InlineData("123456")]    // 6 digits
     [InlineData("12")]        // very short
-    public void Create_throws_when_phone_has_too_few_digits(string phone) =>
-        Assert.Throws<ArgumentException>(() => KeepCustomer.Create(AccountId, "Jane", phone));
+    public void Create_throws_when_phone_has_too_few_digits(string phone)
+    {
+        // ADR-444: canonical form is exactly 10 digits.
+        var ex = Assert.Throws<ArgumentException>(() => KeepCustomer.Create(AccountId, "Jane", phone));
+        Assert.Contains("exactly 10 digits", ex.Message);
+    }
 
     [Fact]
-    public void Create_throws_when_phone_has_too_many_digits()
+    public void Create_throws_when_phone_is_not_ten_digits_after_normalization()
     {
-        // 16 digits — exceeds 15-digit maximum
+        // 16 digits — not 10, and not an 11-digit '1'-prefixed value that normalizes to 10.
         const string tooLong = "1234567890123456";
         Assert.Throws<ArgumentException>(() => KeepCustomer.Create(AccountId, "Jane", tooLong));
     }

@@ -24,7 +24,7 @@ These are not an instruction to ship every remaining item before a supervised pi
 | GAP-033 | Resolved (`11c19d3d`, `89a776d8`). |
 | GAP-048 | Required before using email to share private customer request pages. |
 | GAP-047 | Required if staff relies on Internal priority for operational triage. |
-| GAP-016 / GAP-021 | Required before native use or accepting common `+1` phone entry in Quick Capture. |
+| GAP-016 / GAP-021 | Resolved. ADR-444 ten-digit path across backend + all web client paths; native deferred to Session 14 (ADR-236). |
 | GAP-049 | Required before relying on follow-up creation from closed requests. |
 
 ## Implementation Order
@@ -33,7 +33,7 @@ Complete each numbered slice with focused automated coverage and a production-ca
 
 1. **Release safety and truthful public entry:** GAP-039, then GAP-040. Establish safe production observability and configuration validation first; make the public request journey and published claims truthful second. (GAP-033 public-intake trust and tracker event-feed allowlist — resolved, commits `11c19d3d`, `89a776d8`. GAP-056 customer SMS/QR handoff sender/business context — resolved, commit `0fc7a2a`.)
 2. **Field-work correctness:** No active item. (GAP-055 Actual Work recorder ownership — resolved across Batches A–D: migration/ownership `b3b3d41`, recorder authorization `d26b955` and `72ce6a5`, audited transfer `c7ce822`, and Owner/Admin recovery UI `de40491`.)
-3. **Phone and capture integrity:** GAP-016, GAP-021, GAP-051, then GAP-025. Consolidate the ADR-444 normalization path before extending fallback customer recognition.
+3. **Phone and capture integrity:** GAP-016 and GAP-021 resolved (ADR-444 ten-digit path consolidated across backend and all web client paths; native deferred to Session 14). Next: GAP-051 (native parity / public-web audit), then GAP-025.
 4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, GAP-049, and GAP-063. First establish shared responsive seams without behavior change; then make Owner/Admin review, lifecycle, attention, and timing actions unmistakable. See [BL137](build-log/137-request-detail-and-queue-usability-handoff.md) for the bounded execution order.
 5. **Request workspace next:** GAP-027 and GAP-045 are resolved. Implement GAP-067 first as the presentation-only Request List/Detail foundation, after a brief read-only GAP-042 business-identity placement preflight; then implement GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. The row grammar remains locked: one lifecycle cue, one server-ranked exception cue, and one next-action line. GAP-067 must preserve that grammar, server ranking, and existing behavior; do not merge a broad queue redesign into it. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
 6. **Pilot operating loop and final usability review:** GAP-064 (after GAP-039), GAP-037, GAP-038, and GAP-054. Establish a reliable new-customer-request alert path before relying on intake to create live work, then deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
@@ -196,19 +196,28 @@ The Offering/Assembly editor uses a narrow, one-off `max-w-2xl` layout while the
 
 ### GAP-016 — New Request phone validation and correction path remains incomplete
 
-**Status:** In progress
+**Status:** Resolved
 **Severity:** P0
 **Area:** Quick Capture, authenticated request API, and native parity
 
-Finish the ADR-444 normalized ten-digit North American policy across native and all client paths, including leading `1`/`+1`, correction from capture, and consistent actionable validation.
+The ADR-444 normalized ten-digit North American policy is implemented across every client path
+that exists in the repo: `PhoneNormalizer` (strip non-digits, drop a leading `1` on 11-digit
+input, canonical = exactly 10) drives `KeepCustomer.Create` and `LookupKeepRequestByPhoneService`;
+web Quick Capture gates lookup/submit on ten digits and provides the draft-preserving **Change**
+path in `CaptureForm`; public intake slices a leading `1`. Stale "7–15 digit" / E.164 wording in
+the `KeepCustomer` exception message, the `KeepCustomerConfiguration` column comment, and the
+`KeepCustomerTests` comments/names was corrected to state the exact ten-digit bound. Native parity
+is not actionable until the native project exists (ADR-236, Session 14).
 
 ### GAP-021 — Quick Capture rejects valid country-code input
 
-**Status:** Open
+**Status:** Resolved
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture lookup
 
-Normalize an 11-digit value beginning with `1` to its final ten digits before the UI gate, lookup, and return-to-draft path.
+`normalizeNaPhoneInput` (`quick-capture/utils.ts`) drops a leading `1` and caps at ten digits
+before the UI gate, lookup, and return-to-draft path; `LookupGate`/`HandoffPanel` enforce the
+ten-digit gate. Covered by `phoneFormat`, `LookupGate`, and `draft-preservation` tests.
 
 ### GAP-051 — Phone formatting remains incomplete outside the authenticated PWA
 

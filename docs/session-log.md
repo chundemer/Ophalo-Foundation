@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-06 (GAP-033 public-intake trust and tracker event-feed allowlist — both slices complete and merged; see [BL145](build-log/145-gap-033-public-intake-trust-and-event-feed-allowlist.md))
+**Last updated:** 2026-09-06 (GAP-016 / GAP-021 phone validation closure — ADR-444 ten-digit path confirmed across backend + all web client paths; stale "7–15 digit" wording corrected; see [BL146](build-log/146-gap-016-gap-021-phone-validation-closure.md). Prior: GAP-033 public-intake trust, [BL145](build-log/145-gap-033-public-intake-trust-and-event-feed-allowlist.md))
 
 **Current scope:** GAP-039 (production observability) and GAP-068 (multi-workspace sign-in +
 invited-user display name) are both fully implemented and accepted. GAP-039's founder-owned Batch
@@ -70,10 +70,16 @@ relevant build log.
 
 ## Next implementation sequence
 
-**Next approved coding session: phone and capture integrity — GAP-016 / GAP-021 / GAP-051, then
-GAP-025** (see the pilot/release gate order in Deferred next work). Consolidate the ADR-444
-normalized ten-digit North American path across native and all client paths before extending
-fallback customer recognition. Do not begin GAP-070/GAP-071 optional-module UI work.
+GAP-016 and GAP-021 are resolved: the ADR-444 normalized ten-digit North American path
+(`PhoneNormalizer` → `KeepCustomer.Create` / `LookupKeepRequestByPhoneService`; web Quick Capture
+ten-digit gate + draft-preserving Change; public-intake leading-`1` slicing) is consolidated across
+the backend and every web client path, and stale "7–15 digit" / E.164 wording in the
+`KeepCustomer` message, `KeepCustomerConfiguration` comment, and `KeepCustomerTests` was corrected.
+Native parity is deferred to Session 14 (ADR-236).
+
+**Next approved coding session: phone and capture integrity — GAP-051 (native parity / public-web
+audit), then GAP-025** (see the pilot/release gate order in Deferred next work). Do not begin
+GAP-070/GAP-071 optional-module UI work.
 
 **Separate founder-owned prerequisite:** GAP-039 Batch 4 production-candidate verification remains
 required before any customer-facing pilot. It is an operational verification gate, not the next

@@ -24,7 +24,9 @@ internal sealed class KeepCustomerConfiguration : BaseEntityConfiguration<KeepCu
             .IsRequired();
 
         // Digit-only canonical identity form — used for account-scoped uniqueness (GAP-006).
-        // Max 15 digits matches the E.164 maximum and the domain validation bound.
+        // ADR-444: the canonical form is exactly 10 digits (North American). The 15-char
+        // column bound is retained headroom for a future international slice; shrinking it
+        // would require a migration and is not part of the launch policy.
         builder.Property(x => x.CanonicalPhone)
             .HasMaxLength(15)
             .IsRequired();

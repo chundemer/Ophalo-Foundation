@@ -50,7 +50,7 @@ public sealed class KeepCustomer : BaseEntity
         var canonical = PhoneNormalizer.Normalize(primaryPhone.Trim());
         if (!PhoneNormalizer.IsValidLength(canonical))
             throw new ArgumentException(
-                $"Phone must contain 7–15 digits after normalization; got {canonical.Length}.",
+                $"Phone must contain exactly 10 digits after normalization; got {canonical.Length}.",
                 nameof(primaryPhone));
 
         return new KeepCustomer
