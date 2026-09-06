@@ -29,10 +29,20 @@ These are supervised-pilot gates alongside GAP-039 and GAP-069. GAP-047 is requi
 | Item | Decision required before scheduling |
 | --- | --- |
 | GAP-064 | Minimum accountable staff-alert policy: recipient/fallback, channel, failure/escalation, quiet-hours, and privacy posture. Interim: founder watches the queue. |
-| GAP-025 | Customer phone-number lifecycle. ADR-492 remains only the narrow request-phone continuity guardrail; no inferred identity matching. |
+| GAP-025 | Customer phone-number lifecycle. ADR-492 is only the narrow request-phone continuity guardrail; it does not solve a customer permanently changing numbers. Decide editable current unique phone, verified historical aliases, audit/authority, shared-or-recycled-number safeguards, and request-entered-phone snapshots. No inferred identity matching. |
 | GAP-043 | V1 request-list scale model and verification threshold. |
 | GAP-054 | App-shell/top-bar review: business/account menu, persistent workspace switcher, entitled Price Book settings attachment, and narrow/mobile navigation. |
 | GAP-070 / GAP-071 | Optional-module commercial workflow and truthful discovery/handoff; no self-service entitlement write or guided setup. |
+| Proposed Work & Commercial Quotes | Agree the pilot finish-line and sequencing for the existing field-scope foundation, Owner/Admin Proposed Work Review ([ADR-488](decisions/ADR-488-owner-admin-proposed-work-review-workbench.md), [BL127](build-log/127-owner-admin-proposed-work-review-preflight.md)), and office commercial documents ([BL130](build-log/130-office-commercial-estimate-preflight.md)). Decide which postures—Estimate, Fixed-Price Quote, T&M Authorization—the pilot actually needs. Customer delivery/acceptance remains a separate later capability. |
+
+## Proposed Work & Commercial Quotes — current state
+
+| Layer | State |
+| --- | --- |
+| Field Proposed Work capture | Merged: price-blind scope composer, catalog/assembly/custom lines, undo, nudges, submission, request signal, entitlement, and server release gate. Confirm the production release setting before treating it as pilot-available. |
+| Owner/Admin Proposed Work Review | Not built. ADR-488 and BL127 lock the queue, history, review note, and explicit `Mark reviewed` transition. |
+| Office commercial estimate / quote | Not built. There is no `OfficeQuote`, `QuoteRevision`, or `QuoteLine` domain/UI/API. BL130 locks the product boundary but requires a mechanical preflight. |
+| Customer-facing quote | Later, separate capability: delivery, viewing, acceptance, signature, payment, invoicing, and accounting sync are not implied by internal approval. |
 
 ## Deferred / pilot learning
 
