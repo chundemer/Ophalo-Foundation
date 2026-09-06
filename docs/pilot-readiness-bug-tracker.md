@@ -33,7 +33,7 @@ Complete each numbered slice with focused automated coverage and a production-ca
 
 1. **Release safety and truthful public entry:** GAP-039, then GAP-040. Establish safe production observability and configuration validation first; make the public request journey and published claims truthful second. (GAP-033 public-intake trust and tracker event-feed allowlist — resolved, commits `11c19d3d`, `89a776d8`. GAP-056 customer SMS/QR handoff sender/business context — resolved, commit `0fc7a2a`.)
 2. **Field-work correctness:** No active item. (GAP-055 Actual Work recorder ownership — resolved across Batches A–D: migration/ownership `b3b3d41`, recorder authorization `d26b955` and `72ce6a5`, audited transfer `c7ce822`, and Owner/Admin recovery UI `de40491`.)
-3. **Phone and capture integrity:** GAP-016 and GAP-021 resolved (ADR-444 ten-digit path consolidated across backend and all web client paths; native deferred to Session 14). Next: GAP-051 (native parity / public-web audit), then GAP-025.
+3. **Phone and capture integrity:** GAP-016 and GAP-021 resolved (ADR-444 ten-digit path consolidated across backend and all web client paths). GAP-051 public-web done (BL147); its remaining native-parity scope is deferred to Session 14. Next: GAP-025.
 4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, GAP-049, and GAP-063. First establish shared responsive seams without behavior change; then make Owner/Admin review, lifecycle, attention, and timing actions unmistakable. See [BL137](build-log/137-request-detail-and-queue-usability-handoff.md) for the bounded execution order.
 5. **Request workspace next:** GAP-027 and GAP-045 are resolved. Implement GAP-067 first as the presentation-only Request List/Detail foundation, after a brief read-only GAP-042 business-identity placement preflight; then implement GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. The row grammar remains locked: one lifecycle cue, one server-ranked exception cue, and one next-action line. GAP-067 must preserve that grammar, server ranking, and existing behavior; do not merge a broad queue redesign into it. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
 6. **Pilot operating loop and final usability review:** GAP-064 (after GAP-039), GAP-037, GAP-038, and GAP-054. Establish a reliable new-customer-request alert path before relying on intake to create live work, then deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
@@ -221,11 +221,17 @@ ten-digit gate. Covered by `phoneFormat`, `LookupGate`, and `draft-preservation`
 
 ### GAP-051 — Phone formatting remains incomplete outside the authenticated PWA
 
-**Status:** In progress
+**Status:** In progress — public-web done; native parity deferred to Session 14 (ADR-236)
 **Severity:** P1
 **Area:** Native and public phone input/display
 
-Authenticated PWA staff-facing formatting is complete. Finish native parity and the public-web audit, including tolerant `1`/`+1` input and formatted configured business-phone display, while preserving canonical stored values and `tel:`/API behavior.
+Authenticated PWA staff-facing formatting is complete. Public-web is done (BL147): the public
+intake form already tolerates `1`/`+1` and formats as-you-type, and the configured business phone
+is now rendered `(XXX) XXX-XXXX` on every public projection — the intake info endpoint
+(token + slug) and the customer tracker (active + expired) — via the display-only
+`PhoneDisplayFormatter`, with canonical storage, API round-trips, and `tel:` targets unchanged.
+Native parity is the only remaining scope and cannot land until the native project exists
+(Session 14, ADR-236).
 
 ### GAP-025 — Quick Capture hides request-phone-only customer continuity
 

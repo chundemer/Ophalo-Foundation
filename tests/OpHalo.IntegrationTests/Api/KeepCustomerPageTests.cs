@@ -487,11 +487,25 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
 
         Assert.Equal("https://cdn.example.com/logo.png", body.GetProperty("logoUrl").GetString());
         Assert.Equal("https://acme-plumbing.example.com", body.GetProperty("websiteUrl").GetString());
-        Assert.Equal("+61412345678", body.GetProperty("phone").GetString());
+        // GAP-051: canonical stored phone is rendered for display on the public projection.
+        Assert.Equal("(555) 010-0199", body.GetProperty("phone").GetString());
 
         // Never expose email on the public tracker projection.
         Assert.False(body.TryGetProperty("email", out _));
         Assert.False(body.TryGetProperty("customerFacingEmail", out _));
+    }
+
+    [Fact]
+    public async Task GetCustomerPage_ActiveRequest_NonCanonicalConfiguredPhone_PassesThroughUnformatted()
+    {
+        await SeedBusinessIdentityAsync("+61 412 345 678");
+
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        // A deliberately non-standard configured value still shows as entered (trimmed only).
+        Assert.Equal("+61 412 345 678", body.GetProperty("phone").GetString());
     }
 
     [Fact]
@@ -516,11 +530,14 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
         // A known business must not go anonymous at a terminal state (GAP-033/R90b-2b).
         Assert.Equal("https://cdn.example.com/logo.png", body.GetProperty("logoUrl").GetString());
         Assert.Equal("https://acme-plumbing.example.com", body.GetProperty("websiteUrl").GetString());
-        Assert.Equal("+61412345678", body.GetProperty("phone").GetString());
+        // GAP-051: display formatting is retained on the terminal-state tombstone projection too.
+        Assert.Equal("(555) 010-0199", body.GetProperty("phone").GetString());
         Assert.False(body.TryGetProperty("email", out _));
     }
 
-    private async Task SeedBusinessIdentityAsync()
+    // Default is a canonical 10-digit number: the PWA Settings screen stores the configured
+    // business phone canonical, so the public projection must format it for display (GAP-051).
+    private async Task SeedBusinessIdentityAsync(string phone = "5550100199")
     {
         await using var scope = _factory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
@@ -530,7 +547,7 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
             .FirstAsync();
 
         var profile = KeepBusinessProfile.Create(accountId);
-        profile.UpdateContact("+61412345678", null);
+        profile.UpdateContact(phone, null);
         var identityResult = profile.UpdatePublicIdentity(
             "https://cdn.example.com/logo.png", "https://acme-plumbing.example.com");
         Assert.True(identityResult.IsSuccess);

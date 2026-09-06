@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-06 (GAP-016 / GAP-021 phone validation closure — ADR-444 ten-digit path confirmed across backend + all web client paths; stale "7–15 digit" wording corrected; see [BL146](build-log/146-gap-016-gap-021-phone-validation-closure.md). Prior: GAP-033 public-intake trust, [BL145](build-log/145-gap-033-public-intake-trust-and-event-feed-allowlist.md))
+**Last updated:** 2026-09-06 (GAP-051 public-web configured business-phone display — the configured business phone is now formatted `(XXX) XXX-XXXX` on the intake info endpoint (token + slug) and the customer tracker (active + expired) via the display-only `PhoneDisplayFormatter`; canonical storage/API/`tel:` unchanged; native parity still deferred to Session 14. See [BL147](build-log/147-gap-051-public-web-business-phone-display.md). Prior: GAP-016 / GAP-021 closure, [BL146](build-log/146-gap-016-gap-021-phone-validation-closure.md))
 
 **Current scope:** GAP-039 (production observability) and GAP-068 (multi-workspace sign-in +
 invited-user display name) are both fully implemented and accepted. GAP-039's founder-owned Batch
@@ -77,8 +77,12 @@ the backend and every web client path, and stale "7–15 digit" / E.164 wording 
 `KeepCustomer` message, `KeepCustomerConfiguration` comment, and `KeepCustomerTests` was corrected.
 Native parity is deferred to Session 14 (ADR-236).
 
-**Next approved coding session: phone and capture integrity — GAP-051 (native parity / public-web
-audit), then GAP-025** (see the pilot/release gate order in Deferred next work). Do not begin
+GAP-051's public-web scope is done (BL147): configured business-phone display is formatted on
+every public projection; the intake form input path was already ADR-444-compliant. Its remaining
+native-parity scope is deferred to Session 14 (ADR-236).
+
+**Next approved coding session: phone and capture integrity — GAP-025** (ADR-492 request-phone-only
+customer continuity; see the pilot/release gate order in Deferred next work). Do not begin
 GAP-070/GAP-071 optional-module UI work.
 
 **Separate founder-owned prerequisite:** GAP-039 Batch 4 production-candidate verification remains

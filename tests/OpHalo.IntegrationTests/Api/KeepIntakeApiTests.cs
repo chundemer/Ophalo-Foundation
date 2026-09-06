@@ -676,7 +676,8 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
         {
             var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
             var profile = KeepBusinessProfile.Create(_accountId);
-            profile.UpdateContact("+61412345678", null);
+            // The PWA Settings screen stores the configured business phone canonical.
+            profile.UpdateContact("5550100199", null);
             var identityResult = profile.UpdatePublicIdentity("https://cdn.example.com/logo.png", "https://acme-plumbing.example.com");
             Assert.True(identityResult.IsSuccess);
             db.Set<KeepBusinessProfile>().Add(profile);
@@ -691,11 +692,33 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
         Assert.Equal("Acme Plumbing", body.GetProperty("businessName").GetString());
         Assert.Equal("https://cdn.example.com/logo.png", body.GetProperty("logoUrl").GetString());
         Assert.Equal("https://acme-plumbing.example.com", body.GetProperty("websiteUrl").GetString());
-        Assert.Equal("+61412345678", body.GetProperty("phone").GetString());
+        // GAP-051: canonical stored phone is rendered for display on the intake info projection.
+        Assert.Equal("(555) 010-0199", body.GetProperty("phone").GetString());
 
         // Never expose email on the public info projection.
         Assert.False(body.TryGetProperty("email", out _));
         Assert.False(body.TryGetProperty("customerFacingEmail", out _));
+    }
+
+    [Fact]
+    public async Task IntakeInfo_ActiveSlug_WithConfiguredIdentity_ReturnsFormattedPhone()
+    {
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var profile = KeepBusinessProfile.Create(_accountId);
+            profile.UpdateContact("5550100199", null);
+            db.Set<KeepBusinessProfile>().Add(profile);
+            await db.SaveChangesAsync();
+        }
+
+        var response = await _client.GetAsync(
+            "/keep/public-intake/slug/acme-plumbing/info");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        // GAP-051: the slug info projection formats the configured business phone identically.
+        Assert.Equal("(555) 010-0199", body.GetProperty("phone").GetString());
     }
 
     [Fact]

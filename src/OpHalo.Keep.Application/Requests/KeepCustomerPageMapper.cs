@@ -1,3 +1,4 @@
+using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 
@@ -17,7 +18,9 @@ internal static class KeepCustomerPageMapper
         new(BusinessName: context.BusinessName,
             LogoUrl: context.LogoUrl,
             WebsiteUrl: context.WebsiteUrl,
-            Phone: context.Phone,
+            // Display-only: the stored/canonical value is unchanged; the public projection
+            // shows a readable configured business phone (GAP-051).
+            Phone: PhoneDisplayFormatter.FormatConfigured(context.Phone),
             ReferenceCode: context.ReferenceCode,
             IsExpired: true,
             NewRequestUrl: null,
@@ -41,7 +44,8 @@ internal static class KeepCustomerPageMapper
         new(BusinessName: context.BusinessName,
             LogoUrl: context.LogoUrl,
             WebsiteUrl: context.WebsiteUrl,
-            Phone: context.Phone,
+            // Display-only: see BuildExpiredResult (GAP-051).
+            Phone: PhoneDisplayFormatter.FormatConfigured(context.Phone),
             ReferenceCode: context.ReferenceCode,
             IsExpired: false,
             NewRequestUrl: null,

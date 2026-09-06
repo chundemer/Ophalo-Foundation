@@ -5,6 +5,7 @@ using OpHalo.Foundation.Application.Auth;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Application.Validation;
+using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
@@ -91,14 +92,19 @@ public sealed class CreateKeepPublicIntakeService(
     {
         if (string.IsNullOrWhiteSpace(rawToken)) return null;
         var tokenHash = tokenService.HashPublicIntakeToken(rawToken);
-        return await persistence.GetPublicIdentityByTokenHashAsync(tokenHash, ct);
+        return WithDisplayPhone(await persistence.GetPublicIdentityByTokenHashAsync(tokenHash, ct));
     }
 
     public async Task<KeepPublicIntakeInfo?> GetInfoBySlugAsync(string slug, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(slug)) return null;
-        return await persistence.GetPublicIdentityBySlugAsync(slug, ct);
+        return WithDisplayPhone(await persistence.GetPublicIdentityBySlugAsync(slug, ct));
     }
+
+    // Display-only: the stored/canonical configured phone is unchanged; the public intake
+    // identity projection shows a readable configured business phone (GAP-051).
+    private static KeepPublicIntakeInfo? WithDisplayPhone(KeepPublicIntakeInfo? info) =>
+        info is null ? null : info with { Phone = PhoneDisplayFormatter.FormatConfigured(info.Phone) };
 
     private static Result<bool> ValidateServiceLocation(CreateKeepPublicIntakeCommand command)
     {
