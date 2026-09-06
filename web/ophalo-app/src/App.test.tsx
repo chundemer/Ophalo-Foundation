@@ -549,22 +549,22 @@ describe("getNavItems", () => {
 
   it("owner without the Price Book entitlement does not see Price Book", () => {
     const ids = getNavItems("owner", false).map((i) => i.id);
-    expect(ids).toEqual(["requests", "home", "settings"]);
+    expect(ids).toEqual(["requests", "settings"]);
   });
 
   it("admin without the Price Book entitlement does not see Price Book", () => {
     const ids = getNavItems("admin", false).map((i) => i.id);
-    expect(ids).toEqual(["requests", "home", "settings"]);
+    expect(ids).toEqual(["requests", "settings"]);
   });
 
-  it("owner with the Price Book entitlement sees it between Getting Started and Settings", () => {
+  it("owner with the Price Book entitlement sees it before Settings", () => {
     const ids = getNavItems("owner", true).map((i) => i.id);
-    expect(ids).toEqual(["requests", "home", "pricebook", "settings"]);
+    expect(ids).toEqual(["requests", "pricebook", "settings"]);
   });
 
   it("admin with the Price Book entitlement sees it", () => {
     const ids = getNavItems("admin", true).map((i) => i.id);
-    expect(ids).toEqual(["requests", "home", "pricebook", "settings"]);
+    expect(ids).toEqual(["requests", "pricebook", "settings"]);
   });
 });
 
@@ -593,7 +593,7 @@ describe("App — phone navigation omits Price Book, Settings, and Account Admin
     ]);
   });
 
-  it("phone overflow menu hides Price Book and Settings, keeps Requests and Getting Started, and never surfaces an independent Account Administration entry", async () => {
+  it("phone overflow menu hides Price Book and Settings, keeps Requests, and never surfaces an independent Account Administration entry", async () => {
     const user = userEvent.setup();
     renderApp();
     await waitFor(() => expect(screen.getByLabelText("Open navigation menu")).toBeInTheDocument());
@@ -602,7 +602,6 @@ describe("App — phone navigation omits Price Book, Settings, and Account Admin
     const menu = within(screen.getByRole("dialog", { name: "Navigation menu" }));
 
     expect(menu.getByRole("button", { name: "Requests" })).toBeInTheDocument();
-    expect(menu.getByRole("button", { name: "Getting Started" })).toBeInTheDocument();
     expect(menu.queryByRole("button", { name: "Price Book" })).not.toBeInTheDocument();
     expect(menu.queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
     expect(menu.queryByText(/Account Administration/i)).not.toBeInTheDocument();
@@ -629,9 +628,9 @@ describe("App — phone navigation omits Price Book, Settings, and Account Admin
   });
 });
 
-// Section 0 shell migration: Getting Started and Settings join Requests/Detail/Price Book in the
-// V2 top-nav application shell — one horizontal header, no desktop left <aside> sidebar.
-describe("App — V2 top-nav shell covers Getting Started and Settings", () => {
+// Section 0 shell migration: Settings joins Requests/Detail/Price Book in the V2 top-nav
+// application shell — one horizontal header, no desktop left <aside> sidebar.
+describe("App — V2 top-nav shell covers Settings", () => {
   beforeEach(() => {
     window.location.hash = "";
     mockGetMe.mockReset().mockResolvedValue({
@@ -647,29 +646,12 @@ describe("App — V2 top-nav shell covers Getting Started and Settings", () => {
     ]);
   });
 
-  it("keeps the desktop top-nav header (and no <aside> sidebar) after navigating to Getting Started", async () => {
-    const user = userEvent.setup();
-    const { container } = renderApp();
-
-    const header = await waitFor(() => getDesktopHeader(container));
-    await user.click(within(header).getByRole("button", { name: /Getting Started/ }));
-
-    await screen.findByRole("heading", { name: "Getting started", level: 1 });
-    expect(window.location.hash).toBe("#/getting-started");
-    expect(container.querySelector("aside")).toBeNull();
-    expect(getDesktopHeader(container)).toBe(header);
-    // Global New Request CTA stays available on this route (unlike Price Book).
-    expect(within(header).getByRole("button", { name: /New Request/ })).toBeInTheDocument();
-  });
-
-  it("renders Getting Started from its direct URL", async () => {
+  it("#/getting-started no longer routes anywhere special — falls back to Requests", async () => {
     window.location.hash = "#/getting-started";
-    const { container } = renderApp();
+    renderApp();
 
-    await screen.findByRole("heading", { name: "Getting started", level: 1 });
-    expect(within(getDesktopHeader(container)).getByRole("button", { name: /Getting Started/ })).toHaveClass(
-      "bg-[var(--keep-accent-bg)]",
-    );
+    await screen.findByRole("heading", { level: 1, name: /Requests/ });
+    expect(screen.queryByRole("heading", { name: "Getting started" })).not.toBeInTheDocument();
   });
 
   it("keeps the desktop top-nav header (and no <aside> sidebar) after navigating to Settings", async () => {

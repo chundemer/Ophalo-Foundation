@@ -2,7 +2,7 @@
 
 **Purpose:** The live, forward-looking backlog for unresolved pilot-readiness work.
 
-**Last triaged:** 2026-09-05
+**Last triaged:** 2026-09-06
 
 Historical findings, resolved work, and superseded implementation notes were removed from this document. They remain in [the session log](session-log.md) and the relevant `docs/build-log/` records. A tracker item belongs here only while it has remaining work or an unresolved decision.
 
@@ -107,6 +107,52 @@ trusted proxied HTTPS request before HTTPS-redirection middleware; an untrusted 
 cannot spoof the scheme/client address; and the two warnings no longer appear in a production
 startup log. Record the Railway mount/external-store configuration and proxy trust boundary in the
 operational runbook.
+
+### GAP-070 — Optional Price Book enrollment lacks a complete entitlement-aware shell
+
+**Status:** Open — defer until request-first pilot onboarding is complete
+**Severity:** P0
+**Area:** Authenticated PWA navigation, routes, and capability-state refresh
+
+Price Book is an optional account capability, not a Pilot-classification side effect. An unenrolled
+account must have a complete Requests-first workspace: no Price Book primary-navigation item, no
+reserved blank layout slot, and no module-specific affordances in settings or work toolbars. An
+entitled Owner/Admin must discover the module without it competing with Requests. The existing
+`GET /accounts/me/capability-packages` read model remains the client discovery authority; do not
+move package flags into auth exchange/JWT claims. A later authorized entitlement change must
+invalidate/refetch that client state promptly.
+
+**Guardrails:** Server-side enrollment and role checks remain authoritative for every capability
+action. This gap does not authorize self-service checkout, a customer entitlement-write endpoint,
+or a guided onboarding wizard. Direct-route behavior must be deliberate and accessible; it may
+explain unavailability or redirect, but must not expose package data or leave a broken page.
+
+**Done when:** browser verification and focused frontend tests prove enrolled and unenrolled
+Owner/Admin states reflow cleanly across desktop/narrow layouts; direct routes behave intentionally;
+and a capability refresh changes the shell without relying on a new session/JWT contract.
+
+### GAP-071 — Optional Modules discovery and commercial handoff are not yet a truthful product surface
+
+**Status:** Open — defer until request-first pilot onboarding is complete
+**Severity:** P0
+**Area:** Account/subscription experience and pilot operator workflow
+
+Price Book configuration belongs in Business Settings only after entitlement. Package discovery and
+commercial selection belong in the account/subscription area (for example, Subscription & Optional
+Modules), without making a customer assemble Keep before using Requests. During the controlled
+pilot, a real internal OpHalo operator assesses fit and uses the authorized internal entitlement
+path; the resulting enrollment is `InternalUser`-attributed to that operator. The current founder
+bootstrap/runbook constraint for the first internal operator remains an operational prerequisite.
+
+**Guardrails:** Do not automatically enroll all Pilot accounts, blanket-backfill pilot accounts, or
+attribute an operator grant to the customer Owner. Do not promise Trial evaluation, billing,
+plan/add-on eligibility, expiry revocation, or self-service activation until a separate commercial
+workflow decision is made. Disabling a package is non-destructive: retained history stays governed
+by its existing read-only/audit rules.
+
+**Done when:** the pilot operator workflow is usable and auditable; the account menu communicates
+optional-module status truthfully without exposing a fake checkout; and the later commercial choice
+has an explicitly approved server-authoritative contract.
 
 ### GAP-033 — Public intake does not establish sufficient customer trust or return continuity
 

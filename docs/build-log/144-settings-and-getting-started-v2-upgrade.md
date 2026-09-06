@@ -2,8 +2,13 @@
 
 **Status:** Slices A, B, C delivered (frontend-only, `ophalo-app`). Locked contract:
 [settings-and-getting-started-ui-upgrade.md](../ux-design/v2/settings-and-getting-started-ui-upgrade.md).
-Preserves ADR-428 IA, defaults, and day-zero model. The §5 screenshot-acceptance pass across all
-three slices is still pending (product-owner review, not a coding task).
+Preserves ADR-428 IA, defaults, and day-zero model. The §5 screenshot-acceptance pass for Slices B
+and C (Public Link & Profile, Team) is still pending (product-owner review, not a coding task).
+**Slice A's Getting Started/Home acceptance item is superseded (2026-09-06):** BL142 Session 3
+(ADR-496) removes the Getting Started page/nav entirely and migrates its live-link readiness
+content into the Requests empty-state panel — the request-first onboarding direction supersedes
+review of the page it removes. See
+[BL142](142-pilot-onboarding-upgrade-handoff.md#session-3--request-first-pwa-onboarding).
 
 ## Slice A — Getting Started + Settings shell + Response Policy — delivered
 

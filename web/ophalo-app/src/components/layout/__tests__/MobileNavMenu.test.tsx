@@ -6,7 +6,6 @@ import type { NavItem } from "../../../App";
 
 const items: NavItem[] = [
   { id: "requests", label: "Requests", icon: null },
-  { id: "home", label: "Getting Started", icon: null },
   { id: "pricebook", label: "Price Book", icon: null },
   { id: "settings", label: "Settings", icon: null },
 ];
@@ -25,7 +24,6 @@ describe("MobileNavMenu", () => {
       />,
     );
     expect(screen.getByText("Requests")).toBeInTheDocument();
-    expect(screen.getByText("Getting Started")).toBeInTheDocument();
     expect(screen.getByText("Price Book")).toBeInTheDocument();
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });

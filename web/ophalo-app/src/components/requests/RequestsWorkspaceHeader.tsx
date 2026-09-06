@@ -1,9 +1,7 @@
-import type { KeepBusinessSetupResult } from "../../lib/apiClient";
-import { RequestsOnboardingBanner } from "../RequestsOnboardingBanner";
+import { RequestsEmptyStatePanel } from "./RequestsEmptyStatePanel";
 
 interface RequestsWorkspaceHeaderProps {
-  showOnboardingBanner: boolean;
-  setup: KeepBusinessSetupResult | undefined;
+  showEmptyStatePanel: boolean;
   onNavigateSettings: (section?: "public-profile" | "policy" | "team") => void;
   onStartCapture: () => void;
   pageTitle: string;
@@ -22,8 +20,7 @@ interface RequestsWorkspaceHeaderProps {
 }
 
 export function RequestsWorkspaceHeader({
-  showOnboardingBanner,
-  setup,
+  showEmptyStatePanel,
   onNavigateSettings,
   onStartCapture,
   pageTitle,
@@ -35,10 +32,9 @@ export function RequestsWorkspaceHeader({
   if (paneMode) {
     return (
       <div className="px-3 pt-2 sm:px-4">
-        {showOnboardingBanner && setup && (
+        {showEmptyStatePanel && (
           <div className="mb-2">
-            <RequestsOnboardingBanner
-              setup={setup}
+            <RequestsEmptyStatePanel
               onNavigateSettings={onNavigateSettings}
               onStartCapture={onStartCapture}
               compact
@@ -56,10 +52,9 @@ export function RequestsWorkspaceHeader({
 
   return (
     <div className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
-      {showOnboardingBanner && setup && (
+      {showEmptyStatePanel && (
         <div className="mb-4">
-          <RequestsOnboardingBanner
-            setup={setup}
+          <RequestsEmptyStatePanel
             onNavigateSettings={onNavigateSettings}
             onStartCapture={onStartCapture}
           />

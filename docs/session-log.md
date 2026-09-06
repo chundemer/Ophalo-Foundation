@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-09-06
 
 **Current scope:** GAP-039 (production observability) and GAP-068 (multi-workspace sign-in +
 invited-user display name) are both fully implemented and accepted. GAP-039's founder-owned Batch
@@ -12,8 +12,12 @@ membership-status data issue that was blocking multi-workspace selection for one
 
 Pilot Onboarding Upgrade Session 0 (audit) and Session 1 (server-owned Proposed Work release gate)
 are complete, tested, merged to `main` (`eb33f6a5`, plus follow-up `226778af`), and **deployed**
-(verified 2026-09-05). Session 2 (automatic Pilot package provisioning, ADR-496) is now unblocked
-and **in progress**. See [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md).
+(verified 2026-09-05). Session 2 Slice A (enrollment provenance schema) is accepted, merged to
+`main`, and applied to Christian's local development database.
+On 2026-09-06, ADR-496 was amended: the uncommitted automatic-Pilot-provisioning and blanket
+backfill slices are superseded. Price Book is an operator-selected per-business capability during
+the pilot, not a Pilot-classification side effect. See
+[BL142](build-log/142-pilot-onboarding-upgrade-handoff.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
@@ -47,15 +51,15 @@ relevant build log.
 
 ## Next implementation sequence
 
-1. **Session 2 — automatic Pilot package provisioning** (ADR-496), split into three slices
-   (exceeds the single-session batch gate) — see
+1. **Pilot onboarding — request-first PWA completion** (ADR-496) — see
    [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md):
    - **Slice A — schema + domain provenance** — done, accepted. 7 production files (including a
      required nullable-DTO compatibility fix); migration verified against real Postgres and
      applied to Christian's local dev database. See BL142 for full delivery record.
-   - **Slice B — pilot provisioning wiring** (`AccountProvisioningResult`/Service,
-     `CommitNewAccountExchangeAsync`) — next, separate session.
-   - **Slice C — idempotent backfill/recovery for existing pilots** — separate session.
+   - **Slices B/C — automatic Pilot provisioning/backfill** — superseded; do not commit or
+     implement. Per-business pilot grants use the existing authorized internal entitlement path.
+   - Complete the request-first PWA onboarding slices before taking the deferred P0 optional-module
+     UI gaps below.
    GAP-033 is not next unless Christian explicitly reprioritizes it.
 2. **GAP-033 — public-intake trust and tracker access truthfulness** (P1, `ophalo-web`), full
    scope in
@@ -78,9 +82,9 @@ a coding batch, independent of GAP-033.
 
 ## Deferred next work
 
-- **Pilot onboarding upgrade:** Session 2 (automatic Pilot package provisioning, ADR-496) is in
-  progress — see [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md) for the full session
-  list and locked release-gate design.
+- **Optional module UI:** P0 gaps GAP-070 and GAP-071 are deferred until the request-first pilot
+  onboarding phase is complete. They do not authorize a guided setup wizard, self-service billing,
+  or a customer entitlement-write endpoint.
 - **4g pilot request-close advisory:** preflight after the safety/usability sequence above. An
   advisory on outstanding Actual Work with a structured `Close anyway` pilot exception, not a hard
   Resolved→Closed gate. See [BL136 P](build-log/136-P-preflight.md).
@@ -91,7 +95,9 @@ a coding batch, independent of GAP-033.
   only after the controlled-pilot and rehearsal gates; see
   [BL135](build-log/135-minimum-office-closeout-mechanical-preflight.md).
 - **Settings & Getting Started V2 UI upgrade:** all three frontend-only slices (A, B, C) are
-  delivered; the product-owner screenshot-acceptance pass is still pending. See
+  delivered; the product-owner screenshot-acceptance pass for Public Link & Profile and Team is
+  still pending. Slice A's Getting Started/Home acceptance item is superseded by BL142 Session 3
+  (ADR-496 request-first onboarding removes that page). See
   [BL144](build-log/144-settings-and-getting-started-v2-upgrade.md).
 - **Price Book direct-cost visibility:** next after the Settings & Getting Started V2 upgrade
   completes acceptance. Extend the authorized Catalog Items list read contract with current

@@ -1,8 +1,13 @@
 # ADR-428 — Day-Zero Settings And Getting Started Redesign
 
 **Date:** 2026-07-09  
-**Status:** Locked  
+**Status:** Locked
 **Source:** Session 22 product review; in-progress Getting Started/Settings screenshot review; build-log 076
+
+> **Clarification — 2026-09-06:** An optional capability-package selection is not a return to a
+> guided setup wizard when it is non-blocking, commercially authorized, and separate from the
+> ready-to-use request loop. It belongs in the account/subscription experience, not the day-zero
+> Settings or Getting Started setup surface.
 
 ## Context
 

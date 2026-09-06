@@ -270,10 +270,10 @@ export function Requests({
     staleTime: 60_000,
   });
   const setup = guidedSetupQuery.data;
-  const showOnboardingBanner =
-    isOwnerOrAdmin &&
-    !!setup &&
-    !(setup.businessInfoComplete && setup.createIntakePageComplete && setup.addFirstRequestComplete);
+  // BL142 Session 3: the empty-state panel is about the zero-request workspace specifically —
+  // the public link and business profile are ready by default (ADR-428), so only the "has a
+  // request ever been added" fact gates it, not the full former onboarding checklist.
+  const showEmptyStatePanel = isOwnerOrAdmin && !!setup && !setup.addFirstRequestComplete;
 
   // GAP-042: businessName is minimal authenticated workspace-shell context, sourced from the
   // shared ["me"] cache (populated at app-shell mount) rather than a List-specific query — so
@@ -583,8 +583,7 @@ export function Requests({
         <div className="max-w-6xl mx-auto w-full">
 
         <RequestsWorkspaceHeader
-          showOnboardingBanner={showOnboardingBanner}
-          setup={setup}
+          showEmptyStatePanel={showEmptyStatePanel}
           onNavigateSettings={onNavigateSettings}
           onStartCapture={onStartCapture}
           pageTitle={pageTitle}

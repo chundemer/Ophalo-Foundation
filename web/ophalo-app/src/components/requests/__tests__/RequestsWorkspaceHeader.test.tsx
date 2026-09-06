@@ -8,8 +8,7 @@ import { RequestsWorkspaceHeader } from "../RequestsWorkspaceHeader";
 
 function baseProps(overrides: Partial<React.ComponentProps<typeof RequestsWorkspaceHeader>> = {}) {
   return {
-    showOnboardingBanner: false,
-    setup: undefined,
+    showEmptyStatePanel: false,
     onNavigateSettings: vi.fn(),
     onStartCapture: vi.fn(),
     pageTitle: "Requests for Apex Home Services",

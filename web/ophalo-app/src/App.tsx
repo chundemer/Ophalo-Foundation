@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { AuthGuard } from "./components/AuthGuard";
 import { QuickCapture } from "./components/QuickCapture";
 import { KeepButton } from "./components/keep/KeepButton";
-import { Home } from "./pages/Home";
 import { RequestWorkbenchShell } from "./components/requests/RequestWorkbenchShell";
 import { RequestDetail } from "./pages/RequestDetail";
 import { ActualWorkWorkspacePage } from "./pages/ActualWorkWorkspacePage";
@@ -39,7 +38,6 @@ const PHONE_OMITTED_NAV_IDS: ReadonlySet<NavItem["id"]> = new Set(["pricebook", 
 // reliable source (e.g. role in session claims, a dedicated access endpoint).
 
 type AppRoute =
-  | { page: "home" }
   | { page: "requests" }
   | { page: "settings"; section?: "public-profile" | "policy" | "team" }
   | { page: "pricebook"; tab?: "items" | "assemblies" | "nudges" }
@@ -75,7 +73,6 @@ export function getRouteFromLocation(): AppRoute {
   // Split the Price Book path from its query string before matching detail routes — otherwise
   // `#/pricebook?tab=assemblies` would fail every `#/pricebook/...` pattern and fall through.
   const [hashPath, hashQuery] = hash.split("?");
-  if (hashPath === "#/getting-started") return { page: "home" };
   if (hashPath === "#/settings") {
     const section = new URLSearchParams(hashQuery ?? "").get("section");
     return {
@@ -118,7 +115,7 @@ export function getRouteFromLocation(): AppRoute {
 }
 
 export interface NavItem {
-  id: "home" | "requests" | "settings" | "pricebook";
+  id: "requests" | "settings" | "pricebook";
   label: string;
   icon: React.ReactNode;
 }
@@ -131,7 +128,6 @@ export function getNavItems(role: AccountRole, entitled: boolean): NavItem[] {
     { id: "requests", label: "Requests", icon: <Inbox className="h-4 w-4" /> },
   ];
   if (role === "owner" || role === "admin") {
-    items.push({ id: "home", label: "Getting Started", icon: null });
     if (entitled) {
       items.push({ id: "pricebook", label: "Price Book", icon: <Tag className="h-4 w-4" /> });
     }
@@ -243,8 +239,6 @@ function AppShell() {
       history.pushState(null, "", `${base}${suffix}`);
     } else if (newRoute.page === "pricebook-assembly") {
       history.pushState(null, "", `${base}#/pricebook/assembly/${newRoute.offeringAssemblyId}`);
-    } else if (newRoute.page === "home") {
-      history.pushState(null, "", `${base}#/getting-started`);
     } else if (newRoute.page === "settings") {
       const suffix = newRoute.section ? `?section=${newRoute.section}` : "";
       history.pushState(null, "", `${base}#/settings${suffix}`);
@@ -331,8 +325,7 @@ function AppShell() {
       : undefined;
 
   const activeNavId: NavItem["id"] =
-    route.page === "home" ? "home"
-    : route.page === "settings" ? "settings"
+    route.page === "settings" ? "settings"
     : route.page === "pricebook" || route.page === "pricebook-item" || route.page === "pricebook-assembly" ? "pricebook"
     : "requests";
 
@@ -341,7 +334,6 @@ function AppShell() {
   const usesTopNavShell =
     route.page === "requests" ||
     route.page === "detail" ||
-    route.page === "home" ||
     route.page === "settings" ||
     route.page === "pricebook" ||
     route.page === "pricebook-item" ||
@@ -442,17 +434,6 @@ function AppShell() {
             </button>
             {(role === "owner" || role === "admin") && (
               <>
-                <button
-                  type="button"
-                  onClick={() => navigate({ page: "home" })}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
-                    activeNavId === "home"
-                      ? "bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)] font-semibold"
-                      : "text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
-                  }`}
-                >
-                  Getting Started
-                </button>
                 {priceBookEntitled && (
                   <button
                     type="button"
@@ -586,14 +567,6 @@ function AppShell() {
             onNavigateToActualWorkspace={navigateToActualWorkspace}
           />
         )}
-        {route.page === "home" && (
-          <Home
-            onStartCapture={openCapture}
-            role={role}
-            onNavigateSettings={navigateToSettings}
-            onNavigateRequests={navigateToRequests}
-          />
-        )}
         {route.page === "settings" && (
           <Settings
             callerRole={role}
@@ -679,10 +652,10 @@ function AppShell() {
         />
       )}
 
-      {/* Mobile overflow nav — the only mobile-discoverable path to Getting Started (Session 2e.4,
-          build-log/112: no manually-known URL required). Settings and Price Book (and, since
-          Account Administration lives inside Settings, that too) are unconditionally omitted from
-          `items` — phone pilot posture locked/corrected 2026-08-26. This menu only ever opens
+      {/* Mobile overflow nav (Session 2e.4, build-log/112: no manually-known URL required).
+          Settings and Price Book (and, since Account Administration lives inside Settings, that
+          too) are unconditionally omitted from `items` — phone pilot posture locked/corrected
+          2026-08-26. This menu only ever opens
           below md:/768px (the header holding its trigger is `md:hidden`), which is also the only
           width where the desktop sidebar/aside — where these routes remain reachable — is absent;
           there is no width where both this menu and the sidebar are unavailable. */}

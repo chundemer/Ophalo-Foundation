@@ -11,23 +11,26 @@ and live in production.
 (unchanged). `FieldScopeSearchApiService` is locked ungated (Christian's call, 2026-09-04) — it is
 the shared, price-free catalog/assembly search behind both the Proposed Work composer and the
 already-released Actual Work capture flow, and creates no Proposed Work state itself; the
-state-changing endpoints it feeds (field-select, expand-assembly) are gated. **Session 2 is now
-unblocked and in progress.**
+state-changing endpoints it feeds (field-select, expand-assembly) are gated. **Session 2 Slice A
+is complete. On 2026-09-06, ADR-496 was amended: its planned automatic-Pilot-provisioning Slices B
+and C are superseded and must not be committed.**
 **Date:** 2026-09-04
 **Authority:** [ADR-496](../decisions/ADR-496-pilot-package-provisioning-and-release-visibility.md),
 [ADR-428](../decisions/ADR-428-day-zero-settings-getting-started-redesign.md), and ADR-454.
 
 ## Outcome to deliver
 
-A pilot account is provisioned with the Price Book package automatically. The product opens on the
-daily request loop—not a setup checklist. Price Book is an intentionally guided next layer; Proposed
-Work and Quotes remain unpublished until separately released.
+A Pilot account opens on the daily request loop—not a setup checklist. Price Book is an optional
+capability, enabled per business by an authorized internal OpHalo operator during the pilot; it is
+not derived from Pilot classification. Proposed Work and Quotes remain unpublished until separately
+released.
 
 ```text
 Pilot account created
   -> public link + response-policy defaults are ready
   -> empty Requests workspace: Open customer view | Add your first request
-  -> Price Book activation: add the services/materials/fees used by this business
+  -> optional operator-assisted Price Book enrollment when it fits the business
+  -> entitled account: Price Book activation adds the services/materials/fees used by this business
   -> later, when released: Proposed Work and Quotes
 ```
 
@@ -46,12 +49,14 @@ Pilot account created
 
 ## Locked rollout choices
 
-- Price Book is visible immediately to entitled Pilot Owner/Admin users, but remains secondary to
-  Requests in first-run guidance.
+- Price Book is visible immediately to entitled Owner/Admin users, but remains secondary to
+  Requests in first-run guidance. Pilot classification alone does not grant it.
 - Proposed Work and Quotes are unreleased until this onboarding upgrade is complete and explicitly
   signed off. Their server-side release gates must remain closed regardless of package enrollment.
-- Automatic Pilot enrollment uses explicit `SystemProvisioning` audit provenance. Do not create a
-  bootstrap/pseudo AccountUser and do not attribute the automated grant to the new customer owner.
+- A pilot grant is an authenticated internal-operator action and uses `InternalUser` provenance
+  with that operator's real identity. Do not create a bootstrap/pseudo AccountUser or attribute a
+  grant to the customer owner. `SystemProvisioning` is reserved for a future authorized automated
+  commercial grant.
 
 ## Code-session list for Gemini
 
@@ -196,18 +201,19 @@ closed). 4/4 policy unit tests pass; 6/6 focused release-gate integration tests 
 pre-existing ProposedScope/ScopeNudge/QuickScopeAction/FieldScopeSearch integration tests
 unaffected; 14/14 architecture tests pass; no checked-in appsettings sets the key.
 
-### Session 2 — atomic pilot package provisioning
+### Session 2 — enrollment provenance foundation; automatic provisioning superseded
 
 **Prerequisite — satisfied:** Session 1's release gate is implemented, verified, merged
 (`eb33f6a5`, `226778af`), and deployed (verified 2026-09-05). The full technician-reachable,
 state-changing/scope-exposing Proposed Work surface (create/update/remove/restore/submit/read,
 field-select, expand-assembly, Paired Nudges field read, field quick-scope-action read) is gated
 and live in production. `FieldScopeSearchApiService` is locked ungated by design (see Session 1
-above). Session 2 may begin.
+above). Only the Slice A provenance foundation proceeded; the automatic-provisioning direction is
+superseded below.
 
-**Goal:** migrate the enrollment audit model, then ensure every newly provisioned
-`AccountClassification.Pilot` gets one system-provisioned enrolled package row in the same
-transaction as the account graph; Production and InternalTest accounts do not.
+**Original goal (superseded 2026-09-06):** migrate the enrollment audit model, then automatically
+grant every newly provisioned `AccountClassification.Pilot` a package row. The provenance foundation
+remains delivered; the automatic grant and blanket recovery policy do not.
 
 - Add a `change_source` (or equivalently named) enrollment provenance value with at least
   `InternalUser` and `SystemProvisioning`. Migrate existing rows as `InternalUser`.
@@ -270,12 +276,12 @@ independently-compiling slices (2026-09-05), the same way BL140 Batch 2 was spli
   passed.
   `dotnet ef database update` applied cleanly against Christian's local dev database
   (2026-09-06), alongside the previously-pending `AddPostAuthContinuation` migration.
-- **Slice B — pilot provisioning wiring.** `AccountProvisioningResult` grows an optional
-  enrollment; `AccountProvisioningService` builds it for `AccountClassification.Pilot` (stays
-  pure, uses its existing `nowUtc` input); `EfAuthCodePersistence.CommitNewAccountExchangeAsync`
-  inserts it in the existing account-creation transaction.
-- **Slice C — idempotent backfill/recovery for existing pilot accounts** missing the
-  system-provisioned enrollment row.
+- **Slice B — automatic Pilot provisioning wiring — superseded; do not commit.** The local
+  prototype is not an approved behavior because it binds commercial capability access to the Pilot
+  classification.
+- **Slice C — blanket Pilot backfill/recovery — superseded; do not implement.** Existing pilot
+  businesses are assessed and enrolled individually by an authorized internal operator when the
+  package fits their workflow.
 
 Each slice is its own Claude session per CLAUDE.md's "start a fresh session after an approved
 commit" rule.
@@ -364,10 +370,11 @@ existing entitled pilots.
 
 ## Manual acceptance scenarios
 
-1. Create a new Pilot account. Confirm package enrollment is automatic, the public link is live,
-   and the empty Request state presents only the two core actions.
-2. Create a non-pilot account. Confirm the package is not automatically enrolled.
-3. As a pilot Owner/Admin, use Price Book according to the selected discovery policy.
+1. Create a Pilot account. Confirm its public link is live and the empty Request state presents
+   only the two core actions; confirm no Price Book grant is inferred from classification.
+2. As an authorized internal OpHalo operator, enroll a business that explicitly selected Price
+   Book; confirm the audit records that operator and the entitled Owner/Admin can use Price Book.
+3. Confirm an unenrolled business remains able to use Requests without Price Book.
 4. Attempt Proposed Work/Quote HTTP mutations before release; confirm they are rejected.
 5. Use a Safari device without a configured mail handler and confirm the product does not describe
    `mailto:` as an automatic send.

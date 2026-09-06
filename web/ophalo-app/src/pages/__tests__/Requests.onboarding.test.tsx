@@ -3,12 +3,18 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Requests } from "../Requests";
-import type { KeepBusinessSetupResult, KeepRequestListResult, KeepSetupResult } from "../../lib/apiClient";
+import type {
+  IntakeStatusResult,
+  KeepBusinessSetupResult,
+  KeepRequestListResult,
+  KeepSetupResult,
+} from "../../lib/apiClient";
 
 const mockGetRequests = vi.fn();
 const mockGetAvailableRequests = vi.fn();
 const mockGetGuidedSetup = vi.fn();
 const mockGetSetup = vi.fn();
+const mockGetIntake = vi.fn();
 
 vi.mock("../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../lib/apiClient")>(
@@ -22,6 +28,7 @@ vi.mock("../../lib/apiClient", async () => {
       getAvailableRequests: (...args: unknown[]) => mockGetAvailableRequests(...args),
       getGuidedSetup: (...args: unknown[]) => mockGetGuidedSetup(...args),
       getSetup: (...args: unknown[]) => mockGetSetup(...args),
+      getIntake: (...args: unknown[]) => mockGetIntake(...args),
     },
   };
 });
@@ -33,11 +40,11 @@ const emptyList: KeepRequestListResult = {
   listContext: { view: "default", isDefaultCommandCenter: true, isHistory: false, isSearch: false },
 };
 
-const incompleteSetup: KeepBusinessSetupResult = {
-  businessInfoComplete: false,
+const zeroRequestSetup: KeepBusinessSetupResult = {
+  businessInfoComplete: true,
   addFirstRequestComplete: false,
   reviewCustomerPageComplete: false,
-  createIntakePageComplete: false,
+  createIntakePageComplete: true,
   shareIntakePageComplete: false,
   buildTeamComplete: false,
   useMobileComplete: false,
@@ -45,17 +52,21 @@ const incompleteSetup: KeepBusinessSetupResult = {
   intendedTeamSize: null,
 };
 
-const requestPageReadySetup: KeepBusinessSetupResult = {
-  ...incompleteSetup,
-  businessInfoComplete: true,
-  createIntakePageComplete: true,
+const hasRequestsSetup: KeepBusinessSetupResult = {
+  ...zeroRequestSetup,
+  addFirstRequestComplete: true,
 };
 
-const completeSetup: KeepBusinessSetupResult = {
-  ...incompleteSetup,
-  businessInfoComplete: true,
-  createIntakePageComplete: true,
-  addFirstRequestComplete: true,
+const liveIntake: IntakeStatusResult = {
+  hasActiveLink: true,
+  publicSlug: "acme-plumbing",
+  createdAtUtc: "2026-08-01T00:00:00Z",
+};
+
+const noLinkYetIntake: IntakeStatusResult = {
+  hasActiveLink: false,
+  publicSlug: null,
+  createdAtUtc: null,
 };
 
 const mockBusinessSetup: KeepSetupResult = {
@@ -101,25 +112,27 @@ beforeEach(() => {
   mockGetAvailableRequests.mockReset();
   mockGetGuidedSetup.mockReset();
   mockGetSetup.mockReset();
+  mockGetIntake.mockReset();
   mockGetRequests.mockResolvedValue(emptyList);
   mockGetAvailableRequests.mockResolvedValue({ requests: [], pageInfo: emptyList.pageInfo });
   mockGetSetup.mockResolvedValue(mockBusinessSetup);
+  mockGetIntake.mockResolvedValue(liveIntake);
 });
 
-describe("Requests onboarding banner", () => {
-  it("shows the banner for an Owner with incomplete core setup", async () => {
-    mockGetGuidedSetup.mockResolvedValue(incompleteSetup);
+describe("Requests empty-state panel (BL142 Session 3)", () => {
+  it("shows the panel for an Owner with zero requests", async () => {
+    mockGetGuidedSetup.mockResolvedValue(zeroRequestSetup);
     renderRequests("owner");
 
-    expect(await screen.findByText("Set up your customer request page")).toBeInTheDocument();
+    expect(await screen.findByText("Your public request link is live")).toBeInTheDocument();
   });
 
-  it("does not show the banner for an Operator", async () => {
-    mockGetGuidedSetup.mockResolvedValue(incompleteSetup);
+  it("does not show the panel for an Operator", async () => {
+    mockGetGuidedSetup.mockResolvedValue(zeroRequestSetup);
     renderRequests("operator");
 
     await waitFor(() => expect(screen.getByText("Requests")).toBeInTheDocument());
-    expect(screen.queryByText("Set up your customer request page")).not.toBeInTheDocument();
+    expect(screen.queryByText("Your public request link is live")).not.toBeInTheDocument();
     expect(mockGetGuidedSetup).not.toHaveBeenCalled();
     expect(mockGetSetup).not.toHaveBeenCalled();
   });
@@ -127,61 +140,72 @@ describe("Requests onboarding banner", () => {
   // Viewer never reaches the Requests page component: App.tsx renders AccessLimited
   // for role === "viewer" instead of mounting Requests at all.
 
-  it("navigates the primary CTA directly to Settings public-profile", async () => {
-    mockGetGuidedSetup.mockResolvedValue(incompleteSetup);
-    const user = userEvent.setup();
-    const { onNavigateSettings } = renderRequests("owner");
+  it("opens the customer view on the live link", async () => {
+    mockGetGuidedSetup.mockResolvedValue(zeroRequestSetup);
+    renderRequests("owner");
 
-    const cta = await screen.findByRole("button", { name: "Set up request page" });
-    await user.click(cta);
-
-    expect(onNavigateSettings).toHaveBeenCalledWith("public-profile");
+    const link = await screen.findByRole("link", { name: "Open customer view" });
+    expect(link).toHaveAttribute("href", expect.stringContaining("/keep/s/acme-plumbing"));
   });
 
-  it("advances the primary CTA to Quick Capture once the request page is set up", async () => {
-    mockGetGuidedSetup.mockResolvedValue(requestPageReadySetup);
+  it("routes the Add-your-first-request action to Quick Capture", async () => {
+    mockGetGuidedSetup.mockResolvedValue(zeroRequestSetup);
     const user = userEvent.setup();
-    const { onStartCapture, onNavigateSettings } = renderRequests("owner");
+    const { onStartCapture } = renderRequests("owner");
 
     const cta = await screen.findByRole("button", { name: "Add your first request" });
     await user.click(cta);
 
     expect(onStartCapture).toHaveBeenCalled();
-    expect(onNavigateSettings).not.toHaveBeenCalled();
   });
 
-  it("opens Quick Capture from the first-request checklist item", async () => {
-    mockGetGuidedSetup.mockResolvedValue(incompleteSetup);
+  it("directs to Settings when the link isn't ready yet, instead of claiming it's live", async () => {
+    mockGetGuidedSetup.mockResolvedValue(zeroRequestSetup);
+    mockGetIntake.mockResolvedValue(noLinkYetIntake);
     const user = userEvent.setup();
-    const { onStartCapture } = renderRequests("owner");
+    const { onNavigateSettings } = renderRequests("owner");
 
-    const step = await screen.findByRole("button", { name: /Add your first customer request/ });
-    await user.click(step);
+    expect(await screen.findByText("Your public request link is being set up")).toBeInTheDocument();
 
-    expect(onStartCapture).toHaveBeenCalled();
+    const cta = screen.getByRole("button", { name: "Check in Settings" });
+    await user.click(cta);
+
+    expect(onNavigateSettings).toHaveBeenCalledWith("public-profile");
+    expect(screen.queryByRole("link", { name: "Open customer view" })).not.toBeInTheDocument();
   });
 
-  it("hides the banner once the real core setup fields are complete", async () => {
-    mockGetGuidedSetup.mockResolvedValue(completeSetup);
+  it("shows a checking heading, not a premature live claim, while the intake query is in flight", async () => {
+    mockGetGuidedSetup.mockResolvedValue(zeroRequestSetup);
+    let resolveIntake!: (value: IntakeStatusResult) => void;
+    mockGetIntake.mockReturnValue(new Promise<IntakeStatusResult>((resolve) => { resolveIntake = resolve; }));
+    renderRequests("owner");
+
+    expect(await screen.findByText("Checking your public request link")).toBeInTheDocument();
+    expect(screen.queryByText("Your public request link is live")).not.toBeInTheDocument();
+    expect(screen.queryByText("Your public request link is being set up")).not.toBeInTheDocument();
+
+    resolveIntake(liveIntake);
+    expect(await screen.findByText("Your public request link is live")).toBeInTheDocument();
+  });
+
+  it("hides the panel once the business has added its first request", async () => {
+    mockGetGuidedSetup.mockResolvedValue(hasRequestsSetup);
     renderRequests("owner");
 
     await waitFor(() => expect(mockGetGuidedSetup).toHaveBeenCalled());
-    expect(screen.queryByText("Set up your customer request page")).not.toBeInTheDocument();
+    expect(screen.queryByText("Your public request link is live")).not.toBeInTheDocument();
   });
 
   // Layout glitch reported from the pilot demo: pane mode's request-list column is a fixed
-  // 360px, so the default full-width banner (built around `sm:` breakpoints) never resolved
-  // to its wide layout there and rendered squeezed into the list column. The compact banner
+  // 360px, so the default full-width panel (built around `sm:` breakpoints) never resolved
+  // to its wide layout there and rendered squeezed into the list column. The compact panel
   // is the purpose-built stack-only layout for that column.
-  it("renders the compact banner (not the full-width one) in pane mode", async () => {
-    mockGetGuidedSetup.mockResolvedValue(incompleteSetup);
+  it("renders the compact panel (not the full-width one) in pane mode", async () => {
+    mockGetGuidedSetup.mockResolvedValue(zeroRequestSetup);
     renderRequests("owner", true);
 
-    expect(await screen.findByText("Set up your request page")).toBeInTheDocument();
-    expect(screen.queryByText("Set up your customer request page")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("Give customers a clear place to start a request and keep work from slipping through."),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Set up request page" })).toBeInTheDocument();
+    const region = await screen.findByRole("region", { name: "Get your first request" });
+    expect(region.className).toContain("rounded-lg");
+    expect(region.className).not.toContain("rounded-xl");
   });
 });
