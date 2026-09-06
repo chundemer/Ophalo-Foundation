@@ -12,15 +12,17 @@ Historical findings, resolved work, and superseded implementation notes were rem
 - **In progress:** A bounded implementation is underway; the stated remainder is still required.
 - **Reopened:** A prior remedy was incomplete or superseded.
 - **Needs decision:** Product direction must be locked before implementation.
+- **Deferred:** A real item deliberately not scheduled now; the deferral condition is stated.
+- **Resolved:** Delivered and accepted; retained here only as a concise pointer to the evidence.
 
-## Tomorrow's Launch Gates
+## Launch Gates
 
 These are not an instruction to ship every remaining item before a supervised pilot. They define the conditions that must be satisfied before enabling the relevant workflow.
 
 | Item | Gate condition |
 | --- | --- |
-| GAP-039 | Required before any customer-facing production pilot. |
-| GAP-068 | Required before pilot launch — a founder/owner with two+ active memberships cannot currently sign in at all. |
+| GAP-039 | Required before any customer-facing production pilot. Browser/API Sentry code is merged; founder-owned Sentry/Railway/Vercel console configuration, alert-delivery verification, and the Batch 4 production-candidate gate remain. |
+| GAP-068 | Resolved (`755c7eaf`; manual verification `2cda916d` / BL143). |
 | GAP-033 | Resolved (`11c19d3d`, `89a776d8`). |
 | GAP-048 | Required before using email to share private customer request pages. |
 | GAP-047 | Required if staff relies on Internal priority for operational triage. |
@@ -31,9 +33,9 @@ These are not an instruction to ship every remaining item before a supervised pi
 
 Complete each numbered slice with focused automated coverage and a production-candidate/manual check where applicable. Do not start a dependent slice before its prerequisite is accepted.
 
-1. **Release safety and truthful public entry:** GAP-039, then GAP-040. Establish safe production observability and configuration validation first; make the public request journey and published claims truthful second. (GAP-033 public-intake trust and tracker event-feed allowlist — resolved, commits `11c19d3d`, `89a776d8`. GAP-056 customer SMS/QR handoff sender/business context — resolved, commit `0fc7a2a`.)
+1. **Release safety and truthful public entry:** GAP-039, then GAP-040. GAP-039's browser/API Sentry code is merged (`d7d0ee22`, `fd34af34`, `baf07265`, `a69a8edf`, `70e75a3f`); its remaining scope is founder-owned console configuration, alert-delivery verification, and the Batch 4 production-candidate gate. GAP-040 makes the public request journey and published claims truthful. (GAP-033 public-intake trust and tracker event-feed allowlist — resolved, commits `11c19d3d`, `89a776d8`. GAP-056 customer SMS/QR handoff sender/business context — resolved, commit `0fc7a2a`.)
 2. **Field-work correctness:** No active item. (GAP-055 Actual Work recorder ownership — resolved across Batches A–D: migration/ownership `b3b3d41`, recorder authorization `d26b955` and `72ce6a5`, audited transfer `c7ce822`, and Owner/Admin recovery UI `de40491`.)
-3. **Phone and capture integrity:** GAP-016 and GAP-021 resolved (ADR-444 ten-digit path consolidated across backend and all web client paths). GAP-051 public-web done (BL147); its remaining native-parity scope is deferred to Session 14. Next: GAP-025.
+3. **Phone and capture integrity:** GAP-016 and GAP-021 resolved (ADR-444 ten-digit path consolidated across backend and all web client paths). GAP-051 public-web done (BL147); its remaining native-parity scope is deferred to Session 14. GAP-025 is deliberately deferred: ADR-492 is a narrow, explicit historical-phone continuity guardrail, not a solution for customer phone-number changes.
 4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, GAP-049, and GAP-063. First establish shared responsive seams without behavior change; then make Owner/Admin review, lifecycle, attention, and timing actions unmistakable. See [BL137](build-log/137-request-detail-and-queue-usability-handoff.md) for the bounded execution order.
 5. **Request workspace next:** GAP-027 and GAP-045 are resolved. Implement GAP-067 first as the presentation-only Request List/Detail foundation, after a brief read-only GAP-042 business-identity placement preflight; then implement GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. The row grammar remains locked: one lifecycle cue, one server-ranked exception cue, and one next-action line. GAP-067 must preserve that grammar, server ranking, and existing behavior; do not merge a broad queue redesign into it. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `0cfb335`.)
 6. **Pilot operating loop and final usability review:** GAP-064 (after GAP-039), GAP-037, GAP-038, and GAP-054. Establish a reliable new-customer-request alert path before relying on intake to create live work, then deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
@@ -42,21 +44,26 @@ Complete each numbered slice with focused automated coverage and a production-ca
 
 ### GAP-068 — Multi-workspace sign-in is a dead end; invited users have no display name
 
-**Status:** Open
+**Status:** Resolved
 **Severity:** P0
 **Area:** Foundation auth (`/auth/signin`, `/auth/start`, `/auth/exchange`, invite acceptance)
 
-An email with two or more active `AccountUser` memberships never receives a magic link — `FindEligibleSignInMemberByEmailAsync`/`ClassifyStartRequestAsync` collapse ambiguity to "no eligible member," and `SignInAuthService` treats that as ordinary enumeration-safe neutral success with no code issued. This is a real, permanent lock-out (the founder's own account is currently affected), not a deferred UX nicety. Separately, invite acceptance creates a global `User` with `Name = string.Empty`; `/auth/me` surfaces that as `userName: null`, leaving invited users with no attributable identity in the workspace header or customer-facing activity.
+An email with two or more active `AccountUser` memberships never received a magic link, and invite
+acceptance created a global `User` with a blank name that surfaced as `userName: null`. Locked
+decision [ADR-497](decisions/ADR-497-post-auth-continuation-multi-workspace-signin-and-display-name.md):
+a single server-owned, single-use `PostAuthContinuation` row redeemed via `POST /auth/continue`,
+with `/auth/start` / `/auth/signin` responses enumeration-safe throughout.
 
-**Locked decision:** [ADR-497](decisions/ADR-497-post-auth-continuation-multi-workspace-signin-and-display-name.md). A single server-owned, single-use, ~10-minute `PostAuthContinuation` row covers name-blank sign-in, multi-membership sign-in, and name-blank invite acceptance; redeemed via new `POST /auth/continue`, which live-reverifies membership Active-ness and name-blankness rather than trusting a snapshot. `/auth/start`/`/auth/signin` responses stay enumeration-safe throughout.
-
-**Implementation order:** see [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md) — Slice 1 (`PostAuthContinuation` foundation, additive) **done, accepted**, Slice 2 (multi-membership selector + name gate at `/auth/exchange` + `/auth/continue`) next, Slice 3 (invite acceptance name gate), Slice 4 (`ophalo-web` frontend).
-
-**Done when:** A person with two active memberships can sign in and choose a workspace without a second email or a destructive membership edit; an invited user with no name is prompted once, and that name reaches `/auth/me` and attribution; all acceptance cases in ADR-497 are covered by automated tests.
+**Resolution:** Slices 1–4 merged to `main` — frontend completion `755c7eaf`; manual browser/network
+verification recorded (`2cda916d`) and in [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md),
+including a production-verified fix for an `AccountUsers.MembershipStatus` / `NormalizedEmail` data
+issue that was blocking multi-workspace selection for one email. ADR-497 acceptance cases are
+covered by automated tests.
 
 ### GAP-039 — Production failures and pilot health are not observable enough to earn trust
 
-**Status:** Open
+**Status:** In progress — browser/API Sentry implementation merged; founder-owned operational
+configuration and verification remain
 **Severity:** P0
 **Area:** Production reliability and internal product operations
 
@@ -70,9 +77,32 @@ An email with two or more active `AccountUser` memberships never receives a magi
 4. Configure Railway health checking against `/health/ready`, Sentry environment/DSN/release configuration, and the founder-email alert rule. Record a short runbook: inspect release/correlation ID, check health and Railway logs, decide mitigation versus rollback, and record the incident.
 5. Verify a production candidate with controlled server and browser failures, normal/unhealthy health responses, an invalid public-base URL, alert delivery, release identity, and automated redaction checks for representative PII and public-token paths.
 
-**Delivered:** Steps 1–2 — the API telemetry boundary (`SentryTelemetryScrubber` allowlist rebuild with residual-token discard), the `Sentry.AspNetCore` integration, the authenticated-only `account_id` / correlation-id tags, and the `Sentry__Dsn` production startup requirement — are implemented and accepted ([BL141](build-log/141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md), 2026-09-03). Steps 3–5 remain.
+**Delivered (code, merged):**
 
-**Done when:** Controlled server and browser failures arrive in Sentry with useful release/correlation context and no protected data; founder email alerting works; readiness/availability monitoring is verified; invalid required public configuration fails safely; and the runbook is usable by the founder.
+- Steps 1–2 — the API telemetry boundary (`SentryTelemetryScrubber` allowlist rebuild with
+  residual-token discard), the `Sentry.AspNetCore` integration, the authenticated-only `account_id`
+  / correlation-id tags, and the `Sentry__Dsn` production startup requirement
+  ([BL141](build-log/141-gap-039-batch-1-api-telemetry-boundary-and-error-capture.md), commit `baf07265`);
+  API readiness / correlation IDs / safe diagnostics (`d7d0ee22`); production smoke-test script and
+  runbook (`fd34af34`, `docs/runbook/production-smoke-test.md`).
+- Step 3 — the `@sentry/react` errors-only integration with redacted browser capture and a
+  fail-closed build gate (`70e75a3f`), and the single parsed `VITE_PUBLIC_BASE_URL` accessor with a
+  fail-safe configuration-error UI replacing every direct `.replace()` use (`a69a8edf`).
+- Step 4 — the operational runbook is in-repo (`docs/runbook/sentry-configuration.md`).
+
+**Remaining — founder-owned, operational (no repository evidence that these are done):**
+
+- Enter the API and Workbench-PWA Sentry DSNs, the `/health/ready` healthcheck path, and the
+  release/environment settings in the Railway and Vercel consoles per the runbook.
+- Create the founder-email alert rule in the Sentry console and verify alert delivery.
+- Step 5 / Batch 4 production-candidate gate: run the controlled server and browser failure,
+  health-response, invalid-public-URL, redaction, and alert-delivery checks against the production
+  candidate and record the results.
+
+**Done when:** Controlled server and browser failures arrive in Sentry with useful
+release/correlation context and no protected data; founder email alerting is verified to deliver;
+readiness/availability monitoring is verified; invalid required public configuration fails safely;
+and the runbook is usable by the founder.
 
 ### GAP-069 — Production API container does not yet persist Data Protection keys or recognize its TLS-terminating proxy
 
@@ -110,8 +140,10 @@ operational runbook.
 
 ### GAP-070 — Optional Price Book enrollment lacks a complete entitlement-aware shell
 
-**Status:** Open — defer until request-first pilot onboarding is complete
-**Severity:** P0
+**Status:** Deferred — optional-module work; not blocking for the request-first controlled pilot.
+The request-first pilot onboarding phase (BL142) is complete, but this remains deferred pending the
+GAP-071 commercial/optional-module workflow decision.
+**Severity:** P2
 **Area:** Authenticated PWA navigation, routes, and capability-state refresh
 
 Price Book is an optional account capability, not a Pilot-classification side effect. An unenrolled
@@ -133,8 +165,10 @@ and a capability refresh changes the shell without relying on a new session/JWT 
 
 ### GAP-071 — Optional Modules discovery and commercial handoff are not yet a truthful product surface
 
-**Status:** Open — defer until request-first pilot onboarding is complete
-**Severity:** P0
+**Status:** Deferred — needs a product/commercial-workflow decision before it can be scheduled; not
+blocking for the request-first controlled pilot. During the pilot, entitlement stays on the
+authorized internal path (`internal.entitlements.manage`, `InternalUser`-attributed).
+**Severity:** P2
 **Area:** Account/subscription experience and pilot operator workflow
 
 Price Book configuration belongs in Business Settings only after entitlement. Package discovery and
@@ -235,11 +269,24 @@ Native parity is the only remaining scope and cannot land until the native proje
 
 ### GAP-025 — Quick Capture hides request-phone-only customer continuity
 
-**Status:** Reopened
-**Severity:** P1
+**Status:** Needs decision — deliberately deferred from the next pilot coding session
+**Severity:** P2
 **Area:** Quick Capture identity lookup
 
-Implement ADR-492: retain canonical-customer matches, but render a request-phone-only hit as an explicit possible existing customer with up to three active-request cards and a clear choice to open, reuse, or create new. Never auto-select, link, navigate, or silently backfill; preserve exact, account-scoped normalized lookup and the no-candidate-cap protections.
+ADR-492's explicit possible-customer flow is substantially implemented and remains the only
+authorized response to a request-phone-only hit: no automatic attach, navigation, customer
+creation, or canonical-phone backfill. It is **not** a customer phone-number change feature.
+
+`KeepCustomer.CanonicalPhone` is currently immutable, so a customer whose permanently changed
+number has never been deliberately attached to a prior request will still be created as a new
+customer. A future, separately approved identity-lifecycle decision would need an editable current
+unique phone plus audited verified historical aliases, with `KeepCustomerId` as the durable
+identity. Do not introduce fuzzy matching on name, email, address, or request-phone history.
+
+For the pilot, retain the narrow ADR-492 guardrail and investigate only a concrete regression in
+that existing flow. Do not make GAP-025 the next coding session or broaden its scope without pilot
+evidence and an approved identity-lifecycle decision. Minimize active-work disclosure on a
+phone-only possible match because the number may be stale, shared, or recycled.
 
 ### GAP-019 — Request Detail needs durable shared responsive seams before further behavior changes
 
@@ -534,7 +581,7 @@ Render **Update customer** before **Log contact** whenever both actions are allo
 
 ### GAP-065A — An active Actual Work Draft no longer hides prior submitted visits (UI slice)
 
-**Status:** Resolved (`4fbda15`)
+**Status:** Resolved (fix `4fbda15`; recorded `767bee83`)
 **Severity:** P1 (narrow UI slice of GAP-065)
 **Area:** Request Detail — Actual Work section
 
@@ -547,8 +594,8 @@ no workspace route. Owner/Admin financial-review authorization is not broadened.
 `RequestDetailActualWorkSection.test.tsx` (6 focused tests); `src/pages/request-detail` suite 425
 passed; tsc / `check:tokens` / `vite build` / `git diff --check` clean.
 
-The broader GAP-065 queue **Internal review pending** cue, the persistent Office Review navigation
-affordance, and the server-authoritative projection remain **Needs decision** below.
+The broader GAP-065 queue cue, the persistent Office Review destination, and the server-authoritative
+projection are now delivered — see the resolved GAP-065 entry.
 
 ### GAP-064 — A new customer request can arrive without reliably alerting accountable staff
 
@@ -586,63 +633,23 @@ and that no customer data beyond the minimum notification payload is exposed.
 
 ### GAP-065 — Owner/Admin internal financial-review work is hard to discover from requests
 
-**Status:** Open
+**Status:** Resolved
 **Severity:** P1
 **Area:** Request List, Office Review navigation, and Actual Work review context
 
-**Implementation contract:** [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md)
+An Owner/Admin can now open Request Detail once, enter any outstanding submitted visit directly from
+a **Pending financial reviews (N)** card, review one visit, and deliberately continue to the next
+via the wide-workspace pending-visit switcher; a quiet, server-authoritative request-row cue and the
+persistent Office Review destination surface the work in the queue without touching request ranking,
+attention, or the server review gate. Locked boundaries and the full delivery record are in
+[BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md); the
+cross-module signal contract is [ADR-463](decisions/ADR-463-keeprequest-work-signal.md).
 
-**Locked product boundary:** A submitted Actual Work visit is an immutable, dated field record;
-it is never merged with another visit merely because both belong to the same request or service
-account. Financial review is also per visit, preserving the submitted price/cost snapshots,
-performer attribution, visit notes, correction/supersession history, and audit trail. A future
-customer charge may group one or more reviewed visits, but that billing/invoice grouping is not a
-current Keep entity or scope.
-
-**Locked workflow rule:** **submitted and unreviewed is an active office task; reviewed is
-history.** A current Actual Work Draft is not review work, but it must never hide an earlier
-submitted/unreviewed visit.
-
-**Phased resolution:**
-
-1. **Request Detail direct entry (first implementation slice).** For Owner/Admin only, promote
-   every submitted, unreviewed visit into a factual **Pending financial reviews (N)** task card in
-   the Actual Work region, ahead of passive Visit history. Each visit gets its own row with
-   submitted timestamp, technician/recorder where truthfully available, line count, and a direct
-   **Review financials** route to that exact workspace visit. Use **Ready to review** for
-   financially complete-but-unreviewed work, **Needs cost/price resolution** when applicable, and
-   reserve **Review complete** for a visit with `reviewedAtUtc`. Keep reviewed and superseded
-   records in passive history. The completed GAP-065A history fix remains in force.
-2. **Request-scoped workspace continuation (second slice).** Preserve the exact-visit deep link,
-   but add a compact Owner/Admin pending-visit switcher in the wide financial-review workspace.
-   It lists the outstanding submitted visits for this request, with the selected visit explicit.
-   After a successful review, show confirmation and **Review next pending visit** plus **Back to
-   request**; never auto-navigate. Switching with a dirty reviewer note or open financial
-   resolution input requires a discard confirmation. Reviewed visits may be available in a
-   secondary audit section, but pending visits are dominant.
-3. **Queue discoverability (separate preflight/implementation slices).** Add a quiet,
-   server-authoritative Owner/Admin request-row count cue such as **2 visits need review**. A
-   normal request-row click continues to open Request Detail; it must not unexpectedly jump to a
-   financial workspace. The existing account-wide Office/Actual Work Review destination should
-   become a clearly named, persistent destination with a truthful empty state. A later dedicated
-   cross-request review queue may offer one row per pending visit and a direct Review action, but
-   requires its own query, authorization, ranking, and empty-state preflight.
-
-**Guardrails:** Do not show review work for a Draft, reviewed or superseded visit, an
-Operator/Viewer, or a terminal request with no unreviewed submitted visit. Do not change request
-ranking, queue counts, attention severity, lifecycle status, financial-review authorization, or
-the server's review gate as a presentation fix. Any request-row cue/count must come from a
-server-authoritative projection, never client inference from lifecycle, Draft, or history data.
-Do not introduce a generic “Review all” action until its eligibility, per-visit reviewer-note
-semantics, resolution handling, and audit evidence are separately locked.
-
-**Done when:** An Owner/Admin can open Request Detail once, enter any outstanding visit directly,
-review one visit, and deliberately continue to the next outstanding visit without returning to the
-request list. The request-level review signal remains active until every submitted, unsuperseded
-visit is reviewed. Queue discovery is clear but remains distinct from customer-promise attention.
-Focused coverage proves multiple pending visits, reviewed/superseded visits, draft-plus-prior
-visit, role, dirty-switch, success continuation, deep-link, empty-state, and server-authoritative
-cue/count behavior.
+**Resolution:** all delivery slices committed — Slice 1B-server `faf7b64`, Slice 1B-client
+`e27c48c`, Slice 2 `6ab880b`, Slice 3a `baaeff1`, Slice 3b `f231126` (+ `606203d` compact pane-row
+amendment). Slice 3c closed documentation-only ([BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md)
+handoff). The cross-request one-row-per-visit review queue is explicitly out of scope and
+unscheduled — it needs its own query, authorization, ranking, and empty-state decision.
 
 ### GAP-066 — Catalog Item detail is not yet a usable financial and operational-impact workspace
 

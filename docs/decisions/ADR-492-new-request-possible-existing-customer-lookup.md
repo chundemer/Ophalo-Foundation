@@ -63,3 +63,23 @@ superseded. It hid active-work context and made a duplicate request too easy to 
 gate remains a brief decision point, not a customer-history workspace: exact matches use the
 existing customer-found screen; possible matches make uncertainty visible and require an operator
 choice.
+
+## Clarification (2026-09-06) — this is not customer phone-number lifecycle
+
+`CanonicalPhone` is currently immutable and is the account-scoped unique lookup key; there is no
+staff capability to change it. Consequently, this decision does **not** solve the ordinary case in
+which a known customer permanently receives a new phone number. A request-phone-only candidate can
+exist only when a prior request was deliberately attached to the customer while carrying a different
+entered phone number. It is not evidence that a previously unseen new number belongs to that
+customer.
+
+Do not expand GAP-025 into inferred identity matching by name, email, address, or raw request-phone
+history. If the pilot establishes a real need to maintain changed phone numbers, decide it as a
+separate customer-identity capability: `KeepCustomerId` remains the identity; a current normalized
+phone is unique and editable; prior verified numbers are retained as audited historical aliases; and
+each request retains its entered-phone snapshot. Until that decision is made, phone-only historical
+matches remain weak continuity evidence and must require deliberate staff confirmation.
+
+Because a stale, shared, or recycled number can identify an unrelated caller, the possible-match
+screen must disclose no more active-work detail than staff need to make that confirmation. This ADR
+does not authorize a customer-history browser or broad work disclosure from a bare phone entry.
