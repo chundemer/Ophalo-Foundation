@@ -108,21 +108,27 @@ describe("PriceBook", () => {
     mockGetCatalogItems.mockResolvedValue({ items: [], limit: 50, hasMore: false, nextCursor: null });
     renderPriceBook();
 
-    await waitFor(() => expect(screen.getByText("Your catalog is empty")).toBeInTheDocument());
-    expect(screen.getByText("Start with the parts, services, and fees you use most.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("What are you setting up?")).toBeInTheDocument());
+    expect(
+      screen.getByText("Add your first catalog item. Pick the kind that fits it best — you can add more later."),
+    ).toBeInTheDocument();
     expect(mockGetCatalogItems).toHaveBeenCalledWith({});
   });
 
-  it("a successful empty response hides the header CTA and shows only the empty-state CTA", async () => {
+  it("a successful empty response hides the header CTA and shows only the empty-state type choices", async () => {
     mockGetCatalogItems.mockResolvedValue({ items: [], limit: 50, hasMore: false, nextCursor: null });
     renderPriceBook();
 
-    await waitFor(() => expect(screen.getByText("Your catalog is empty")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("What are you setting up?")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Add catalog item" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add your first catalog item/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Material/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Equipment/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Service/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Fee/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /not sure — start blank/i })).toBeInTheDocument();
   });
 
-  it("a successful populated response shows the header CTA and hides the empty-state CTA", async () => {
+  it("a successful populated response shows the header CTA and hides the empty-state panel", async () => {
     mockGetCatalogItems.mockResolvedValue(oneItem);
     renderPriceBook();
 
@@ -130,8 +136,7 @@ describe("PriceBook", () => {
     // Exactly two: the mobile-width copy (title row) and the sm+ sticky-workspace-bar copy —
     // one semantic control shown once per breakpoint, never both at once on the same viewport.
     expect(screen.getAllByRole("button", { name: "Add catalog item" })).toHaveLength(2);
-    expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /add your first catalog item/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("What are you setting up?")).not.toBeInTheDocument();
   });
 
   it("workspace controls (search, category filter, status filter) render as one semantic set — not duplicated by the sticky desktop bar", async () => {
@@ -153,27 +158,47 @@ describe("PriceBook", () => {
     expect(stickyBar?.contains(screen.getByLabelText("Search catalog"))).toBe(true);
   });
 
-  it("both the header and empty-state CTAs open the same drawer", async () => {
+  it("both the header CTA and an empty-state type choice open the same drawer", async () => {
     const user = userEvent.setup();
     mockGetCatalogItems.mockResolvedValue({ items: [], limit: 50, hasMore: false, nextCursor: null });
     renderPriceBook();
 
-    await waitFor(() => expect(screen.getByText("Your catalog is empty")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: /add your first catalog item/i }));
+    await waitFor(() => expect(screen.getByText("What are you setting up?")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /^Service/ }));
     expect(screen.getByRole("dialog", { name: "New catalog item" })).toBeInTheDocument();
   });
 
-  it("does not render the empty-state CTA while loading or on error", async () => {
+  it("an empty-state type choice pre-selects that type in the drawer", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockResolvedValue({ items: [], limit: 50, hasMore: false, nextCursor: null });
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getByText("What are you setting up?")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /^Fee/ }));
+    const dialog = screen.getByRole("dialog", { name: "New catalog item" });
+    expect(within(dialog).getByLabelText(/type/i)).toHaveValue("Fee");
+  });
+
+  it("'Not sure — start blank' opens the drawer with the default type", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockResolvedValue({ items: [], limit: 50, hasMore: false, nextCursor: null });
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getByText("What are you setting up?")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /not sure — start blank/i }));
+    const dialog = screen.getByRole("dialog", { name: "New catalog item" });
+    expect(within(dialog).getByLabelText(/type/i)).toHaveValue("Material");
+  });
+
+  it("does not render the empty-state panel while loading or on error", async () => {
     mockGetCatalogItems.mockImplementation(() => new Promise(() => {}));
     renderPriceBook();
-    expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /add your first catalog item/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("What are you setting up?")).not.toBeInTheDocument();
 
     mockGetCatalogItems.mockReset().mockRejectedValue(new Error("boom"));
     renderPriceBook();
     await waitFor(() => expect(screen.getByText("Try again")).toBeInTheDocument());
-    expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /add your first catalog item/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("What are you setting up?")).not.toBeInTheDocument();
   });
 
   it("renders catalog rows, formatting NoStandalonePrice distinctly from a real price", async () => {
@@ -317,7 +342,7 @@ describe("PriceBook", () => {
     await user.type(screen.getByLabelText("Search catalog"), "nonexistent");
 
     await waitFor(() => expect(screen.getByText("No items match your filters")).toBeInTheDocument());
-    expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
+    expect(screen.queryByText("What are you setting up?")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Add catalog item" }).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "Reset all" }));
@@ -460,14 +485,14 @@ describe("PriceBook", () => {
 
     // The default-Active list comes back empty, then the zero-state check confirms no inactive
     // items exist either before the true empty-state onboarding renders.
-    await waitFor(() => expect(screen.getByText("Your catalog is empty")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("What are you setting up?")).toBeInTheDocument());
     expect(mockGetCatalogItems).toHaveBeenCalledWith({});
     expect(mockGetCatalogItems).toHaveBeenCalledWith({ status: "Inactive", limit: 1 });
     const callsBeforeCreate = mockGetCatalogItems.mock.calls.filter(
       ([params]) => JSON.stringify(params) === JSON.stringify({}),
     ).length;
 
-    await user.click(screen.getByRole("button", { name: /add your first catalog item/i }));
+    await user.click(screen.getByRole("button", { name: /not sure — start blank/i }));
     expect(screen.getByRole("dialog", { name: "New catalog item" })).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Name"), "New Widget");
@@ -500,7 +525,7 @@ describe("PriceBook", () => {
     renderPriceBook();
 
     await waitFor(() => expect(screen.getByText("No active items")).toBeInTheDocument());
-    expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
+    expect(screen.queryByText("What are you setting up?")).not.toBeInTheDocument();
     // The catalog isn't empty, so the header CTA stays available.
     expect(screen.getAllByRole("button", { name: "Add catalog item" }).length).toBeGreaterThan(0);
 

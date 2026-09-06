@@ -16,7 +16,7 @@ import {
 // on Cost/Sell Price, rather than a dedicated read-only Currency field.
 const ACCOUNT_CURRENCY = "USD";
 
-const TYPE_OPTIONS = [
+export const TYPE_OPTIONS = [
   { value: "Material", label: "Material" },
   { value: "Equipment", label: "Equipment" },
   { value: "Service", label: "Service" },
@@ -39,6 +39,7 @@ interface CatalogItemDrawerProps {
   onCategoriesChanged: () => void;
   onClose: () => void;
   onCreated: (result: CreateAndActivateCatalogItemResult) => void;
+  initialType?: string;
 }
 
 interface FormState {
@@ -157,8 +158,10 @@ const FIELD_ERROR_MESSAGES: Partial<Record<string, string>> = {
  * combobox (`CategoryCombobox`) with race-safe fallback to an existing category, and a below-cost
  * confirmation gate. Save & add another resets the form and keeps the drawer open.
  */
-export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, onCreated }: CatalogItemDrawerProps) {
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, onCreated, initialType }: CatalogItemDrawerProps) {
+  const [form, setForm] = useState<FormState>(
+    initialType ? { ...EMPTY_FORM, type: initialType } : EMPTY_FORM,
+  );
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);

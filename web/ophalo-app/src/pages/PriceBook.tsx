@@ -2,7 +2,17 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Keyboard, Package, Plus, Search, Tag, X } from "lucide-react";
 import { api, ApiError, type AccountRole, type GetCatalogItemsParams, type ScopeNudgeRuleConfigRowResponse } from "../lib/apiClient";
-import { CatalogItemDrawer } from "../components/keep/CatalogItemDrawer";
+import { CatalogItemDrawer, TYPE_OPTIONS } from "../components/keep/CatalogItemDrawer";
+
+// Plain-language guidance for a first-time owner choosing a catalog item's type. Shown only in
+// the empty-catalog onboarding panel below — the drawer's own "Type" selector stays the compact
+// dropdown once the catalog is no longer empty, so this copy never carries into daily use.
+const TYPE_CHOICE_DESCRIPTIONS: Record<string, string> = {
+  Material: "A part or supply you use on a job.",
+  Equipment: "A tool or piece of equipment used for the job.",
+  Service: "Work you perform for a customer.",
+  Fee: "A fixed charge, like a trip, disposal, or permit fee.",
+};
 import { OfferingAssemblyDrawer } from "../components/keep/OfferingAssemblyDrawer";
 import { CategoryCombobox } from "../components/keep/CategoryCombobox";
 import { KeepModal } from "../components/keep/KeepModal";
@@ -106,6 +116,7 @@ export function PriceBook({
   const isOwnerOrAdmin = role === "owner" || role === "admin";
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerInitialType, setDrawerInitialType] = useState<string | undefined>(undefined);
   const [assemblyDrawerOpen, setAssemblyDrawerOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // App.tsx's URL is the source of truth when it controls this (`activeTabProp`). This
@@ -666,21 +677,38 @@ export function PriceBook({
 
         {!isLoading && !isError && isTrulyEmpty && (
           <div className="flex flex-1 items-center justify-center py-16">
-            <div className="max-w-sm w-full rounded-xl border border-[var(--ophalo-border)] px-6 py-8 text-center">
+            <div className="max-w-md w-full rounded-xl border border-[var(--ophalo-border)] px-6 py-8 text-center">
               <Tag className="mx-auto mb-3 h-8 w-8 text-[var(--ophalo-muted)]" />
-              <h2 className="text-[var(--ophalo-ink)] text-base font-semibold mb-1">Your catalog is empty</h2>
-              <p className="text-[var(--ophalo-muted)] text-sm mb-4">
-                Start with the parts, services, and fees you use most.
+              <h2 className="text-[var(--ophalo-ink)] text-base font-semibold mb-1">What are you setting up?</h2>
+              <p className="text-[var(--ophalo-muted)] text-sm mb-5">
+                Add your first catalog item. Pick the kind that fits it best — you can add more later.
               </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {TYPE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setDrawerInitialType(option.value);
+                      setDrawerOpen(true);
+                    }}
+                    className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-3
+                      text-left hover:border-[var(--keep-accent)] hover:bg-[var(--ophalo-canvas)] transition-colors
+                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+                  >
+                    <span className="block text-sm font-medium text-[var(--ophalo-ink)]">{option.label}</span>
+                    <span className="block mt-0.5 text-xs text-[var(--ophalo-muted)]">
+                      {TYPE_CHOICE_DESCRIPTIONS[option.value]}
+                    </span>
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 onClick={() => setDrawerOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
-                  bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+                className="mt-4 text-sm font-medium text-[var(--keep-accent)] hover:underline"
               >
-                <Plus className="h-4 w-4" />
-                Add your first catalog item
+                Not sure — start blank
               </button>
             </div>
           </div>
@@ -1175,8 +1203,12 @@ export function PriceBook({
         <CatalogItemDrawer
           categories={categoriesData?.categories ?? []}
           onCategoriesChanged={() => void queryClient.invalidateQueries({ queryKey: ["catalogCategories"] })}
-          onClose={() => setDrawerOpen(false)}
+          onClose={() => {
+            setDrawerOpen(false);
+            setDrawerInitialType(undefined);
+          }}
           onCreated={() => void queryClient.invalidateQueries({ queryKey: ["catalogItems"] })}
+          initialType={drawerInitialType}
         />
       )}
 

@@ -79,6 +79,16 @@ describe("CatalogItemDrawer", () => {
     mockGetCatalogCategories.mockReset();
   });
 
+  it("defaults the type field to Material when no initialType is given", () => {
+    renderDrawer();
+    expect(screen.getByLabelText(/type/i)).toHaveValue("Material");
+  });
+
+  it("seeds the type field from initialType when given", () => {
+    renderDrawer({ initialType: "Fee" });
+    expect(screen.getByLabelText(/type/i)).toHaveValue("Fee");
+  });
+
   it("submits Save & activate with the entered fields and closes on success", async () => {
     const user = userEvent.setup();
     mockCreateCatalogItem.mockResolvedValue(createdResult);
