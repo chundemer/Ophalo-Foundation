@@ -12,7 +12,7 @@ public sealed record CapabilityPackageEnrollmentStatus(
     CapabilityEnrollmentStatus Status,
     DateTime? EnabledAtUtc,
     DateTime? DisabledAtUtc,
-    Guid ChangedByAccountUserId,
+    Guid? ChangedByAccountUserId,
     Guid ConcurrencyVersion);
 
 /// <summary>

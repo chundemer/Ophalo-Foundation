@@ -35,6 +35,7 @@ public class AccountCapabilityPackageEnrollmentTests
         Assert.Equal(CapabilityEnrollmentStatus.Enrolled, e.Status);
         Assert.Equal(Now, e.EnabledAt);
         Assert.Null(e.DisabledAt);
+        Assert.Equal(EnrollmentChangeSource.InternalUser, e.ChangeSource);
         Assert.Equal(Actor, e.ChangedByAccountUserId);
         Assert.NotEqual(Guid.Empty, e.ConcurrencyVersion);
     }
@@ -72,6 +73,45 @@ public class AccountCapabilityPackageEnrollmentTests
             AccountId, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, Actor, DateTime.Now));
     }
 
+    // --- EnrollBySystemProvisioning (ADR-496) ---
+
+    [Fact]
+    public void EnrollBySystemProvisioning_succeeds_with_no_actor()
+    {
+        var e = AccountCapabilityPackageEnrollment.EnrollBySystemProvisioning(
+            AccountId, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, Now);
+
+        Assert.Equal(AccountId, e.AccountId);
+        Assert.Equal(CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, e.FeatureKey);
+        Assert.Equal(CapabilityEnrollmentStatus.Enrolled, e.Status);
+        Assert.Equal(Now, e.EnabledAt);
+        Assert.Null(e.DisabledAt);
+        Assert.Equal(EnrollmentChangeSource.SystemProvisioning, e.ChangeSource);
+        Assert.Null(e.ChangedByAccountUserId);
+        Assert.NotEqual(Guid.Empty, e.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void EnrollBySystemProvisioning_with_empty_account_id_throws()
+    {
+        Assert.Throws<ArgumentException>(() => AccountCapabilityPackageEnrollment.EnrollBySystemProvisioning(
+            Guid.Empty, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, Now));
+    }
+
+    [Fact]
+    public void EnrollBySystemProvisioning_with_non_utc_time_throws()
+    {
+        Assert.Throws<ArgumentException>(() => AccountCapabilityPackageEnrollment.EnrollBySystemProvisioning(
+            AccountId, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, DateTime.Now));
+    }
+
+    [Fact]
+    public void EnrollBySystemProvisioning_with_key_outside_allow_list_throws()
+    {
+        Assert.Throws<ArgumentException>(() => AccountCapabilityPackageEnrollment.EnrollBySystemProvisioning(
+            AccountId, "keep.not_a_real_capability_package", Now));
+    }
+
     // --- Disable ---
 
     [Fact]
@@ -86,8 +126,22 @@ public class AccountCapabilityPackageEnrollmentTests
         Assert.True(result.IsSuccess);
         Assert.Equal(CapabilityEnrollmentStatus.Disabled, e.Status);
         Assert.Equal(Later, e.DisabledAt);
+        Assert.Equal(EnrollmentChangeSource.InternalUser, e.ChangeSource);
         Assert.Equal(disabledBy, e.ChangedByAccountUserId);
         Assert.NotEqual(versionBefore, e.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void Disable_on_system_provisioned_row_reassigns_to_InternalUser()
+    {
+        var e = AccountCapabilityPackageEnrollment.EnrollBySystemProvisioning(
+            AccountId, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, Now);
+
+        var result = e.Disable(Actor, Later);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(EnrollmentChangeSource.InternalUser, e.ChangeSource);
+        Assert.Equal(Actor, e.ChangedByAccountUserId);
     }
 
     [Fact]
@@ -118,6 +172,7 @@ public class AccountCapabilityPackageEnrollmentTests
         Assert.Equal(CapabilityEnrollmentStatus.Enrolled, e.Status);
         Assert.Equal(Later, e.EnabledAt);
         Assert.Null(e.DisabledAt);
+        Assert.Equal(EnrollmentChangeSource.InternalUser, e.ChangeSource);
         Assert.Equal(reenabledBy, e.ChangedByAccountUserId);
         Assert.NotEqual(versionBefore, e.ConcurrencyVersion);
     }

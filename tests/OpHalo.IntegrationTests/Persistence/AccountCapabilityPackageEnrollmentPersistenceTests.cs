@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Entities.Accounts;
@@ -87,6 +88,57 @@ public sealed class AccountCapabilityPackageEnrollmentPersistenceTests : IClassF
             .CommitAsync(loadedB, CancellationToken.None);
 
         Assert.Equal(AccountCapabilityPackageEnrollmentCommitResult.ConcurrencyConflict, staleCommit);
+    }
+
+    [Fact]
+    public async Task AddAsync_persists_a_system_provisioned_row_with_no_actor()
+    {
+        var enrollment = AccountCapabilityPackageEnrollment.EnrollBySystemProvisioning(_accountId, FeatureKey, Now);
+        await using var ctx = CreateContext();
+
+        var result = await new EfAccountCapabilityPackageEnrollmentPersistence(ctx)
+            .AddAsync(enrollment, CancellationToken.None);
+        Assert.Equal(AccountCapabilityPackageEnrollmentCommitResult.Committed, result);
+
+        await using var readCtx = CreateContext();
+        var loaded = await new EfAccountCapabilityPackageEnrollmentPersistence(readCtx)
+            .GetByAccountAndFeatureKeyAsync(_accountId, FeatureKey, CancellationToken.None);
+        Assert.Equal(EnrollmentChangeSource.SystemProvisioning, loaded!.ChangeSource);
+        Assert.Null(loaded.ChangedByAccountUserId);
+    }
+
+    [Fact]
+    public async Task Database_check_constraint_rejects_InternalUser_row_with_null_actor()
+    {
+        await using var ctx = CreateContext();
+
+        var ex = await Assert.ThrowsAsync<PostgresException>(() => ctx.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO account_capability_package_enrollments
+                (id, account_id, feature_key, status, enabled_at, disabled_at, change_source,
+                 changed_by_account_user_id, concurrency_version, created_at_utc, updated_at_utc)
+            VALUES
+                ({Guid.NewGuid()}, {_accountId}, {FeatureKey}, {"Enrolled"}, {Now}, NULL,
+                 {"InternalUser"}, NULL, {Guid.NewGuid()}, {Now}, {Now})
+            """));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, ex.SqlState);
+    }
+
+    [Fact]
+    public async Task Database_check_constraint_rejects_SystemProvisioning_row_with_actor_present()
+    {
+        await using var ctx = CreateContext();
+
+        var ex = await Assert.ThrowsAsync<PostgresException>(() => ctx.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO account_capability_package_enrollments
+                (id, account_id, feature_key, status, enabled_at, disabled_at, change_source,
+                 changed_by_account_user_id, concurrency_version, created_at_utc, updated_at_utc)
+            VALUES
+                ({Guid.NewGuid()}, {_accountId}, {FeatureKey}, {"Enrolled"}, {Now}, NULL,
+                 {"SystemProvisioning"}, {_ownerId}, {Guid.NewGuid()}, {Now}, {Now})
+            """));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, ex.SqlState);
     }
 
     private static async Task<(Guid AccountId, Guid OwnerAccountUserId)> SeedAccountAsync(OpHaloDbContext ctx)

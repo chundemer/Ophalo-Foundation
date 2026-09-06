@@ -47,9 +47,16 @@ relevant build log.
 
 ## Next implementation sequence
 
-1. **Session 2 — automatic Pilot package provisioning** (ADR-496), per
-   [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md) — in progress. GAP-033 is not next
-   unless Christian explicitly reprioritizes it.
+1. **Session 2 — automatic Pilot package provisioning** (ADR-496), split into three slices
+   (exceeds the single-session batch gate) — see
+   [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md):
+   - **Slice A — schema + domain provenance** — done, accepted. 7 production files (including a
+     required nullable-DTO compatibility fix); migration verified against real Postgres and
+     applied to Christian's local dev database. See BL142 for full delivery record.
+   - **Slice B — pilot provisioning wiring** (`AccountProvisioningResult`/Service,
+     `CommitNewAccountExchangeAsync`) — next, separate session.
+   - **Slice C — idempotent backfill/recovery for existing pilots** — separate session.
+   GAP-033 is not next unless Christian explicitly reprioritizes it.
 2. **GAP-033 — public-intake trust and tracker access truthfulness** (P1, `ophalo-web`), full
    scope in
    [pilot-readiness-bug-tracker.md](pilot-readiness-bug-tracker.md#gap-033--public-intake-does-not-establish-sufficient-customer-trust-or-return-continuity).

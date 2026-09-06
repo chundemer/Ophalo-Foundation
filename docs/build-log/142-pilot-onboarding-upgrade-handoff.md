@@ -227,6 +227,59 @@ enrolled key/status; non-pilot graph does not; real internal transitions require
 new-account exchange persistence commits atomically; a failed transaction leaves no partial account
 or enrollment; duplicate/retry behavior is safe.
 
+**Session 2 exceeds the CLAUDE.md batch-size gate as a single session and is split into three
+independently-compiling slices (2026-09-05), the same way BL140 Batch 2 was split into 2a/2b/2c:**
+
+- **Slice A — schema + domain provenance — done, accepted (2026-09-06).** New
+  `EnrollmentChangeSource` enum (`InternalUser`, `SystemProvisioning`) in
+  Core; `AccountCapabilityPackageEnrollment` gains `ChangeSource`, `ChangedByAccountUserId`
+  becomes nullable; existing `Enroll`/`Disable`/`Reenable` keep their actor-required signatures
+  unchanged and stamp `ChangeSource = InternalUser` (including when acting on a previously
+  system-provisioned row — `ChangeSource` reassigns to `InternalUser` since a real actor now owns
+  the change); new `EnrollBySystemProvisioning(accountId, featureKey, nowUtc)` factory stamps
+  `SystemProvisioning` with no actor. EF configuration adds the column and a table-level check
+  constraint (exhaustive two-branch: `(InternalUser AND actor NOT NULL) OR (SystemProvisioning AND
+  actor IS NULL)` — rejects unknown source values too).
+  **7 production files** (not 6 as originally scoped): the six named above, plus
+  `InternalCapabilityPackageEnrollmentService.cs` — its `CapabilityPackageEnrollmentStatus` DTO's
+  `ChangedByAccountUserId` must become `Guid?` to keep compiling against the now-nullable entity
+  property; a required compatibility change, not provisioning behavior pulled forward from Slice B.
+  Migration `20260906001644_AddEnrollmentChangeSource` was scaffolded by Christian
+  (`dotnet ef migrations add`, ADR-049) and hand-corrected by Claude before review: EF's scaffold
+  defaulted the new column to `""` on backfill, which would have failed the check constraint
+  against every pre-existing row (`""` matches neither enum value); corrected `Up()` to the
+  repo's established live-column-backfill pattern (`20260820220812_AddActualWorkRecorderAccountUserId`)
+  — add nullable, `UPDATE ... SET change_source = 'InternalUser' WHERE change_source IS NULL`,
+  tighten to `NOT NULL`, then add the constraint. `Down()` was also corrected: the scaffold reverted
+  `changed_by_account_user_id` to `NOT NULL` with an all-zero-guid `defaultValue`, which would have
+  silently fabricated an actor for any `SystemProvisioning` row; it now runs a guard query first and
+  raises a clear Postgres exception naming the affected row count if any `SystemProvisioning` row
+  exists, before touching any column — no rollback is possible once such a row exists, by design.
+  New `EnrollmentChangeSourceMigrationTests.cs` proves the live-upgrade path a clean-database test
+  cannot exercise: migrates to the immediately-prior migration, inserts a row under the *old* schema
+  (no `change_source` column, actor `NOT NULL`), applies this migration, and asserts the row
+  survived with `ChangeSource = InternalUser` and its original actor untouched; plus both rollback
+  paths (`Rollback_fails_loudly_once_a_SystemProvisioning_row_exists`,
+  `Rollback_succeeds_when_no_SystemProvisioning_rows_exist`). No provisioning behavior changes in
+  this slice.
+  **Verification:** all 8 `AccountCapabilityPackageEnrollment`-related integration tests pass
+  against real PostgreSQL (Testcontainers) — 5 in `AccountCapabilityPackageEnrollmentPersistenceTests`
+  (including the two new check-constraint-rejection cases and the system-provisioned-row happy
+  path) + 3 in `EnrollmentChangeSourceMigrationTests`. Full unit suite 1793/1793 passed (18 in
+  `AccountCapabilityPackageEnrollmentTests`, up from the original 13); architecture suite 14/14
+  passed.
+  `dotnet ef database update` applied cleanly against Christian's local dev database
+  (2026-09-06), alongside the previously-pending `AddPostAuthContinuation` migration.
+- **Slice B — pilot provisioning wiring.** `AccountProvisioningResult` grows an optional
+  enrollment; `AccountProvisioningService` builds it for `AccountClassification.Pilot` (stays
+  pure, uses its existing `nowUtc` input); `EfAuthCodePersistence.CommitNewAccountExchangeAsync`
+  inserts it in the existing account-creation transaction.
+- **Slice C — idempotent backfill/recovery for existing pilot accounts** missing the
+  system-provisioned enrollment row.
+
+Each slice is its own Claude session per CLAUDE.md's "start a fresh session after an approved
+commit" rule.
+
 ### Session 3 — request-first PWA onboarding
 
 **Goal:** remove contradictory setup language and make the empty Requests workspace useful.

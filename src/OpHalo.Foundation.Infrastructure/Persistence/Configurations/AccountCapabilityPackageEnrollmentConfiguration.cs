@@ -30,8 +30,12 @@ internal sealed class AccountCapabilityPackageEnrollmentConfiguration
 
         builder.Property(x => x.DisabledAt);
 
-        builder.Property(x => x.ChangedByAccountUserId)
+        builder.Property(x => x.ChangeSource)
+            .HasConversion<string>()
+            .HasMaxLength(50)
             .IsRequired();
+
+        builder.Property(x => x.ChangedByAccountUserId);
 
         // Application-managed opaque uuid token: never database-generated, no default, no
         // trigger, no index. EF includes it in the UPDATE predicate so a stale write maps to
@@ -52,5 +56,12 @@ internal sealed class AccountCapabilityPackageEnrollmentConfiguration
             .WithMany()
             .HasForeignKey(x => x.AccountId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // ADR-496: exhaustive two-branch condition — also rejects any change_source value other
+        // than the two known enum members, not just an invalid actor/source combination.
+        builder.ToTable(t => t.HasCheckConstraint(
+            "ck_account_capability_package_enrollments_actor_by_source",
+            "(change_source = 'InternalUser' AND changed_by_account_user_id IS NOT NULL) OR " +
+            "(change_source = 'SystemProvisioning' AND changed_by_account_user_id IS NULL)"));
     }
 }

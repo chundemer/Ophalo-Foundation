@@ -26,8 +26,14 @@ public sealed class AccountCapabilityPackageEnrollment : BaseEntity
 
     public DateTime? DisabledAt { get; private set; }
 
-    /// <summary>Internal OpHalo user who last changed this enrollment (actor attribution).</summary>
-    public Guid ChangedByAccountUserId { get; private set; }
+    /// <summary>Who last changed this enrollment — determines whether an actor is required.</summary>
+    public EnrollmentChangeSource ChangeSource { get; private set; }
+
+    /// <summary>
+    /// Internal OpHalo user who last changed this enrollment (actor attribution). Null only when
+    /// <see cref="ChangeSource"/> is <see cref="EnrollmentChangeSource.SystemProvisioning"/>.
+    /// </summary>
+    public Guid? ChangedByAccountUserId { get; private set; }
 
     /// <summary>
     /// Application-managed opaque concurrency token — same pattern as
@@ -55,9 +61,40 @@ public sealed class AccountCapabilityPackageEnrollment : BaseEntity
             Status = CapabilityEnrollmentStatus.Enrolled,
             EnabledAt = nowUtc,
             DisabledAt = null,
+            ChangeSource = EnrollmentChangeSource.InternalUser,
             ChangedByAccountUserId = changedByAccountUserId,
             ConcurrencyVersion = Guid.NewGuid()
         });
+    }
+
+    /// <summary>
+    /// System-provisioned enrollment (ADR-496) — created automatically for a newly provisioned
+    /// Pilot account, never by an internal actor. No actor attribution; <see cref="ValidateActorAndTime"/>
+    /// is bypassed intentionally since there is no actor to validate.
+    /// </summary>
+    public static AccountCapabilityPackageEnrollment EnrollBySystemProvisioning(
+        Guid accountId, string featureKey, DateTime nowUtc)
+    {
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("AccountId must not be empty.", nameof(accountId));
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must not be default.", nameof(nowUtc));
+        if (nowUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("nowUtc must be UTC.", nameof(nowUtc));
+        if (!CapabilityPackageFeatureKeys.IsAllowed(featureKey))
+            throw new ArgumentException("Unknown feature key.", nameof(featureKey));
+
+        return new AccountCapabilityPackageEnrollment
+        {
+            AccountId = accountId,
+            FeatureKey = featureKey,
+            Status = CapabilityEnrollmentStatus.Enrolled,
+            EnabledAt = nowUtc,
+            DisabledAt = null,
+            ChangeSource = EnrollmentChangeSource.SystemProvisioning,
+            ChangedByAccountUserId = null,
+            ConcurrencyVersion = Guid.NewGuid()
+        };
     }
 
     /// <summary>Idempotency guard: fails rather than silently no-op'ing a duplicate disable.</summary>
@@ -70,6 +107,7 @@ public sealed class AccountCapabilityPackageEnrollment : BaseEntity
 
         Status = CapabilityEnrollmentStatus.Disabled;
         DisabledAt = nowUtc;
+        ChangeSource = EnrollmentChangeSource.InternalUser;
         ChangedByAccountUserId = changedByAccountUserId;
         ConcurrencyVersion = Guid.NewGuid();
         return Result.Success();
@@ -86,6 +124,7 @@ public sealed class AccountCapabilityPackageEnrollment : BaseEntity
         Status = CapabilityEnrollmentStatus.Enrolled;
         EnabledAt = nowUtc;
         DisabledAt = null;
+        ChangeSource = EnrollmentChangeSource.InternalUser;
         ChangedByAccountUserId = changedByAccountUserId;
         ConcurrencyVersion = Guid.NewGuid();
         return Result.Success();
