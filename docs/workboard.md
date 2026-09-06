@@ -44,6 +44,11 @@ These are supervised-pilot gates alongside GAP-039 and GAP-069. GAP-047 is requi
 | Office commercial estimate / quote | Not built. There is no `OfficeQuote`, `QuoteRevision`, or `QuoteLine` domain/UI/API. BL130 locks the product boundary but requires a mechanical preflight. |
 | Customer-facing quote | Later, separate capability: delivery, viewing, acceptance, signature, payment, invoicing, and accounting sync are not implied by internal approval. |
 
+**Price Book requirement:** use **Serial #** rather than SKU for the relevant item identifier. When
+Price Book item-identity work is scheduled, define its scope, uniqueness, entry/edit authority, and
+whether it identifies a catalog item, a specific installed unit, or both; do not silently introduce
+SKU terminology or behavior.
+
 ## Deferred / pilot learning
 
 - **GAP-037, GAP-038:** founder value report and in-product feedback/help loop.
