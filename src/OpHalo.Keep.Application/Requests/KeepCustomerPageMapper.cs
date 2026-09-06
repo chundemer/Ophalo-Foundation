@@ -53,10 +53,12 @@ internal static class KeepCustomerPageMapper
             FeedbackComment: context.FeedbackComment,
             FeedbackSubmittedAtUtc: context.FeedbackSubmittedAtUtc,
             ExpiresAtUtc: context.ExpiresAtUtc,
-            // Defensive filter even though persistence already scopes to Visibility = All.
-            // A future persistence change must not accidentally expose internal events.
+            // GAP-033: explicit default-deny allowlist by event type and message source.
+            // The stored Visibility flag is kept as a first gate (defense in depth), but an
+            // event reaches the customer page only if IsCustomerVisibleEvent also allows it.
+            // Any unlisted or future event type is excluded until explicitly reviewed.
             Events: events
-                .Where(e => e.Visibility == KeepRequestEventVisibility.All)
+                .Where(IsCustomerVisibleEvent)
                 .Select(MapEvent)
                 .ToList(),
             AllowedActions: ComputeAllowedActions(context.Status, context.FeedbackSubmittedAtUtc.HasValue, context.IsOffSeason),
@@ -92,6 +94,46 @@ internal static class KeepCustomerPageMapper
         _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {status}")
     };
 
+    /// <summary>
+    /// MessageIntent values that may appear on the customer's own request page. Every current
+    /// intent is customer-relevant — a business update (<see cref="MessageIntent.BusinessUpdate"/>)
+    /// or the customer's own submitted message. Listed explicitly so a future intent is excluded
+    /// by default until reviewed (GAP-033).
+    /// </summary>
+    private static readonly IReadOnlySet<MessageIntent> CustomerVisibleMessageIntents =
+        new HashSet<MessageIntent>
+        {
+            MessageIntent.GeneralMessage,
+            MessageIntent.Question,
+            MessageIntent.UpdateRequest,
+            MessageIntent.ScheduleChangeRequest,
+            MessageIntent.ChangeOrCancelRequest,
+            MessageIntent.Complaint,
+            MessageIntent.BusinessUpdate,
+            MessageIntent.InformationAdded,
+            MessageIntent.CallRequested,
+            MessageIntent.TimingChangeRequested,
+            MessageIntent.CancellationRequested,
+        };
+
+    /// <summary>
+    /// Default-deny gate for the public customer request feed (GAP-033). An event is shown only
+    /// when it is stored as customer-visible (<see cref="KeepRequestEventVisibility.All"/>) AND
+    /// its type and message source are on this explicit allowlist. Every other current type, and
+    /// any unknown/future enum value, is excluded until it is deliberately added here.
+    /// </summary>
+    internal static bool IsCustomerVisibleEvent(KeepRequestEvent e) =>
+        e.Visibility == KeepRequestEventVisibility.All
+        && e.EventType switch
+        {
+            KeepRequestEventType.StatusChanged => true,
+            KeepRequestEventType.MessageAdded =>
+                e.ActorType is ActorType.Customer or ActorType.AccountUser
+                && e.MessageIntent is { } intent
+                && CustomerVisibleMessageIntents.Contains(intent),
+            _ => false,
+        };
+
     internal static KeepCustomerPageEventItem MapEvent(KeepRequestEvent e) => new(
         MapEventType(e.EventType),
         e.Content,
@@ -100,19 +142,11 @@ internal static class KeepCustomerPageMapper
 
     private static string MapEventType(KeepRequestEventType type) => type switch
     {
-        KeepRequestEventType.RequestCreated        => "request_created",
-        KeepRequestEventType.StatusChanged         => "status_changed",
-        KeepRequestEventType.MessageAdded          => "message_added",
-        KeepRequestEventType.RequestClosed         => "request_closed",
-        KeepRequestEventType.RequestCancelled      => "request_cancelled",
-        KeepRequestEventType.InternalNoteAdded     => "internal_note_added",
-        KeepRequestEventType.AttentionAcknowledged => "attention_acknowledged",
-        // FeedbackReceived, NotificationConfirmed, and NotificationPrepared are Internal —
-        // filtered before MapEvent is called; handled defensively.
-        KeepRequestEventType.FeedbackReceived      => "feedback_received",
-        KeepRequestEventType.NotificationConfirmed => "notification_confirmed",
-        KeepRequestEventType.NotificationPrepared  => "notification_prepared",
-        _ => throw new InvalidOperationException($"Unknown KeepRequestEventType: {type}")
+        KeepRequestEventType.StatusChanged => "status_changed",
+        KeepRequestEventType.MessageAdded  => "message_added",
+        // IsCustomerVisibleEvent excludes every other type before MapEvent is reached.
+        _ => throw new InvalidOperationException(
+            $"Event type {type} is not customer-visible and must not reach MapEventType."),
     };
 
     private static string MapActorLabel(ActorType actorType) => actorType switch

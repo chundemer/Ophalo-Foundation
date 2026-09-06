@@ -7,6 +7,7 @@ using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.IntegrationTests.Api;
 
@@ -24,6 +25,9 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
     private const string PageToken = "customer_page_token_test_abc";
     private string _referenceCode = string.Empty;
     private Guid _seededVersion;
+    private Guid _accountId;
+    private Guid _ownerAccountUserId;
+    private Guid _requestId;
 
     public KeepCustomerPageTests(KeepApiWebFactory factory)
     {
@@ -79,6 +83,9 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
 
         _referenceCode = request.ReferenceCode;
         _seededVersion = request.ConcurrencyVersion;
+        _accountId = graph.Account.Id;
+        _ownerAccountUserId = graph.Owner.Id;
+        _requestId = request.Id;
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -193,6 +200,51 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
         // customer page's own feedbackComment is the customer's own submitted comment, not
         // operator-restricted (S84/292d03d), and is intentionally present.
         Assert.False(body.TryGetProperty("feedbackCommentVisible", out _));
+    }
+
+    // =========================================================================
+    // Test 4b — GAP-033: the event feed is a default-deny allowlist. Internal-visibility
+    // events (internal notes, external contact, participation, etc.) must never reach
+    // page.events; only StatusChanged and customer/business MessageAdded do.
+    // =========================================================================
+
+    [Fact]
+    public async Task GetCustomerPage_EventFeed_ExcludesInternalEventsAndIncludesBusinessUpdate()
+    {
+        var now = DateTime.UtcNow;
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateInternalNote(
+                _requestId, _accountId, _ownerAccountUserId, "Page Test Owner",
+                "Customer still owes $400 from the last visit — do not schedule until paid.", now));
+            db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateAttentionAcknowledged(
+                _requestId, _accountId, _ownerAccountUserId, "Page Test Owner",
+                "reviewed overnight backlog", now.AddMinutes(1)));
+            db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateBusinessUpdateMessage(
+                _requestId, _accountId, _ownerAccountUserId, "Page Test Owner",
+                "We can be there Tuesday at 9am.", now.AddMinutes(2)));
+            await db.SaveChangesAsync();
+        }
+
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var events = body.GetProperty("events").EnumerateArray().ToList();
+
+        var single = Assert.Single(events);
+        Assert.Equal("message_added", single.GetProperty("eventType").GetString());
+        Assert.Equal("We can be there Tuesday at 9am.", single.GetProperty("content").GetString());
+        Assert.Equal("business", single.GetProperty("actorLabel").GetString());
+
+        Assert.DoesNotContain(events, e => e.GetProperty("eventType").GetString() == "internal_note_added");
+        Assert.DoesNotContain(events, e =>
+        {
+            var content = e.GetProperty("content");
+            return content.ValueKind == JsonValueKind.String && content.GetString()!.Contains("$400");
+        });
     }
 
     // =========================================================================
