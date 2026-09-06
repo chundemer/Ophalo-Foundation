@@ -18,11 +18,12 @@
 ## Next
 
 1. **GAP-040 — marketing-site accuracy.** Public copy, claims, and visuals truthfully match shipped V1 before the intake link is marketed.
-2. **GAP-063 — Spam/Test action.** Owner/Admin can make the existing authorized terminal classification from Request Detail, with accessible confirmation, optional ≤500-character reason, and truthful post-action state. [ADR-296](decisions/decision-index.md).
-3. **GAP-048 — share intent.** Private-page email goes through informed share confirmation; `mailto:` is never delivery evidence.
-4. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up.
+2. **GAP-047 — reliable urgent-priority triage.** Preserve the existing server-ranked amber `Internal priority: Urgent` request-row cue for scanning. On transport/API failure or a stale-version conflict, show associated failure feedback, retain/reload authoritative state, and never imply that a priority change saved when it did not.
+3. **GAP-063 — Spam/Test action.** Owner/Admin can make the existing authorized terminal classification from Request Detail, with accessible confirmation, optional ≤500-character reason, and truthful post-action state. [ADR-296](decisions/decision-index.md).
+4. **GAP-048 — share intent.** Private-page email goes through informed share confirmation; `mailto:` is never delivery evidence.
+5. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up.
 
-These are supervised-pilot gates alongside GAP-039 and GAP-069. GAP-047 is required only if staff uses Internal priority for triage; it remains behind its Request Detail foundation sequence.
+These are supervised-pilot gates alongside GAP-039 and GAP-069. GAP-047 is required because the pilot uses Internal priority as a visual urgent-triage cue.
 
 ## Decision queue
 
@@ -54,7 +55,6 @@ SKU terminology or behavior.
 - **GAP-037, GAP-038:** founder value report and in-product feedback/help loop.
 - **GAP-041, GAP-046, GAP-026, GAP-053:** request-list selection, filter, search, and action-order refinements.
 - **GAP-044:** completed/cancelled-work discoverability.
-- **GAP-047:** internal-priority failure feedback; only if the triage workflow relies on it.
 - **GAP-051 native parity:** Session 14; public-web delivery is done.
 - **GAP-066:** Catalog Item financial/operational-impact workspace.
 - **GAP-067:** request-workspace presentation pass; blocks GAP-042 until screenshot acceptance.
@@ -76,4 +76,4 @@ SKU terminology or behavior.
 
 ## Pilot gate checklist
 
-Before a supervised customer-facing pilot: GAP-039 Batch 4, GAP-069, GAP-040, GAP-063, GAP-048 before sharing private pages, and GAP-049 before relying on closed-request follow-ups. GAP-064 needs a written alert-policy decision; until then the founder deliberately watches the queue.
+Before a supervised customer-facing pilot: GAP-039 Batch 4, GAP-069, GAP-040, GAP-047 (reliable urgent-priority cue), GAP-063, GAP-048 before sharing private pages, and GAP-049 before relying on closed-request follow-ups. GAP-064 needs a written alert-policy decision; until then the founder deliberately watches the queue.
