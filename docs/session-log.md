@@ -1,17 +1,11 @@
 # Session Log — OpHalo Foundation
 
-**Updated 2026-09-06** — planning-doc reconciliation, no code change. Merged since the last brief:
-GAP-039 browser/API Sentry code, GAP-065, GAP-068, GAP-033. Status and sequencing now live in the
-[workboard](workboard.md); this brief is the next-session pointer only.
+**Updated 2026-09-06** — status and sequencing live in the [workboard](workboard.md); this is the
+next-session pointer only.
 
 ## Baseline
 
-- Pilot posture: controlled parallel field pilot ([BL131](build-log/131-next-week-parallel-field-pilot-plan.md)) —
-  the contractor's existing system stays authoritative for estimates/invoices/payments/accounting; Keep is the field record.
-- Done: BL142 onboarding (ADR-496); GAP-065 ([BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md));
-  GAP-068 (ADR-497, [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md));
-  GAP-033 ([BL145](build-log/145-gap-033-public-intake-trust-and-event-feed-allowlist.md));
-  phone integrity GAP-016/021 + GAP-051 public-web (native parity → Session 14, ADR-236).
+- Controlled parallel field pilot ([BL131](build-log/131-next-week-parallel-field-pilot-plan.md)): existing system remains authoritative for estimates/invoices/payments/accounting; Keep is the factual field record.
 
 ## Canonical release-safety order
 
