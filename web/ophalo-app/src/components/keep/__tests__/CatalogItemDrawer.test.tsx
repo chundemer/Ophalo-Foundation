@@ -89,6 +89,13 @@ describe("CatalogItemDrawer", () => {
     expect(screen.getByLabelText(/type/i)).toHaveValue("Fee");
   });
 
+  it("explains category and search alias distinctly, beside each field", () => {
+    renderDrawer();
+    expect(screen.getByText(/groups items for browsing and filtering/i)).toBeInTheDocument();
+    expect(screen.getByText(/an alternate name that finds this same item/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Search alias")).toBeInTheDocument();
+  });
+
   it("submits Save & activate with the entered fields and closes on success", async () => {
     const user = userEvent.setup();
     mockCreateCatalogItem.mockResolvedValue(createdResult);

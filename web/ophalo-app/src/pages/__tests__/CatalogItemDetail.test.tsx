@@ -245,6 +245,15 @@ describe("CatalogItemDetail", () => {
     expect(screen.getByText("Search aliases")).toBeInTheDocument();
   });
 
+  it("explains what a search alias is, with a concrete example, distinct from a category", async () => {
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    expect(screen.getByText(/an alternate name that finds this same item/i)).toBeInTheDocument();
+    expect(screen.getByText(/doesn't create another item or price/i)).toBeInTheDocument();
+  });
+
   it("returns focus to the Edit trigger after the drawer is dismissed", async () => {
     const user = userEvent.setup();
     mockGetCatalogItem.mockResolvedValue(baseItem);

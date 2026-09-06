@@ -7,6 +7,7 @@ import {
   CatalogItemEditDrawer,
   type CatalogItemHeaderDraft,
 } from "../components/keep/CatalogItemEditDrawer";
+import { ALIAS_FIELD_HELP } from "../components/keep/catalogFieldHelp";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-base text-[var(--ophalo-ink)] px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
@@ -682,7 +683,7 @@ export function CatalogItemDetail({
               <div className="space-y-4 xl:col-span-5">
                 <section className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-4 shadow-sm" aria-labelledby="aliases-heading">
               <h2 id="aliases-heading" className="text-sm font-semibold text-[var(--ophalo-ink)]">Search aliases</h2>
-              <p className="mt-1 text-xs text-[var(--ophalo-muted)]">Helps technicians find this item in field search using alternate terms or shorthand.</p>
+              <p className="mt-1 text-xs text-[var(--ophalo-muted)]">{ALIAS_FIELD_HELP}</p>
               {data.aliases.length === 0 ? (
                 <p className="mt-4 text-sm text-[var(--ophalo-muted)]">No search aliases yet.</p>
               ) : (

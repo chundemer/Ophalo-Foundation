@@ -87,6 +87,11 @@ describe("CatalogItemEditDrawer", () => {
     expect(screen.getByRole("checkbox", { name: "Common item" })).not.toBeChecked();
   });
 
+  it("explains what a category is beside the field", () => {
+    renderDrawer();
+    expect(screen.getByText(/groups items for browsing and filtering/i)).toBeInTheDocument();
+  });
+
   it("renders as a right-side responsive drawer that fills the width on a phone", () => {
     renderDrawer();
     const panel = screen.getByRole("dialog");

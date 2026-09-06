@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { KeepModal } from "./KeepModal";
 import { CategoryCombobox } from "./CategoryCombobox";
+import { CATEGORY_FIELD_HELP } from "./catalogFieldHelp";
 import {
   api,
   ApiError,
@@ -312,6 +313,7 @@ export function CatalogItemEditDrawer({
             {fieldErrors.categoryId && (
               <span className="text-sm text-[var(--ophalo-danger)]">{fieldErrors.categoryId}</span>
             )}
+            <p className="text-xs text-[var(--ophalo-muted)]">{CATEGORY_FIELD_HELP}</p>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-[var(--ophalo-ink)]">

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { KeepModal } from "./KeepModal";
 import { CategoryCombobox } from "./CategoryCombobox";
+import { CATEGORY_FIELD_HELP, ALIAS_FIELD_HELP } from "./catalogFieldHelp";
 import {
   api,
   ApiError,
@@ -423,6 +424,7 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
                 onCategoriesChanged={onCategoriesChanged}
                 onPendingChange={setCategoryPending}
               />
+              <p className="text-xs text-[var(--ophalo-muted)]">{CATEGORY_FIELD_HELP}</p>
             </div>
           </div>
 
@@ -499,7 +501,7 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-[var(--ophalo-ink)]" htmlFor="ci-alias">
-                  Search keyword / shorthand
+                  Search alias
                 </label>
                 <input
                   id="ci-alias"
@@ -509,7 +511,7 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
                   type="text"
                   value={form.aliasText}
                   onChange={(e) => updateField("aliasText", e.target.value)}
-                  placeholder="e.g. condensate pump"
+                  placeholder="e.g. sump pump"
                   maxLength={200}
                   className={`${INPUT_CLS} ${fieldErrors.aliasText ? ERROR_INPUT_CLS : ""}`}
                   disabled={isPending}
@@ -520,6 +522,7 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
                     {fieldErrors.aliasText}
                   </span>
                 )}
+                <p className="text-xs text-[var(--ophalo-muted)]">{ALIAS_FIELD_HELP}</p>
               </div>
             </div>
           </fieldset>
