@@ -7,6 +7,7 @@
 - An item enters **Now** only with a written decision, acceptance criteria, owner, and no unresolved prerequisite. Move its status in the delivery commit.
 - **Next** is ordered but unstarted. **Decision queue** is unschedulable. **Deferred** is deliberately outside the current pilot sequence. **Done** needs evidence.
 - Keep `session-log.md` to a short handoff; it does not duplicate this board or build-log history.
+- Keep this board short and forward-looking. Unresolved ideas and deliberately parked topics live in [deferred-topics.md](deferred-topics.md); the frozen [pilot readiness tracker](pilot-readiness-bug-tracker.md) is the authoritative index of completed pilot-readiness work, each item carrying commit evidence.
 
 ## Now
 
@@ -23,14 +24,16 @@
 4. **GAP-048 — share intent.** Private-page email goes through informed share confirmation; `mailto:` is never delivery evidence.
 5. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up.
 
-These are supervised-pilot gates alongside GAP-039 and GAP-069. GAP-047 is required because the pilot uses Internal priority as a visual urgent-triage cue.
+These are supervised-pilot gates alongside GAP-039 and GAP-069.
+
+GAP-047 (an Internal-priority update can appear to save when it failed) is **conditional, not a current gate**. Its former Request Detail foundation prerequisite (GAP-019 / 058 / 059) is complete, so the deferral now rests entirely on one product choice: it blocks the pilot only if staff will rely on Internal priority to decide what to handle first. Confirm that choice before treating it as in or out.
 
 ## Decision queue
 
 | Item | Decision required before scheduling |
 | --- | --- |
 | GAP-064 | Minimum accountable staff-alert policy: recipient/fallback, channel, failure/escalation, quiet-hours, and privacy posture. Interim: founder watches the queue. |
-| GAP-025 | Customer phone-number lifecycle. ADR-492 is only the narrow request-phone continuity guardrail; it does not solve a customer permanently changing numbers. Decide editable current unique phone, verified historical aliases, audit/authority, shared-or-recycled-number safeguards, and request-entered-phone snapshots. No inferred identity matching. |
+| GAP-025 | Customer phone-number lifecycle. ADR-492 is only the narrow request-phone continuity guardrail; it does not solve a customer permanently changing numbers. Decide editable current unique phone, verified historical aliases, audit/authority, shared-or-recycled-number safeguards, and request-entered-phone snapshots. No inferred identity matching. Includes [DEF-060](deferred-topics.md) (request-level service location and address history): recognizing a returning customer safely depends on location/address context, not phone alone. |
 | GAP-043 | V1 request-list scale model and verification threshold. |
 | GAP-054 | App-shell/top-bar review: business/account menu, persistent workspace switcher, entitled Price Book settings attachment, and narrow/mobile navigation. |
 | GAP-070 / GAP-071 | Optional-module commercial workflow and truthful discovery/handoff; no self-service entitlement write or guided setup. |
@@ -55,7 +58,7 @@ SKU terminology or behavior.
 - **GAP-037, GAP-038:** founder value report and in-product feedback/help loop.
 - **GAP-041, GAP-046, GAP-026, GAP-053:** request-list selection, filter, search, and action-order refinements.
 - **GAP-044:** completed/cancelled-work discoverability.
-- **GAP-051 native parity:** Session 14; public-web delivery is done.
+- **Native mobile app — parked, outside this pilot.** Field-execution app is Session 14+; store submission is S19. Stack and posture are locked: [ADR-236](decisions/ADR-236-mobile-native-app-technology-stack.md) (promoted by ADR-385). Open submission work is tracked in the [mobile store submission checklist](mobile-store-submission-checklist.md). GAP-051 native phone-formatting parity rides this track; public-web delivery is done.
 - **GAP-066:** Catalog Item financial/operational-impact workspace.
 - **GAP-067:** request-workspace presentation pass; blocks GAP-042 until screenshot acceptance.
 - **GAP-070, GAP-071:** P2 optional-module work, pending their Decision Queue entry.
@@ -65,8 +68,11 @@ SKU terminology or behavior.
 
 ## Done / evidence index
 
+The frozen [pilot readiness tracker](pilot-readiness-bug-tracker.md) is the authoritative record of all completed pilot-readiness work, each item carrying commit evidence. This table lists only items that need a pointer here because they were not tracked there.
+
 | Item | Evidence |
 | --- | --- |
+| GAP-050 | Account-scoped related-work indicator for the same canonical customer: `924b808e` (backend read path), `bdf90c33` (panel + navigation); [BL096](build-log/096-phase-4-request-detail-preflight-handoff.md). Promoted from DEF-050; never appeared in the legacy tracker. |
 | GAP-033 | Public-intake trust/event allowlist: `11c19d3d`, `89a776d8`; [BL145](build-log/145-gap-033-public-intake-trust-and-event-feed-allowlist.md). |
 | GAP-039 implementation | API/PWA Sentry code/runbooks: `d7d0ee22`, `fd34af34`, `baf07265`, `a69a8edf`, `70e75a3f`; operational Batch 4 remains Now. |
 | GAP-065 / GAP-065A | Financial-review discovery: `faf7b64`, `e27c48c`, `6ab880b`, `baaeff1`, `f231126`, `606203d`; [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md). |

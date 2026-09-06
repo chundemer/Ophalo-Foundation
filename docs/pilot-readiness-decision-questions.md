@@ -1,7 +1,12 @@
 # Pilot Readiness Decision Questions
 
 **Date:** 2026-06-25  
-**Status:** Temporary working document — not authoritative  
+**Status:** SUPERSEDED THINKING DOCUMENT — not authoritative. Roughly 100 ADRs have landed since
+this was written; where it disagrees with an ADR, the [decision index](decisions/decision-index.md),
+[workboard](workboard.md), and [deferred-topics.md](deferred-topics.md) win. Pending: a triage pass
+marking each remaining open question promoted / deferred / rejected, after which this file is archived.
+Do not treat any unresolved question here as live scope.
+
 **Purpose:** Collect the questions that must be answered before locking the remaining pilot/go-live
 build plan. After decisions are made, promote the final outcomes into `docs/decisions/decision-index.md`,
 the relevant build log, ADRs, and/or `docs/deferred-topics.md`.
