@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-06 (Session 3b — Team invite clarity, complete)
+**Last updated:** 2026-09-06 (Session 4 — Price Book first-catalog and terminology guidance, complete; BL142 fully complete)
 
 **Current scope:** GAP-039 (production observability) and GAP-068 (multi-workspace sign-in +
 invited-user display name) are both fully implemented and accepted. GAP-039's founder-owned Batch
@@ -22,7 +22,11 @@ Slice B (two-choice New Request decision) is complete and tested. Session 3 Slic
 Settings readiness labels) is complete and tested — Session 3 is now fully complete. Session 3b
 (Team invite clarity) is complete and tested: the invite form states the invitation lifecycle,
 shows business-outcome role descriptions (Admin/Operator/Viewer, Operator default, no Owner), and
-success copy no longer promises email delivery. See
+success copy no longer promises email delivery. Session 4 (Price Book discovery and first-catalog
+guidance) is complete and tested across three slices: A (empty-catalog "What are you setting up?"
+first-item type guidance, `d52b2452`), B (Category vs. Search alias field guidance, `f8704628`),
+and C (PWA "Technician suggestions" terminology, replacing "Nudges" in all user-facing copy while
+keeping the `ScopeNudgeRule` API/domain term, `eee46c00`). BL142 is now fully complete. See
 [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
@@ -94,9 +98,23 @@ relevant build log.
      unavailable), and corrects post-submit copy to say the invitation is pending acceptance
      rather than promising email delivery. 1 production file; new
      `TeamSection.inviteClarity.test.tsx` (5 tests). Focused suite (9 tests across both
-     TeamSection test files) and `tsc --noEmit` passed. **Session 4 — Price Book discovery** is
-     next (see BL142).
-   GAP-033 is not next unless Christian explicitly reprioritizes it.
+     TeamSection test files) and `tsc --noEmit` passed. **Session 4 — Price Book discovery and
+     first-catalog guidance** — done, accepted, three slices. Slice A: empty-catalog "What are you
+     setting up?" panel offers the four existing catalog-item types (Material/Equipment/
+     Service/Fee), each with a one-line plain-language description, opening `CatalogItemDrawer`
+     pre-set to that type via a new `initialType` prop; guidance shown only in the empty-catalog
+     panel, not the standard drawer. 2 production files; `PriceBook.test.tsx` and
+     `CatalogItemDrawer.test.tsx` updated/extended. Merged `d52b2452`. Slice B: shared field-level
+     guidance (`catalogFieldHelp.ts`) distinguishing Category from Search alias everywhere either
+     is editable (new-item drawer, edit drawer, item detail page); create-drawer's alias field
+     relabeled "Search alias" to match the term used elsewhere. 4 production files, 3 test files.
+     Merged `f8704628`. Slice C: renamed every user-facing "Nudge(s)" string in the PWA to
+     "Technician suggestions" (tab label, Add/Edit/Delete suggestion rule, empty-state copy),
+     leaving the `ScopeNudgeRule` API/component/query-key terminology untouched; tightened the
+     Offerings & Assemblies empty-state subtext to state an assembly doesn't replace its individual
+     items. 2 production files, 1 test file. Merged `eee46c00`. BL142 (ADR-496 pilot onboarding
+     upgrade) is now fully complete — Sessions 0 through 4 all done, accepted, and merged.
+   GAP-033 (below) is next per the pilot/release gate order in Deferred next work.
 2. **GAP-033 — public-intake trust and tracker access truthfulness** (P1, `ophalo-web`), full
    scope in
    [pilot-readiness-bug-tracker.md](pilot-readiness-bug-tracker.md#gap-033--public-intake-does-not-establish-sufficient-customer-trust-or-return-continuity).
