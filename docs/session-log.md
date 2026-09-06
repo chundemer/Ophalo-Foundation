@@ -81,7 +81,9 @@ relevant build log.
        loads), and on Team either `Solo workspace` (exactly one non-removed member) or a factual
        `N team members` count — all server-supplied via the existing `api.getIntake`/`api.getSetup`/
        `api.listMembers` queries, no new backend read. 3 production files; extended
-       `Settings.v2Shell.test.tsx`. Full app suite 1083/1083 passed.
+       `Settings.v2Shell.test.tsx`. Full app suite 1083/1083 passed. Also visually verified
+       against Christian's real local account (all three tabs, close-up zoom) — all three badges
+       render correctly with no layout issues.
    - Session 3 (request-first PWA onboarding) is now fully complete. **Session 3b — Team invite
      clarity** is next (see BL142); complete it before taking the deferred P0 optional-module UI
      gaps below.
