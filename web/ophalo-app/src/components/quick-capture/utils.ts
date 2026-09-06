@@ -14,6 +14,7 @@ export type CaptureFormDraft = {
 };
 
 export type Stage =
+  | { kind: "choice" }
   | { kind: "handoff" }
   | { kind: "lookup" }
   | { kind: "result"; lookup: PhoneLookupResult; lockedPhone: string }

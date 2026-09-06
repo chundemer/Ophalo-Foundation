@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-06 (Session 3 Slice B)
 
 **Current scope:** GAP-039 (production observability) and GAP-068 (multi-workspace sign-in +
 invited-user display name) are both fully implemented and accepted. GAP-039's founder-owned Batch
@@ -17,7 +17,8 @@ are complete, tested, merged to `main` (`eb33f6a5`, plus follow-up `226778af`), 
 On 2026-09-06, ADR-496 was amended: the uncommitted automatic-Pilot-provisioning and blanket
 backfill slices are superseded. Price Book is an operator-selected per-business capability during
 the pilot, not a Pilot-classification side effect. Session 3 Slice A (retire Getting Started, add
-the Requests empty-state panel) is complete, tested, and merged to `main` (`4d9f81ac`). See
+the Requests empty-state panel) is complete, tested, and merged to `main` (`4d9f81ac`). Session 3
+Slice B (two-choice New Request decision) is complete and tested. See
 [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
@@ -66,12 +67,15 @@ relevant build log.
        `RequestsEmptyStatePanel` (state-correct heading: checking/live/being-set-up) shown only
        in the zero-request Requests workspace, gated on `addFirstRequestComplete`. Deleted the
        superseded `RequestsOnboardingBanner` checklist. Full app suite 1075/1075 passed.
-     - **Slice B — two-choice New Request decision** — next. `QuickCapture.tsx` +
-       `quick-capture/utils.ts` (`Stage` type) + a new choice-panel component, replacing the
-       direct `{kind: "handoff"}` jump for Owner/Admin with an explicit "Let the customer submit
-       it" vs. "Record it yourself" decision.
-     - **Slice C — passive Settings readiness labels** — after Slice B. Link `Live`, response
-       policy `Active`, team `Solo workspace`/member-state; frontend-only, no new backend read
+     - **Slice B — two-choice New Request decision** — done, accepted. Added `Stage: "choice"` to
+       `quick-capture/utils.ts` and a new `ChoicePanel.tsx`; Owner/Admin's `QuickCapture` initial
+       stage now opens on `choice` instead of jumping straight to `handoff`. Each card states its
+       outcome ("Let the customer submit it" / "Record it yourself") and routes into the existing
+       `handoff`/`lookup` stages unchanged. Non-Owner/Admin and `followUpPrefill` entry paths are
+       untouched. 3 production files; new tests `ChoicePanel.test.tsx` and `QuickCapture.test.tsx`.
+       Full app suite 1080/1080 passed.
+     - **Slice C — passive Settings readiness labels** — next. Link `Live`, response policy
+       `Active`, team `Solo workspace`/member-state; frontend-only, no new backend read
        (`api.listMembers` already supplies member state).
    - Complete the request-first PWA onboarding slices before taking the deferred P0 optional-module
      UI gaps below.

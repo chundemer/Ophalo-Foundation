@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { type PhoneLookupResult } from "../lib/apiClient";
 import { getPublicBaseUrl } from "../lib/publicBaseUrl";
 import { type Stage, type CaptureFormDraft } from "./quick-capture/utils";
+import { ChoicePanel } from "./quick-capture/ChoicePanel";
 import { HandoffPanel } from "./quick-capture/HandoffPanel";
 import { LookupGate } from "./quick-capture/LookupGate";
 import { LookupResultView } from "./quick-capture/LookupResultView";
@@ -30,7 +31,7 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
     followUpPrefill
       ? { kind: "capture", lockedPhone: followUpPrefill.phone, prefill: followUpPrefill }
       : isOwnerOrAdmin
-        ? { kind: "handoff" }
+        ? { kind: "choice" }
         : { kind: "lookup" }
   );
   const [captureFormDraft, setCaptureFormDraft] = useState<CaptureFormDraft | null>(null);
@@ -80,19 +81,30 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
   }
 
   const title =
-    stage.kind === "handoff"
-      ? "Text a Link"
-      : stage.kind === "lookup"
-        ? "Look Up Customer"
-        : stage.kind === "result"
-          ? stage.lookup.customer
-            ? "Customer Found"
-            : "Possible Existing Customer"
-          : stage.kind === "capture"
-            ? followUpPrefill ? "Create Follow-up Request" : "New Request"
-            : "Request Captured";
+    stage.kind === "choice"
+      ? "New Request"
+      : stage.kind === "handoff"
+        ? "Text a Link"
+        : stage.kind === "lookup"
+          ? "Look Up Customer"
+          : stage.kind === "result"
+            ? stage.lookup.customer
+              ? "Customer Found"
+              : "Possible Existing Customer"
+            : stage.kind === "capture"
+              ? followUpPrefill ? "Create Follow-up Request" : "New Request"
+              : "Request Captured";
 
   const content = (() => {
+    if (stage.kind === "choice") {
+      return (
+        <ChoicePanel
+          onChooseCustomerLink={() => setStage({ kind: "handoff" })}
+          onChooseRecordMyself={() => setStage({ kind: "lookup" })}
+        />
+      );
+    }
+
     if (stage.kind === "handoff") {
       return (
         <HandoffPanel
