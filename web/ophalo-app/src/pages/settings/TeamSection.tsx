@@ -529,6 +529,8 @@ export function TeamSection({ callerRole }: { callerRole: AccountRole }) {
 
   const members = membersData?.members ?? [];
   const seatUsage = membersData?.seatUsage;
+  const teamStateLabel =
+    members.length === 1 ? "Solo workspace" : `${members.length} team members`;
 
   function handleInviteSuccess(email: string) {
     setInviteSuccess(email);
@@ -537,7 +539,15 @@ export function TeamSection({ callerRole }: { callerRole: AccountRole }) {
 
   return (
     <section className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-5 shadow-sm sm:p-6">
-      <h2 className="keep-row-title mb-1.5">Team</h2>
+      <div className="flex items-center gap-2 mb-1.5">
+        <h2 className="keep-row-title">Team</h2>
+        {!isLoading && !isError && members.length > 0 && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--keep-accent)]/20 bg-[var(--keep-accent-bg)] px-2 py-0.5 text-xs font-medium text-[var(--keep-accent-hover)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--keep-accent)]" />
+            {teamStateLabel}
+          </span>
+        )}
+      </div>
       <p className="text-sm text-[var(--ophalo-muted)] mb-4">
         Keep works great for solo businesses — no team required. When you're ready, invite the people who help answer customers or handle work.
       </p>

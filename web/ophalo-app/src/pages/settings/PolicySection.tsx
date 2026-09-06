@@ -54,7 +54,13 @@ export function PolicySection({ setup }: PolicySectionProps) {
 
   return (
     <section className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-5 shadow-sm sm:p-6">
-      <h2 className="keep-row-title mb-1.5">Response Policy</h2>
+      <div className="flex items-center gap-2 mb-1.5">
+        <h2 className="keep-row-title">Response Policy</h2>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--keep-accent)]/20 bg-[var(--keep-accent-bg)] px-2 py-0.5 text-xs font-medium text-[var(--keep-accent-hover)]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--keep-accent)]" />
+          Active
+        </span>
+      </div>
       <p className="text-sm text-[var(--ophalo-muted)] mb-4">
         Set the response targets your team works toward. The defaults work well for most service businesses — come back and adjust once you've seen how requests flow.
       </p>

@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-06 (Session 3 Slice B)
+**Last updated:** 2026-09-06 (Session 3 Slice C — Session 3 complete)
 
 **Current scope:** GAP-039 (production observability) and GAP-068 (multi-workspace sign-in +
 invited-user display name) are both fully implemented and accepted. GAP-039's founder-owned Batch
@@ -18,7 +18,8 @@ On 2026-09-06, ADR-496 was amended: the uncommitted automatic-Pilot-provisioning
 backfill slices are superseded. Price Book is an operator-selected per-business capability during
 the pilot, not a Pilot-classification side effect. Session 3 Slice A (retire Getting Started, add
 the Requests empty-state panel) is complete, tested, and merged to `main` (`4d9f81ac`). Session 3
-Slice B (two-choice New Request decision) is complete and tested. See
+Slice B (two-choice New Request decision) is complete and tested. Session 3 Slice C (passive
+Settings readiness labels) is complete and tested — Session 3 is now fully complete. See
 [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
@@ -74,11 +75,16 @@ relevant build log.
        `handoff`/`lookup` stages unchanged. Non-Owner/Admin and `followUpPrefill` entry paths are
        untouched. 3 production files; new tests `ChoicePanel.test.tsx` and `QuickCapture.test.tsx`.
        Full app suite 1080/1080 passed.
-     - **Slice C — passive Settings readiness labels** — next. Link `Live`, response policy
-       `Active`, team `Solo workspace`/member-state; frontend-only, no new backend read
-       (`api.listMembers` already supplies member state).
-   - Complete the request-first PWA onboarding slices before taking the deferred P0 optional-module
-     UI gaps below.
+     - **Slice C — passive Settings readiness labels** — done, accepted. Added a passive badge to
+       each Settings section heading: `Live` on Public Link (gated on `hasActiveLink` +
+       `publicSlug`, never shown falsely), `Active` on Response Policy (unconditional once setup
+       loads), and on Team either `Solo workspace` (exactly one non-removed member) or a factual
+       `N team members` count — all server-supplied via the existing `api.getIntake`/`api.getSetup`/
+       `api.listMembers` queries, no new backend read. 3 production files; extended
+       `Settings.v2Shell.test.tsx`. Full app suite 1083/1083 passed.
+   - Session 3 (request-first PWA onboarding) is now fully complete. **Session 3b — Team invite
+     clarity** is next (see BL142); complete it before taking the deferred P0 optional-module UI
+     gaps below.
    GAP-033 is not next unless Christian explicitly reprioritizes it.
 2. **GAP-033 — public-intake trust and tracker access truthfulness** (P1, `ophalo-web`), full
    scope in

@@ -301,11 +301,20 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
   }
 
   const activeSlug = intake?.publicSlug ?? null;
+  const isLive = Boolean(intake?.hasActiveLink && intake.publicSlug);
 
   return (
     <section className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-5 shadow-sm sm:p-6 space-y-6">
       <div>
-        <h2 className="keep-row-title mb-1">Public link</h2>
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="keep-row-title">Public link</h2>
+          {isLive && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--keep-accent)]/20 bg-[var(--keep-accent-bg)] px-2 py-0.5 text-xs font-medium text-[var(--keep-accent-hover)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--keep-accent)]" />
+              Live
+            </span>
+          )}
+        </div>
         <p className="text-sm text-[var(--ophalo-muted)]">
           Customers use this link to send you a request. Copy it anywhere — your website, email signature, or text messages.
         </p>

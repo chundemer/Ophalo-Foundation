@@ -55,6 +55,13 @@ const emptyMembers: ListMembersResponse = {
   seatUsage: { occupiedSeats: 1, maxSeats: 5, atLimit: false, limitApplies: true },
 };
 
+const soloMember: ListMembersResponse = {
+  members: [
+    { accountUserId: "1", email: "owner@apex.test", role: "owner", status: "active", isCurrentUser: true, isPrimaryOwner: true, activatedAtUtc: "2026-07-01T00:00:00Z", inviteExpiresAtUtc: null },
+  ],
+  seatUsage: { occupiedSeats: 1, maxSeats: 5, atLimit: false, limitApplies: true },
+};
+
 function renderSettings() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -116,6 +123,44 @@ describe("Settings — V2 shell", () => {
     await user.click(screen.getByRole("tab", { name: "Team" }));
     expect(await screen.findByRole("heading", { name: "Team" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /invite team member/i })).toBeInTheDocument();
+  });
+
+  it("shows passive readiness labels: link Live, policy Active, team Solo workspace", async () => {
+    mockListMembers.mockResolvedValue(soloMember);
+    const user = userEvent.setup();
+    renderSettings();
+
+    expect(await screen.findByText("Live")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Response Policy" }));
+    expect(await screen.findByText("Active")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Team" }));
+    expect(await screen.findByText("Solo workspace")).toBeInTheDocument();
+  });
+
+  it("shows a factual team member count instead of Solo workspace for more than one member", async () => {
+    mockListMembers.mockResolvedValue({
+      members: [
+        { accountUserId: "1", email: "owner@apex.test", role: "owner", status: "active", isCurrentUser: true, isPrimaryOwner: true, activatedAtUtc: "2026-07-01T00:00:00Z", inviteExpiresAtUtc: null },
+        { accountUserId: "2", email: "helper@apex.test", role: "operator", status: "active", isCurrentUser: false, isPrimaryOwner: false, activatedAtUtc: "2026-07-02T00:00:00Z", inviteExpiresAtUtc: null },
+      ],
+      seatUsage: { occupiedSeats: 2, maxSeats: 5, atLimit: false, limitApplies: true },
+    } satisfies ListMembersResponse);
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole("tab", { name: "Team" }));
+    expect(await screen.findByText("2 team members")).toBeInTheDocument();
+    expect(screen.queryByText("Solo workspace")).not.toBeInTheDocument();
+  });
+
+  it("does not claim the public link is Live when it isn't active yet", async () => {
+    mockGetIntake.mockResolvedValue({ hasActiveLink: false, publicSlug: null, createdAtUtc: null } satisfies IntakeStatusResult);
+    renderSettings();
+
+    await screen.findByRole("heading", { name: "Company" });
+    expect(screen.queryByText("Live")).not.toBeInTheDocument();
   });
 
   it("shows a token loading state then the section when setup resolves", async () => {
