@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-06 (Session 4 — Price Book first-catalog and terminology guidance, complete; BL142 fully complete)
+**Last updated:** 2026-09-06 (GAP-033 public-intake trust and tracker event-feed allowlist — both slices complete and merged; see [BL145](build-log/145-gap-033-public-intake-trust-and-event-feed-allowlist.md))
 
 **Current scope:** GAP-039 (production observability) and GAP-068 (multi-workspace sign-in +
 invited-user display name) are both fully implemented and accepted. GAP-039's founder-owned Batch
@@ -9,6 +9,15 @@ invited-user display name) are both fully implemented and accepted. GAP-039's fo
 browser/network verification checklist is done, including a production-verified fix for a
 membership-status data issue that was blocking multi-workspace selection for one email (see
 [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md)).
+
+GAP-033 (public-intake trust and tracker event-feed truthfulness) is complete and merged
+(`11c19d3d`, `89a776d8`): Slice A replaced the post-submit auto-redirect with an ADR-446-compliant
+stable confirmation screen, retired the "private page"/"private link" copy, and added a Terms link
+to the shared public footer; Slice B replaced the `Visibility == All` event filter in
+`KeepCustomerPageMapper` with an explicit default-deny allowlist (`StatusChanged` and
+customer/business `MessageAdded` only; unknown/future event types excluded). Real-phone review is
+folded into the BL089 launch pass. See
+[BL145](build-log/145-gap-033-public-intake-trust-and-event-feed-allowlist.md).
 
 Pilot Onboarding Upgrade Session 0 (audit) and Session 1 (server-owned Proposed Work release gate)
 are complete, tested, merged to `main` (`eb33f6a5`, plus follow-up `226778af`), and **deployed**
@@ -61,7 +70,19 @@ relevant build log.
 
 ## Next implementation sequence
 
-1. **Pilot onboarding — request-first PWA completion** (ADR-496) — see
+**Next approved coding session: phone and capture integrity — GAP-016 / GAP-021 / GAP-051, then
+GAP-025** (see the pilot/release gate order in Deferred next work). Consolidate the ADR-444
+normalized ten-digit North American path across native and all client paths before extending
+fallback customer recognition. Do not begin GAP-070/GAP-071 optional-module UI work.
+
+**Separate founder-owned prerequisite:** GAP-039 Batch 4 production-candidate verification remains
+required before any customer-facing pilot. It is an operational verification gate, not the next
+coding session.
+
+The numbered items below are the completed release-safety sequence, retained for reference.
+Items 1 and 2 are done; the next coding session is named above.
+
+1. **Pilot onboarding — request-first PWA completion** (ADR-496) — **complete** — see
    [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md):
    - **Slice A — schema + domain provenance** — done, accepted. 7 production files (including a
      required nullable-DTO compatibility fix); migration verified against real Postgres and
@@ -114,25 +135,21 @@ relevant build log.
      Offerings & Assemblies empty-state subtext to state an assembly doesn't replace its individual
      items. 2 production files, 1 test file. Merged `eee46c00`. BL142 (ADR-496 pilot onboarding
      upgrade) is now fully complete — Sessions 0 through 4 all done, accepted, and merged.
-   GAP-033 (below) is next per the pilot/release gate order in Deferred next work.
-2. **GAP-033 — public-intake trust and tracker access truthfulness** (P1, `ophalo-web`), full
-   scope in
+   BL142 (ADR-496 pilot onboarding upgrade) is complete.
+2. **GAP-033 — public-intake trust and tracker access truthfulness** (P1) — **complete and
+   merged** (`11c19d3d`, `89a776d8`). See
+   [BL145](build-log/145-gap-033-public-intake-trust-and-event-feed-allowlist.md) and the
+   resolution note in
    [pilot-readiness-bug-tracker.md](pilot-readiness-bug-tracker.md#gap-033--public-intake-does-not-establish-sufficient-customer-trust-or-return-continuity).
-   Corrects the public request journey to not overstate the link-token model and not collect
-   personal data before establishing trust: business identity/contact shown before
-   address/contact fields; email stays visible/optional; land on tracker directly; real
-   privacy-policy link; remove copy promising unsupported email/verification/security properties
-   (tracker-page copy already corrected in `75f472f`; intake form still says "private
-   page"/"private link"); audit the public tracker event feed for an explicit customer-facing
-   event-type allowlist.
 
-Tracker order for this pair: GAP-039 → GAP-033 → GAP-040 (see `pilot-readiness-bug-tracker.md`).
+Remaining tracker order for release safety: GAP-039 (Batch 4 verification, founder-owned) → GAP-040
+(marketing-site accuracy). GAP-033 is done. See `pilot-readiness-bug-tracker.md`.
 
 Do not begin GAP-042 implementation until GAP-067 passes its screenshot/acceptance review (its
 read-only placement preflight remains valid).
 
 Request UI Upgrade 1.1 still needs its product-owner visual acceptance pass — a review task, not
-a coding batch, independent of GAP-033.
+a coding batch.
 
 ## Deferred next work
 
@@ -143,8 +160,8 @@ a coding batch, independent of GAP-033.
   advisory on outstanding Actual Work with a structured `Close anyway` pilot exception, not a hard
   Resolved→Closed gate. See [BL136 P](build-log/136-P-preflight.md).
 - **Pilot/release gate order:** production observability (GAP-039, complete pending founder
-  verification) → pilot onboarding Session 2 (ADR-496) → public-intake trust (GAP-033) → phone
-  integrity (GAP-016/021/051) → remaining tracker order.
+  verification) → pilot onboarding (ADR-496, complete) → public-intake trust (GAP-033, complete) →
+  phone integrity (GAP-016/021/051) → remaining tracker order.
 - **Minimum Office Closeout:** Billing Revision, handoff, and correction/adjustment design resume
   only after the controlled-pilot and rehearsal gates; see
   [BL135](build-log/135-minimum-office-closeout-mechanical-preflight.md).

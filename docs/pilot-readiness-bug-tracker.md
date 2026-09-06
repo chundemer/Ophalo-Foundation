@@ -21,7 +21,7 @@ These are not an instruction to ship every remaining item before a supervised pi
 | --- | --- |
 | GAP-039 | Required before any customer-facing production pilot. |
 | GAP-068 | Required before pilot launch — a founder/owner with two+ active memberships cannot currently sign in at all. |
-| GAP-033 | Required before enabling public customer intake. |
+| GAP-033 | Resolved (`11c19d3d`, `89a776d8`). |
 | GAP-048 | Required before using email to share private customer request pages. |
 | GAP-047 | Required if staff relies on Internal priority for operational triage. |
 | GAP-016 / GAP-021 | Required before native use or accepting common `+1` phone entry in Quick Capture. |
@@ -31,7 +31,7 @@ These are not an instruction to ship every remaining item before a supervised pi
 
 Complete each numbered slice with focused automated coverage and a production-candidate/manual check where applicable. Do not start a dependent slice before its prerequisite is accepted.
 
-1. **Release safety and truthful public entry:** GAP-039, GAP-033, then GAP-040. Establish safe production observability and configuration validation first; make the public request journey and published claims truthful second. (GAP-056 customer SMS/QR handoff sender/business context — resolved, commit `0fc7a2a`.)
+1. **Release safety and truthful public entry:** GAP-039, then GAP-040. Establish safe production observability and configuration validation first; make the public request journey and published claims truthful second. (GAP-033 public-intake trust and tracker event-feed allowlist — resolved, commits `11c19d3d`, `89a776d8`. GAP-056 customer SMS/QR handoff sender/business context — resolved, commit `0fc7a2a`.)
 2. **Field-work correctness:** No active item. (GAP-055 Actual Work recorder ownership — resolved across Batches A–D: migration/ownership `b3b3d41`, recorder authorization `d26b955` and `72ce6a5`, audited transfer `c7ce822`, and Owner/Admin recovery UI `de40491`.)
 3. **Phone and capture integrity:** GAP-016, GAP-021, GAP-051, then GAP-025. Consolidate the ADR-444 normalization path before extending fallback customer recognition.
 4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, GAP-049, and GAP-063. First establish shared responsive seams without behavior change; then make Owner/Admin review, lifecycle, attention, and timing actions unmistakable. See [BL137](build-log/137-request-detail-and-queue-usability-handoff.md) for the bounded execution order.
@@ -156,13 +156,15 @@ has an explicitly approved server-authoritative contract.
 
 ### GAP-033 — Public intake does not establish sufficient customer trust or return continuity
 
-**Status:** Open
+**Status:** Resolved — commits `11c19d3d` (Slice A) and `89a776d8` (Slice B); earlier identity work R90b-1/2a/2b (`75f472f` and migration `20260718013055`)
 **Severity:** P1
-**Area:** `ophalo-web` public intake
+**Area:** `ophalo-web` public intake, Keep customer page mapper
 
 Before asking for customer address/contact data, show business identity and configured public contact information when available; place factual privacy/use disclosures before relevant fields; keep email visible and optional; take a successful submission directly to its private tracker; and provide a real privacy-policy link. Public copy must not promise automatic tracker-link email, verification, or unsupported security properties.
 
 Additionally, audit the private tracker's request-history event feed for public exposure: the public tracker endpoint must serialize an explicit allowlist of customer-relevant event types and message sources, not "all events minus a blocklist." Internal activity (financial review, tech assignment, internal notes, raw status thrash) must never reach `page.events`. Business-authored customer messages and customer-friendly lifecycle phrasing are in scope to show; anything else is excluded by default.
+
+**Resolution:** Business-first identity/contact and configured-identity projection (never email) landed with R90b-1/2a/2b. Slice A replaced the post-submit auto-redirect with an ADR-446-compliant stable confirmation screen — "Request sent", reference code, explicit "Track this request" link to the private tracker, retained business identity and footer, welcome banner still shown on continue — and replaced the "private page"/"private link" copy that overstated the link-token model with neutral request-tracking-link language; a Terms link was added beside Privacy in the shared public footer. Slice B replaced the `Visibility == All` filter in `KeepCustomerPageMapper` with an explicit default-deny allowlist: an event reaches `page.events` only when it is stored customer-visible AND its type is `StatusChanged`, or `MessageAdded` from a `Customer`/`AccountUser` actor with a customer-safe `MessageIntent`; every other current type and any unknown/future enum value is excluded. Coverage: a mapper unit test enumerating every `KeepRequestEventType`, and an integration test proving internal notes and other internal-visibility events never reach `page.events`. Verification: full unit suite 1820/1820, architecture 14/14, `KeepCustomerPageTests` 18/18, event-adjacent integration 140/140; `ophalo-web` `tsc`/build clean plus desktop and business-identity browser review of both intake routes and the confirmation/tracker hand-off. Real-phone review folded into the BL089 launch pass.
 
 ### GAP-040 — Marketing site does not accurately represent the current product or launch posture
 
