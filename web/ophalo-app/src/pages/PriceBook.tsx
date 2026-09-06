@@ -465,7 +465,7 @@ export function PriceBook({
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
             >
               <Plus className="h-4 w-4" />
-              Add nudge rule
+              Add suggestion rule
             </button>
           )}
         </div>
@@ -484,7 +484,7 @@ export function PriceBook({
             [
               { key: "items", label: "Catalog Items" },
               { key: "assemblies", label: "Offerings & Assemblies" },
-              { key: "nudges", label: "Nudges" },
+              { key: "nudges", label: "Technician suggestions" },
             ] as const
           ).map((tab) => (
             <button
@@ -646,7 +646,7 @@ export function PriceBook({
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
           >
             <Plus className="h-4 w-4" />
-            Add nudge rule
+            Add suggestion rule
           </button>
         </div>
       )}
@@ -910,7 +910,7 @@ export function PriceBook({
                 </h2>
                 <p className="text-[var(--ophalo-muted)] text-sm mb-4">
                   {assemblyStatusFilter === "Active"
-                    ? "Build a static bundle of catalog items around one primary offering."
+                    ? "A reusable bundle of catalog items added together as a starting point for a job — it doesn't replace the individual items."
                     : "Nothing has been inactivated."}
                 </p>
                 {assemblyStatusFilter === "Active" && (
@@ -1058,7 +1058,7 @@ export function PriceBook({
 
           {nudgeRulesQuery.isError && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <p className="text-[var(--ophalo-muted)] text-sm mb-3">Couldn't load nudge rules.</p>
+              <p className="text-[var(--ophalo-muted)] text-sm mb-3">Couldn't load technician suggestions.</p>
               <button
                 type="button"
                 onClick={() => void nudgeRulesQuery.refetch()}
@@ -1073,9 +1073,9 @@ export function PriceBook({
             <div className="flex flex-1 items-center justify-center py-16">
               <div className="max-w-sm w-full rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-6 py-8 text-center shadow-sm">
                 <Package className="mx-auto mb-3 h-8 w-8 text-[var(--ophalo-muted)]" />
-                <h2 className="text-[var(--ophalo-ink)] text-base font-semibold mb-1">No nudge rules</h2>
+                <h2 className="text-[var(--ophalo-ink)] text-base font-semibold mb-1">No technician suggestions yet</h2>
                 <p className="text-[var(--ophalo-muted)] text-sm mb-4">
-                  Set up paired suggestions technicians see after adding a trigger item to a scope.
+                  Optional related items suggested after a technician picks a trigger item or assembly — they aren't added automatically and aren't part of the assembly.
                 </p>
                 <button
                   type="button"
@@ -1085,7 +1085,7 @@ export function PriceBook({
                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
                 >
                   <Plus className="h-4 w-4" />
-                  Add your first nudge rule
+                  Add your first suggestion rule
                 </button>
               </div>
             </div>
@@ -1231,14 +1231,14 @@ export function PriceBook({
       {deleteNudgeRule && (
         <KeepModal
           onClose={() => setDeleteNudgeRule(null)}
-          label="Delete nudge rule"
+          label="Delete suggestion rule"
           overlayClassName="flex items-center justify-center px-4"
           backdropClassName="bg-black/30"
           panelClassName="max-w-sm w-full rounded-xl bg-[var(--ophalo-card)] shadow-xl p-5 flex flex-col gap-4"
         >
-          <h2 className="font-serif text-lg font-semibold text-[var(--ophalo-ink)]">Delete nudge rule</h2>
+          <h2 className="font-serif text-lg font-semibold text-[var(--ophalo-ink)]">Delete suggestion rule</h2>
           <p className="text-sm text-[var(--ophalo-ink)]">
-            Delete the nudge rule for <span className="font-semibold">{deleteNudgeRule.triggerDisplayName}</span>?
+            Delete the suggestion rule for <span className="font-semibold">{deleteNudgeRule.triggerDisplayName}</span>?
             This can't be undone.
           </p>
           {deleteNudgeRuleError && (

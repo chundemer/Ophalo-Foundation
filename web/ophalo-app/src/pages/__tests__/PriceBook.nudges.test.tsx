@@ -129,7 +129,7 @@ async function selectFromPicker(user: ReturnType<typeof userEvent.setup>, combob
   await user.click(await within(listbox).findByText(optionText));
 }
 
-describe("PriceBook — Nudges tab", () => {
+describe("PriceBook — Technician suggestions tab", () => {
   beforeEach(() => {
     mockGetCatalogItems.mockReset().mockResolvedValue(catalogPage);
     mockGetCatalogCategories.mockReset().mockResolvedValue({ categories: [] });
@@ -157,8 +157,8 @@ describe("PriceBook — Nudges tab", () => {
     mockCreateScopeNudgeRule.mockResolvedValue({ ...rulesResponse.rules[0] });
     renderPriceBook();
 
-    await user.click(await screen.findByRole("button", { name: "Add your first nudge rule" }));
-    await screen.findByRole("heading", { name: "Add nudge rule" });
+    await user.click(await screen.findByRole("button", { name: "Add your first suggestion rule" }));
+    await screen.findByRole("heading", { name: "Add suggestion rule" });
 
     await selectFromPicker(user, screen.getAllByRole("combobox")[0], "Furnace Inspection");
     await selectFromPicker(user, screen.getAllByRole("combobox")[1], "Filter");
@@ -180,7 +180,7 @@ describe("PriceBook — Nudges tab", () => {
     renderPriceBook();
 
     await user.click(await screen.findByRole("button", { name: "Edit" }));
-    await screen.findByRole("heading", { name: "Edit nudge rule" });
+    await screen.findByRole("heading", { name: "Edit suggestion rule" });
 
     // Trigger is displayed but not an editable combobox.
     expect(screen.getByText("Trigger can't be changed after creation.")).toBeInTheDocument();
@@ -201,8 +201,8 @@ describe("PriceBook — Nudges tab", () => {
 
     await user.click(await screen.findByRole("button", { name: "Delete" }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Delete nudge rule" });
-    expect(within(dialog).getByText(/Delete the nudge rule for/)).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "Delete suggestion rule" });
+    expect(within(dialog).getByText(/Delete the suggestion rule for/)).toBeInTheDocument();
     expect(within(dialog).getByText("Furnace Inspection")).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
@@ -218,7 +218,7 @@ describe("PriceBook — Nudges tab", () => {
     );
     renderPriceBook();
 
-    await user.click(await screen.findByRole("button", { name: "Add your first nudge rule" }));
+    await user.click(await screen.findByRole("button", { name: "Add your first suggestion rule" }));
     await selectFromPicker(user, screen.getAllByRole("combobox")[0], "Furnace Inspection");
     await selectFromPicker(user, screen.getAllByRole("combobox")[1], "Filter");
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -258,8 +258,8 @@ describe("PriceBook — Nudges tab", () => {
     mockCreateScopeNudgeRule.mockResolvedValue({ ...rulesResponse.rules[0] });
     renderPriceBook();
 
-    await user.click(await screen.findByRole("button", { name: "Add your first nudge rule" }));
-    await screen.findByRole("heading", { name: "Add nudge rule" });
+    await user.click(await screen.findByRole("button", { name: "Add your first suggestion rule" }));
+    await screen.findByRole("heading", { name: "Add suggestion rule" });
 
     // Switch the trigger to Assembly and page through the browse-only picker to the second page.
     const triggerAssemblyRadio = screen.getAllByRole("radio", { name: "Assembly" })[0];

@@ -49,7 +49,9 @@ function newSuggestion(): DraftSuggestion {
 }
 
 /**
- * Owner/Admin create/edit modal for Paired Nudges rules (build-log/124, Session 4). Create picks
+ * Owner/Admin create/edit modal for technician-suggestion rules — internally ScopeNudgeRule
+ * (build-log/124, Session 4; BL142 Session 4 renamed the PWA label, not the API/domain term).
+ * Create picks
  * exactly one trigger (catalog item or assembly) plus 1-3 ordered suggestions; edit only replaces
  * the suggestion list — the trigger is shown but not editable, matching the PUT contract accepting
  * no trigger fields.
@@ -168,7 +170,7 @@ export function ScopeNudgeRuleModal({ mode, existingRule, onClose, onSaved }: Sc
     });
   }
 
-  const title = mode === "create" ? "Add nudge rule" : "Edit nudge rule";
+  const title = mode === "create" ? "Add suggestion rule" : "Edit suggestion rule";
 
   return (
     <KeepModal
