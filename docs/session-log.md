@@ -16,7 +16,8 @@ are complete, tested, merged to `main` (`eb33f6a5`, plus follow-up `226778af`), 
 `main`, and applied to Christian's local development database.
 On 2026-09-06, ADR-496 was amended: the uncommitted automatic-Pilot-provisioning and blanket
 backfill slices are superseded. Price Book is an operator-selected per-business capability during
-the pilot, not a Pilot-classification side effect. See
+the pilot, not a Pilot-classification side effect. Session 3 Slice A (retire Getting Started, add
+the Requests empty-state panel) is complete, tested, and merged to `main` (`4d9f81ac`). See
 [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
@@ -58,6 +59,20 @@ relevant build log.
      applied to Christian's local dev database. See BL142 for full delivery record.
    - **Slices B/C — automatic Pilot provisioning/backfill** — superseded; do not commit or
      implement. Per-business pilot grants use the existing authorized internal entitlement path.
+   - **Session 3 — request-first PWA onboarding**, split into slices (exceeds the single-session
+     batch gate):
+     - **Slice A — retire Getting Started, add Requests empty-state panel** — done, accepted,
+       merged (`4d9f81ac`). Removed the Getting Started nav/route/page; new
+       `RequestsEmptyStatePanel` (state-correct heading: checking/live/being-set-up) shown only
+       in the zero-request Requests workspace, gated on `addFirstRequestComplete`. Deleted the
+       superseded `RequestsOnboardingBanner` checklist. Full app suite 1075/1075 passed.
+     - **Slice B — two-choice New Request decision** — next. `QuickCapture.tsx` +
+       `quick-capture/utils.ts` (`Stage` type) + a new choice-panel component, replacing the
+       direct `{kind: "handoff"}` jump for Owner/Admin with an explicit "Let the customer submit
+       it" vs. "Record it yourself" decision.
+     - **Slice C — passive Settings readiness labels** — after Slice B. Link `Live`, response
+       policy `Active`, team `Solo workspace`/member-state; frontend-only, no new backend read
+       (`api.listMembers` already supplies member state).
    - Complete the request-first PWA onboarding slices before taking the deferred P0 optional-module
      UI gaps below.
    GAP-033 is not next unless Christian explicitly reprioritizes it.
