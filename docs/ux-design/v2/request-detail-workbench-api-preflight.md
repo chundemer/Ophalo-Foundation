@@ -62,10 +62,8 @@ Request Detail page and Actual Work integration — `ActualWorkCard.tsx`, `Actua
 under `web/ophalo-app/src/pages/request-detail/__tests__/`. This preflight's contract-matrix and
 gap analysis (server-side flags, `PrimaryAction`, attention-guidance metadata) still stands, but the
 "nothing to audit for drift on the frontend side" framing does not: Actual Work capture/history is a
-reusable existing module, not new frontend work. See `docs/session-log.md` "Active priority" for the
-corrected sequencing — Request Detail UI redesign first, reusing existing Actual Work components as
-one conditional module; 8B (Owner/Admin financial review card) stays deferred per its own preflight
-in `docs/session-log.md`'s Direct Actual Work section.
+reusable existing module, not new frontend work. See `docs/workboard.md` for the
+current work sequence. This preflight's historical sequencing is superseded by the workboard.
 
 **Tests:** `tests/OpHalo.IntegrationTests/Api/KeepRequestDetailTests.cs`,
 `KeepRequestDetailB4Tests.cs`, `KeepRequestDetailB5Tests.cs`, `KeepRequestDetailRowAuthApiTests.cs`;

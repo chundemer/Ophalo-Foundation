@@ -73,10 +73,10 @@ Retired (historical only — do not treat as current doctrine):
 ## Related References
 
 The former `docs/reference/` links in this section are retired; that directory is not present in
-this repository. Use the current decision index, pilot-readiness tracker, and relevant build logs
+this repository. Use the current decision index, workboard, and relevant build logs
 for product-surface contracts and implementation history.
 
 - `docs/decisions/decision-index.md` — locked product and architecture decisions
-- `docs/pilot-readiness-bug-tracker.md` — current launch gaps and acceptance criteria
+- `docs/workboard.md` — current launch gaps, sequencing, and acceptance criteria
 - `docs/build-log/081-session-24-request-detail-2-column-workbench.md` — Request List / Detail
   action-boundary history

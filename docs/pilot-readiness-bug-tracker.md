@@ -1,10 +1,13 @@
-# Pilot Readiness Bug And Gap Tracker
+# Legacy Pilot Readiness Bug And Gap Tracker
 
-**Purpose:** The live, forward-looking backlog for unresolved pilot-readiness work.
+**Archived:** 2026-09-06. This is a preserved reconciliation snapshot, not a live workboard. The canonical forward-looking board is [docs/workboard.md](workboard.md). ADRs own decisions and contracts; build logs retain delivery history.
+
+**Former purpose:** The live, forward-looking backlog for unresolved pilot-readiness work.
 
 **Last triaged:** 2026-09-06
 
-Historical findings, resolved work, and superseded implementation notes were removed from this document. They remain in [the session log](session-log.md) and the relevant `docs/build-log/` records. A tracker item belongs here only while it has remaining work or an unresolved decision.
+This file preserves the prior tracker wording for traceability. Do not update it; use the workboard
+for current state and the relevant build log for delivery history.
 
 ## Status Legend
 

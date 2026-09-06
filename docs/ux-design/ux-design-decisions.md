@@ -460,6 +460,6 @@ wordmark-only. BRAND.md must be updated to match this contract.
   `brand-kit/BRAND.md` are corrected to match that locked implementation. Marketing-surface
   contrast remains subject to its own launch review.
 
-Implementation tracking lives in `docs/session-log.md`; the closed component recipes
+Implementation tracking lives in `docs/workboard.md`; the closed component recipes
 and migration checklist live in `keep-component-spec.md`. The retired
 `ux-design-harden-pass.md` is historical only.

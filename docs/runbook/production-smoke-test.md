@@ -82,7 +82,7 @@ If `--exchange-code` is supplied, its freshly-exchanged session takes priority o
 - Immediately if GAP-039's health/error-capture alerting fires.
 - Full end-to-end mode periodically (e.g. monthly) or whenever email delivery
   configuration changes (Resend key/from-address/DNS), per the GAP-039a deployment
-  notes in `docs/session-log.md`.
+  notes in `docs/workboard.md`.
 
 ## Reading the result
 
