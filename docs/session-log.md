@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-09-06 (Session 3 Slice C — Session 3 complete)
+**Last updated:** 2026-09-06 (Session 3b — Team invite clarity, complete)
 
 **Current scope:** GAP-039 (production observability) and GAP-068 (multi-workspace sign-in +
 invited-user display name) are both fully implemented and accepted. GAP-039's founder-owned Batch
@@ -19,7 +19,10 @@ backfill slices are superseded. Price Book is an operator-selected per-business 
 the pilot, not a Pilot-classification side effect. Session 3 Slice A (retire Getting Started, add
 the Requests empty-state panel) is complete, tested, and merged to `main` (`4d9f81ac`). Session 3
 Slice B (two-choice New Request decision) is complete and tested. Session 3 Slice C (passive
-Settings readiness labels) is complete and tested — Session 3 is now fully complete. See
+Settings readiness labels) is complete and tested — Session 3 is now fully complete. Session 3b
+(Team invite clarity) is complete and tested: the invite form states the invitation lifecycle,
+shows business-outcome role descriptions (Admin/Operator/Viewer, Operator default, no Owner), and
+success copy no longer promises email delivery. See
 [BL142](build-log/142-pilot-onboarding-upgrade-handoff.md).
 
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
@@ -85,8 +88,14 @@ relevant build log.
        against Christian's real local account (all three tabs, close-up zoom) — all three badges
        render correctly with no layout issues.
    - Session 3 (request-first PWA onboarding) is now fully complete. **Session 3b — Team invite
-     clarity** is next (see BL142); complete it before taking the deferred P0 optional-module UI
-     gaps below.
+     clarity** — done, accepted. `InviteForm` (`TeamSection.tsx`) now states the invitation
+     lifecycle before submission, replaces the unexplained role dropdown's implicit meaning with a
+     visible business-outcome description per role (Operator remains default, Owner still
+     unavailable), and corrects post-submit copy to say the invitation is pending acceptance
+     rather than promising email delivery. 1 production file; new
+     `TeamSection.inviteClarity.test.tsx` (5 tests). Focused suite (9 tests across both
+     TeamSection test files) and `tsc --noEmit` passed. **Session 4 — Price Book discovery** is
+     next (see BL142).
    GAP-033 is not next unless Christian explicitly reprioritizes it.
 2. **GAP-033 — public-intake trust and tracker access truthfulness** (P1, `ophalo-web`), full
    scope in

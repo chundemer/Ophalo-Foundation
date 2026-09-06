@@ -439,6 +439,12 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
 
 // ─── Invite form ──────────────────────────────────────────────────────────────
 
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+  admin: "Trusted office lead — can manage settings, team members, and the Price Book, in addition to daily work.",
+  operator: "Field or operations teammate — can create and manage requests and capture field work, but cannot manage team, settings, or the Price Book.",
+  viewer: "Read-only visibility into requests.",
+};
+
 interface InviteFormProps {
   atLimit: boolean;
   maxSeats: number;
@@ -471,6 +477,10 @@ function InviteForm({ atLimit, maxSeats, limitApplies, onSuccess }: InviteFormPr
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      <p className="text-sm text-[var(--ophalo-muted)]">
+        We'll create an invitation for this email. They use the email link to set up or sign in to
+        their own Keep account. They do not have access until they accept it.
+      </p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="email"
@@ -485,6 +495,7 @@ function InviteForm({ atLimit, maxSeats, limitApplies, onSuccess }: InviteFormPr
           value={role}
           onChange={(e) => setRole(e.target.value)}
           disabled={atLimit}
+          aria-describedby="invite-role-description"
           className="keep-field w-full sm:w-auto disabled:opacity-50"
         >
           <option value="admin">Admin</option>
@@ -500,6 +511,9 @@ function InviteForm({ atLimit, maxSeats, limitApplies, onSuccess }: InviteFormPr
           {atLimit ? "Team limit reached" : (submitting ? "Inviting…" : "Invite team member")}
         </KeepButton>
       </div>
+      <p id="invite-role-description" className="text-xs text-[var(--ophalo-muted)]">
+        {ROLE_DESCRIPTIONS[role]}
+      </p>
       {atLimit && limitApplies && (
         <p className="text-xs text-[var(--ophalo-muted)]">
           Your plan includes {maxSeats} team seats. Contact support to add more.
@@ -567,7 +581,8 @@ export function TeamSection({ callerRole }: { callerRole: AccountRole }) {
         />
         {inviteSuccess && (
           <p className="mt-2 text-sm text-[var(--ophalo-success)]">
-            Invite sent to {inviteSuccess}. They'll receive an email link to set up their account.
+            Invitation created for {inviteSuccess} — pending acceptance. If they don't receive the
+            email, use resend or manual-share below.
           </p>
         )}
       </div>
