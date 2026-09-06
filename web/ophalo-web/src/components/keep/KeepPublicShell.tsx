@@ -176,12 +176,20 @@ export function KeepPageFooter({ className = "" }: { className?: string }) {
       <p className="mx-auto mt-1 max-w-md text-sm leading-5 text-[var(--ophalo-muted)]">
         The trust and continuity layer between businesses and customers.
       </p>
-      <Link
-        href="/privacy"
-        className="mt-2 inline-block text-xs font-medium text-[var(--ophalo-muted)] underline-offset-2 hover:underline"
-      >
-        Privacy policy
-      </Link>
+      <div className="mt-2 flex items-center justify-center gap-4">
+        <Link
+          href="/privacy"
+          className="inline-block text-xs font-medium text-[var(--ophalo-muted)] underline-offset-2 hover:underline"
+        >
+          Privacy policy
+        </Link>
+        <Link
+          href="/terms"
+          className="inline-block text-xs font-medium text-[var(--ophalo-muted)] underline-offset-2 hover:underline"
+        >
+          Terms
+        </Link>
+      </div>
     </footer>
   );
 }

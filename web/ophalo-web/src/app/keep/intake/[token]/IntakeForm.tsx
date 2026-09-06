@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowRight, Clock, ClipboardList, Lock, MapPin, UserRound } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, ClipboardList, Lock, MapPin, UserRound } from "lucide-react";
 import { KeepButton } from "@/components/keep/KeepButton";
 import {
   KeepBusinessHeader,
@@ -12,7 +12,7 @@ import {
   KeepSectionHeader,
 } from "@/components/keep/KeepPublicShell";
 
-type Stage = "form" | "submitting" | "unavailable" | "staff";
+type Stage = "form" | "submitting" | "submitted" | "unavailable" | "staff";
 
 const US_STATES = [
   ["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],
@@ -130,8 +130,8 @@ export default function IntakeForm({
   websiteUrl?: string | null;
   phone?: string | null;
 }) {
-  const router = useRouter();
   const [stage, setStage] = useState<Stage>("form");
+  const [submitted, setSubmitted] = useState<{ pageToken: string; referenceCode: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<{ field: KnownField; message: string } | null>(null);
   const [showAptUnit, setShowAptUnit] = useState(false);
@@ -193,7 +193,11 @@ export default function IntakeForm({
       const body = await res.json().catch(() => null);
       const pageToken = typeof body?.pageToken === "string" ? body.pageToken : null;
       if (pageToken) {
-        router.push(`/keep/r/${encodeURIComponent(pageToken)}?welcome=1`);
+        const referenceCode = typeof body?.referenceCode === "string" ? body.referenceCode : null;
+        // ADR-446: do not auto-navigate away from a success the person has not yet read.
+        // Land on a stable confirmation with the request-tracking link and a persistent return path.
+        setSubmitted({ pageToken, referenceCode });
+        setStage("submitted");
         return;
       }
       setError("Something went wrong. Please try again.");
@@ -232,6 +236,57 @@ export default function IntakeForm({
   }
 
   // ─── Terminal states ────────────────────────────────────────────────────────
+
+  if (stage === "submitted" && submitted) {
+    const trackerHref = `/keep/r/${encodeURIComponent(submitted.pageToken)}?welcome=1`;
+    return (
+      <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
+        <div className="mx-auto w-full max-w-2xl">
+          {biz ? (
+            <div className="mb-4 sm:mb-5">
+              <KeepBusinessHeader businessName={biz} logoUrl={logoUrl} label="New request" />
+              <KeepConfiguredContact websiteUrl={websiteUrl} phone={phone} className="mt-2 px-1" />
+            </div>
+          ) : (
+            <div className="mb-4 px-1 sm:mb-5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                New request
+              </p>
+            </div>
+          )}
+
+          <KeepCardShell accentTop>
+            <div className="flex items-center gap-2 text-[var(--keep-accent)]">
+              <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden />
+              <h1 className="font-serif text-2xl font-semibold leading-tight text-foreground sm:text-[28px]">
+                Request sent
+              </h1>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Use the link below to follow progress and reply. Bookmark it — it&apos;s how you
+              return to this request.
+            </p>
+
+            {submitted.referenceCode && (
+              <p className="mt-4 text-sm text-foreground">
+                Reference: <span className="font-semibold">{submitted.referenceCode}</span>
+              </p>
+            )}
+
+            <Link
+              href={trackerHref}
+              className="mt-5 inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg bg-[var(--keep-accent)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--keep-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+            >
+              Track this request
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </KeepCardShell>
+
+          <KeepPageFooter />
+        </div>
+      </main>
+    );
+  }
 
   if (stage === "staff") {
     return (
@@ -318,8 +373,8 @@ export default function IntakeForm({
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               {biz
-                ? `Share a few details. After you submit, you'll get a private page to track this request and message ${biz}.`
-                : "Share a few details. After you submit, you'll get a private page to track this request and message the business."}
+                ? `Share a few details. You'll get a request-tracking link to follow progress and message ${biz} — no account needed.`
+                : "Share a few details. You'll get a request-tracking link to follow progress and message the business — no account needed."}
             </p>
 
             <div className="mt-6 space-y-6">
@@ -664,15 +719,15 @@ export default function IntakeForm({
 
               <p className="mt-3 text-center text-xs text-muted-foreground">
                 <Lock className="mr-1 inline h-3 w-3" aria-hidden />
-                You&apos;ll instantly receive a private page to track progress and communicate with us.
+                Next: your request-tracking link, so you can follow progress and reply.
               </p>
             </div>
           </KeepCardShell>
         </form>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          Already have a request? Check the private link{" "}
-          {biz ? `${biz} sent you.` : "the business sent you."}
+          Already sent a request? Use the tracking link{" "}
+          {biz ? `${biz} shared with you.` : "the business shared with you."}
         </p>
 
         <KeepPageFooter />
