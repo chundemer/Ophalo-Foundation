@@ -21,7 +21,8 @@ awaiting diff review + commit. Entry point: [BL148](build-log/148-gap-054-app-sh
 ## Next
 
 Order is locked in the workboard Next list: GAP-038 → GAP-040 → GAP-063 → GAP-048 → GAP-049 →
-GAP-072 → GAP-047. GAP-038 and GAP-072 each need a discovery ADR before implementation.
+GAP-072 → GAP-047. GAP-038 discovery ADR is now locked ([ADR-500](decisions/ADR-500-in-product-feedback-and-help-updates-loop.md));
+next step is its implementation build-log after GAP-054 commits. GAP-072 still needs a discovery ADR.
 
 ## Hot blocker
 
