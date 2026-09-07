@@ -99,6 +99,47 @@ describe("MobileNavMenu", () => {
     expect(screen.getByText("Admin")).toBeInTheDocument();
   });
 
+  it("renders the Business Settings group and routes sections through onNavigateSection (ADR-499)", async () => {
+    const user = userEvent.setup();
+    const onNavigateSection = vi.fn();
+    render(
+      <MobileNavMenu
+        items={items.filter((i) => i.id !== "settings")}
+        activeId="requests"
+        roleLabel="Owner"
+        sections={[
+          { id: "public-profile", label: "Company Profile & Public Link" },
+          { id: "policy", label: "Response Policy (SLAs)" },
+          { id: "team", label: "Team Seats & Permissions" },
+        ]}
+        onNavigate={vi.fn()}
+        onNavigateSection={onNavigateSection}
+        onSignOut={vi.fn()}
+        isSigningOut={false}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Business Settings")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Team Seats & Permissions" }));
+    expect(onNavigateSection).toHaveBeenCalledWith("team");
+  });
+
+  it("omits the Business Settings group when no sections are provided", () => {
+    render(
+      <MobileNavMenu
+        items={items.filter((i) => i.id !== "settings")}
+        activeId="requests"
+        roleLabel="Operator"
+        onNavigate={vi.fn()}
+        onSignOut={vi.fn()}
+        isSigningOut={false}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Business Settings")).not.toBeInTheDocument();
+  });
+
   it("offers sign out in the mobile menu", async () => {
     const user = userEvent.setup();
     const onSignOut = vi.fn();

@@ -18,15 +18,21 @@
 
 ## Next
 
-1. **GAP-040 — marketing-site accuracy.** Public copy, claims, and visuals truthfully match shipped V1 before the intake link is marketed.
-2. **GAP-047 — reliable urgent-priority triage.** Preserve the existing server-ranked amber `Internal priority: Urgent` request-row cue for scanning. On transport/API failure or a stale-version conflict, show associated failure feedback, retain/reload authoritative state, and never imply that a priority change saved when it did not.
-3. **GAP-063 — Spam/Test action.** Owner/Admin can make the existing authorized terminal classification from Request Detail, with accessible confirmation, optional ≤500-character reason, and truthful post-action state. [ADR-296](decisions/decision-index.md).
-4. **GAP-048 — share intent.** Private-page email goes through informed share confirmation; `mailto:` is never delivery evidence.
-5. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up.
+Completion order locked 2026-09-07. Items 1-2 (app-shell run) finish first — item 1 is already
+implemented, item 2 is needed during the pilot window. Items 3-6 are the supervised-pilot gates.
+Items 7-8 are non-gating polish.
 
-These are supervised-pilot gates alongside GAP-039 and GAP-069.
+1. **GAP-054 — app shell / account menu.** Bounded authenticated-workbench shell: account menu, workspace label (name shown, not switched — ADR-497 rule 8), Business Settings grouping, narrow/mobile navigation. [ADR-499](decisions/ADR-499-authenticated-app-shell-account-menu.md); [BL148](build-log/148-gap-054-app-shell-navigation-discovery.md). Slice 054-1 implemented; browser-verified 2026-09-07; pending diff review + commit. Not a pilot gate.
+2. **GAP-038 — in-product feedback + Help & Updates loop.** Authenticated, rate-limited, fail-soft feedback route to a private founder channel and a maintained Help & Updates page, reached from the GAP-054 account menu. Sequenced here so change announcements land in-product before the heavy change cadence of the coming month. Do not auto-attach customer PII or broad logs; no ticketing/CMS system. Not a pilot gate.
+3. **GAP-040 — marketing-site accuracy.** Public copy, claims, and visuals truthfully match shipped V1 before the intake link is marketed. **Pilot gate.**
+4. **GAP-063 — Spam/Test action.** Owner/Admin can make the existing authorized terminal classification from Request Detail, with accessible confirmation, optional ≤500-character reason, and truthful post-action state. [ADR-296](decisions/decision-index.md). **Pilot gate.**
+5. **GAP-048 — share intent.** Private-page email goes through informed share confirmation; `mailto:` is never delivery evidence. **Pilot gate** (before staff share private pages).
+6. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up. **Pilot gate** (before staff rely on closed-request follow-ups).
+7. **GAP-072 — Your profile page (display name).** Self-service page at a new `#/profile` route that edits `User.Name` only; a "Your profile" row is added to the account menu for **all** roles (desktop + mobile). Display name is Foundation identity, shared across workspaces, editable only by its owner; future per-user product settings attach to `AccountUser`. Needs a discovery ADR first (name-validation rules reuse ADR-497; resolve snapshot-vs-live historical actor-name display). Out of V1: notification/product preferences, passkey/session/security management, account deletion, avatar, per-workspace settings. No Owner/Admin "edit a member's name" control — self-service only. **Not a pilot gate.**
+8. **GAP-047 — Internal-priority save honesty.** The amber `Internal priority: Urgent` row cue is a visual aid for techs only — staff do **not** rely on it for triage order (product decision, 2026-09-07), so this is **no longer a pilot gate**. Still worth doing: on transport/API failure or a stale-version conflict, show failure feedback, retain/reload authoritative state, and never imply a priority change saved when it did not.
 
-GAP-047 (an Internal-priority update can appear to save when it failed) is **conditional, not a current gate**. Its former Request Detail foundation prerequisite (GAP-019 / 058 / 059) is complete, so the deferral now rests entirely on one product choice: it blocks the pilot only if staff will rely on Internal priority to decide what to handle first. Confirm that choice before treating it as in or out.
+GAP-040, GAP-063, GAP-048, and GAP-049 are the supervised-pilot coding gates alongside GAP-039 and
+GAP-069. GAP-054, GAP-038, GAP-072, and GAP-047 are not pilot gates.
 
 ## Decision queue
 
@@ -35,9 +41,8 @@ GAP-047 (an Internal-priority update can appear to save when it failed) is **con
 | GAP-064 | Minimum accountable staff-alert policy: recipient/fallback, channel, failure/escalation, quiet-hours, and privacy posture. Interim: founder watches the queue. |
 | GAP-025 | Customer phone-number lifecycle. ADR-492 is only the narrow request-phone continuity guardrail; it does not solve a customer permanently changing numbers. Decide editable current unique phone, verified historical aliases, audit/authority, shared-or-recycled-number safeguards, and request-entered-phone snapshots. No inferred identity matching. Includes [DEF-060](deferred-topics.md) (request-level service location and address history): recognizing a returning customer safely depends on location/address context, not phone alone. |
 | GAP-043 | V1 request-list scale model and verification threshold. |
-| GAP-054 | App-shell/top-bar review: business/account menu, persistent workspace switcher, entitled Price Book settings attachment, and narrow/mobile navigation. |
 | GAP-070 / GAP-071 | Optional-module commercial workflow and truthful discovery/handoff; no self-service entitlement write or guided setup. |
-| Proposed Work & Commercial Quotes | Agree the pilot finish-line and sequencing for the existing field-scope foundation, Owner/Admin Proposed Work Review ([ADR-488](decisions/ADR-488-owner-admin-proposed-work-review-workbench.md), [BL127](build-log/127-owner-admin-proposed-work-review-preflight.md)), and office commercial documents ([BL130](build-log/130-office-commercial-estimate-preflight.md)). Decide which postures—Estimate, Fixed-Price Quote, T&M Authorization—the pilot actually needs. Customer delivery/acceptance remains a separate later capability. |
+| Proposed Work & Commercial Quotes | Agree the pilot finish-line and sequencing for the existing field-scope foundation, Owner/Admin Proposed Work Review ([ADR-488](decisions/ADR-488-owner-admin-proposed-work-review-workbench.md), [BL127](build-log/127-owner-admin-proposed-work-review-preflight.md)), and office commercial documents ([BL130](build-log/130-office-commercial-estimate-preflight.md)). Decide which postures—Estimate, Fixed-Price Quote, T&M Authorization—the pilot actually needs. Public customer acceptance is a later separately sequenced capability with its product contract locked in [ADR-498](decisions/ADR-498-public-quote-acceptance-change-orders-and-accounting-boundary.md). |
 
 ## Proposed Work & Commercial Quotes — current state
 
@@ -46,7 +51,7 @@ GAP-047 (an Internal-priority update can appear to save when it failed) is **con
 | Field Proposed Work capture | Merged: price-blind scope composer, catalog/assembly/custom lines, undo, nudges, submission, request signal, entitlement, and server release gate. Confirm the production release setting before treating it as pilot-available. |
 | Owner/Admin Proposed Work Review | Not built. ADR-488 and BL127 lock the queue, history, review note, and explicit `Mark reviewed` transition. |
 | Office commercial estimate / quote | Not built. There is no `OfficeQuote`, `QuoteRevision`, or `QuoteLine` domain/UI/API. BL130 locks the product boundary but requires a mechanical preflight. |
-| Customer-facing quote | Later, separate capability: delivery, viewing, acceptance, signature, payment, invoicing, and accounting sync are not implied by internal approval. |
+| Customer-facing quote | Later, separately sequenced capability. ADR-498 locks opaque revision viewing, typed-name electronic consent, all-or-nothing decision, audit snapshot, durable receipt, and change-order boundaries. Payment, invoicing, and accounting sync remain out of scope. |
 
 **Price Book requirement:** use **Serial #** rather than SKU for the relevant item identifier. When
 Price Book item-identity work is scheduled, define its scope, uniqueness, entry/edit authority, and
@@ -55,7 +60,7 @@ SKU terminology or behavior.
 
 ## Deferred / pilot learning
 
-- **GAP-037, GAP-038:** founder value report and in-product feedback/help loop.
+- **GAP-037:** founder weekly value report. (GAP-038 promoted to **Next**, immediately after GAP-054.)
 - **GAP-041, GAP-046, GAP-026, GAP-053:** request-list selection, filter, search, and action-order refinements.
 - **GAP-044:** completed/cancelled-work discoverability.
 - **Native mobile app — parked, outside this pilot.** Field-execution app is Session 14+; store submission is S19. Stack and posture are locked: [ADR-236](decisions/ADR-236-mobile-native-app-technology-stack.md) (promoted by ADR-385). Open submission work is tracked in the [mobile store submission checklist](mobile-store-submission-checklist.md). GAP-051 native phone-formatting parity rides this track; public-web delivery is done.
@@ -82,4 +87,4 @@ The frozen [pilot readiness tracker](pilot-readiness-bug-tracker.md) is the auth
 
 ## Pilot gate checklist
 
-Before a supervised customer-facing pilot: GAP-039 Batch 4, GAP-069, GAP-040, GAP-047 (reliable urgent-priority cue), GAP-063, GAP-048 before sharing private pages, and GAP-049 before relying on closed-request follow-ups. GAP-064 needs a written alert-policy decision; until then the founder deliberately watches the queue.
+Before a supervised customer-facing pilot: GAP-039 Batch 4, GAP-069, GAP-040, GAP-063, GAP-048 before sharing private pages, and GAP-049 before relying on closed-request follow-ups. GAP-047 was dropped as a gate on 2026-09-07 (staff do not triage by Internal priority). GAP-064 needs a written alert-policy decision; until then the founder deliberately watches the queue.

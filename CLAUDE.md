@@ -6,10 +6,14 @@ These rules apply to every session. Keep responses concise and protect the conte
 
 Repository documents are authoritative. Use them in this order:
 
-1. `docs/session-log.md` for current scope, baseline, and the next approved batch.
-2. Named entries in `docs/decisions/decision-index.md` for locked decisions.
-3. Named `docs/build-log/` entries for completed implementation history.
-4. Architecture tests for enforced dependency boundaries.
+1. `docs/session-log.md` — next-session pointer only: the active item, its entry point, and the
+   current hot blocker. Read this first to orient.
+2. `docs/workboard.md` — the canonical forward-looking board: current scope, the locked Next
+   order, pilot gates, the decision queue, and deferred work. This is authoritative for
+   sequencing and scope; the session-log only points into it.
+3. Named entries in `docs/decisions/decision-index.md` for locked decisions.
+4. Named `docs/build-log/` entries for completed implementation history.
+5. Architecture tests for enforced dependency boundaries.
 
 Do not treat external files, the legacy/reference application, or legacy decisions as authoritative.
 Read `_reference/` or external build plans only when Christian or the current repository brief
@@ -34,9 +38,11 @@ explicitly requests them. Never edit `_reference/`.
   genuinely unclear, high-risk, or Christian asks for one. When an advisor is needed, send a concise
   problem statement plus relevant snippets only; do not forward the full conversation or broad repo
   context.
-- Treat `docs/session-log.md` as a lean launch brief. If it grows with historical detail, move that
-  detail to the relevant build log, decision document, or deferred-topic entry and leave only the
-  current scope, next batch, blockers, and verified baseline in the session log.
+- Treat `docs/session-log.md` as a next-session pointer, not a status document: the active item and
+  its entry point, the locked Next order by reference to the workboard, and the current hot blocker.
+  Scope, sequencing, gates, and deferrals live in `docs/workboard.md`; historical detail lives in
+  the relevant build log or decision document. If a session-log line would need editing whenever the
+  workboard changes, move it to the workboard.
 
 ## Session and Scope Protocol
 
@@ -115,8 +121,9 @@ context window.
 - Update documentation surgically; do not rewrite an entire large document when one section changed.
 - Record locked decisions in `docs/decisions/decision-index.md` and implementation history in the
   appropriate build log when the current batch requires it.
-- Keep `docs/session-log.md` as the current execution brief: completed state, exact next batch,
-  blockers, and verified test counts. Do not duplicate historical detail already preserved elsewhere.
+- Keep `docs/workboard.md` current in the same change as the work it records: move an item's status,
+  add its Done / evidence-index pointer, and drop it from Next. Keep `docs/session-log.md` pointing
+  at the new active item. Neither duplicates build-log history.
 
 ## Architecture Boundaries
 

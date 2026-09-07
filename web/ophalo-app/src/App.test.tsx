@@ -129,7 +129,7 @@ describe("App — signed-in user name beside role", () => {
     mockGetCatalogCategories.mockReset().mockResolvedValue({ categories: [] });
   });
 
-  it("renders `name · role` in the desktop workbench header when a name exists", async () => {
+  it("renders `name · role` in the desktop account menu trigger when a name exists", async () => {
     mockGetMe.mockReset().mockResolvedValue({
       accountUserId: "u1",
       accountId: "a1",
@@ -161,7 +161,7 @@ describe("App — signed-in user name beside role", () => {
     );
   });
 
-  it("offers a desktop sign-out control and invokes the logout endpoint", async () => {
+  it("offers sign out inside the desktop account menu and invokes the logout endpoint", async () => {
     mockGetMe.mockReset().mockResolvedValue({
       accountUserId: "u1",
       accountId: "a1",
@@ -175,10 +175,11 @@ describe("App — signed-in user name beside role", () => {
     const { container } = renderApp();
     const header = await waitFor(() => getDesktopHeader(container));
 
-    await user.click(within(header).getByRole("button", { name: "Sign out" }));
+    await user.click(within(header).getByRole("button", { name: /account menu/i }));
+    await user.click(within(header).getByRole("menuitem", { name: "Sign out" }));
 
     expect(mockLogout).toHaveBeenCalledTimes(1);
-    expect(within(header).getByRole("button", { name: "Signing out…" })).toBeDisabled();
+    expect(within(header).getByRole("menuitem", { name: "Signing out…" })).toBeDisabled();
   });
 });
 
@@ -547,37 +548,34 @@ describe("getNavItems", () => {
     expect(ids).toEqual(["requests"]);
   });
 
-  it("owner without the Price Book entitlement does not see Price Book", () => {
+  it("owner without the Price Book entitlement sees only Requests (ADR-499: Settings left the nav)", () => {
     const ids = getNavItems("owner", false).map((i) => i.id);
-    expect(ids).toEqual(["requests", "settings"]);
+    expect(ids).toEqual(["requests"]);
   });
 
-  it("admin without the Price Book entitlement does not see Price Book", () => {
+  it("admin without the Price Book entitlement sees only Requests", () => {
     const ids = getNavItems("admin", false).map((i) => i.id);
-    expect(ids).toEqual(["requests", "settings"]);
+    expect(ids).toEqual(["requests"]);
   });
 
-  it("owner with the Price Book entitlement sees it before Settings", () => {
+  it("owner with the Price Book entitlement sees Requests then Price Book", () => {
     const ids = getNavItems("owner", true).map((i) => i.id);
-    expect(ids).toEqual(["requests", "pricebook", "settings"]);
+    expect(ids).toEqual(["requests", "pricebook"]);
   });
 
-  it("admin with the Price Book entitlement sees it", () => {
+  it("admin with the Price Book entitlement sees Price Book", () => {
     const ids = getNavItems("admin", true).map((i) => i.id);
-    expect(ids).toEqual(["requests", "pricebook", "settings"]);
+    expect(ids).toEqual(["requests", "pricebook"]);
   });
 });
 
-// Mobile administration pilot posture (locked 2026-08-26, corrected 2026-08-26 / Slice 5c): Price
-// Book, Settings, and Account Administration (reachable only inside Settings — there is no
-// independent nav entry for it) are unconditionally omitted from the phone overflow menu. The
-// application shell's real phone/desktop boundary is Tailwind's md:/768px — the same breakpoint
-// that gates both the mobile header holding this menu's only trigger and the desktop nav that
-// still carries these items — not RequestWorkbenchShell's unrelated 1001px request-workspace pane
-// split; the two must not be conflated (correction to the same-day initial implementation, which
-// wrongly gated this filter on a synthetic ResizeObserver measurement the real hamburger trigger
-// can never reach).
-describe("App — phone navigation omits Price Book, Settings, and Account Administration", () => {
+// ADR-499: below md:/768px the overflow menu is the only navigation surface, so it now carries the
+// same navigation as desktop — Requests, the entitled Price Book pill, and (Owner/Admin) the
+// Business Settings sections through the shared AccountMenu grouping. This deliberately reverses
+// the 2026-08-26 omission of Price Book / Settings from the phone menu, whose stated premise
+// ("no viewport where the phone menu opens and desktop nav is also unavailable") is false for a
+// narrow portrait tablet or phone. Account Administration still has no independent entry.
+describe("App — phone navigation carries Price Book and Business Settings (ADR-499)", () => {
   beforeEach(() => {
     window.location.hash = "";
     mockGetMe.mockReset().mockResolvedValue({
@@ -593,7 +591,7 @@ describe("App — phone navigation omits Price Book, Settings, and Account Admin
     ]);
   });
 
-  it("phone overflow menu hides Price Book and Settings, keeps Requests, and never surfaces an independent Account Administration entry", async () => {
+  it("phone overflow menu surfaces Requests, Price Book, and the Business Settings sections for an Owner, with no independent Account Administration entry", async () => {
     const user = userEvent.setup();
     renderApp();
     await waitFor(() => expect(screen.getByLabelText("Open navigation menu")).toBeInTheDocument());
@@ -602,19 +600,37 @@ describe("App — phone navigation omits Price Book, Settings, and Account Admin
     const menu = within(screen.getByRole("dialog", { name: "Navigation menu" }));
 
     expect(menu.getByRole("button", { name: "Requests" })).toBeInTheDocument();
-    expect(menu.queryByRole("button", { name: "Price Book" })).not.toBeInTheDocument();
-    expect(menu.queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
+    expect(menu.getByRole("button", { name: "Price Book" })).toBeInTheDocument();
+    expect(menu.getByRole("button", { name: "Company Profile & Public Link" })).toBeInTheDocument();
+    expect(menu.getByRole("button", { name: "Response Policy (SLAs)" })).toBeInTheDocument();
+    expect(menu.getByRole("button", { name: "Team Seats & Permissions" })).toBeInTheDocument();
     expect(menu.queryByText(/Account Administration/i)).not.toBeInTheDocument();
   });
 
-  it("desktop workbench header (the actual ≥768px path, not the sidebar) still carries Price Book and Settings", async () => {
+  it("phone overflow menu navigates to a Settings section by hash", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await waitFor(() => expect(screen.getByLabelText("Open navigation menu")).toBeInTheDocument());
+
+    await user.click(screen.getByLabelText("Open navigation menu"));
+    const menu = within(screen.getByRole("dialog", { name: "Navigation menu" }));
+    await user.click(menu.getByRole("button", { name: "Response Policy (SLAs)" }));
+
+    expect(window.location.hash).toBe("#/settings?section=policy");
+  });
+
+  it("desktop workbench header carries Price Book as a pill and Settings only through the account menu", async () => {
     window.location.hash = "";
+    const user = userEvent.setup();
     const { container } = renderApp();
     await waitFor(() => expect(screen.getAllByText("Price Book").length).toBeGreaterThan(0));
 
     const header = getDesktopHeader(container);
     expect(within(header).getByRole("button", { name: /Price Book/ })).toBeInTheDocument();
-    expect(within(header).getByRole("button", { name: /Settings/ })).toBeInTheDocument();
+    expect(within(header).queryByRole("button", { name: /^Settings$/ })).not.toBeInTheDocument();
+
+    await user.click(within(header).getByRole("button", { name: /account menu/i }));
+    expect(within(header).getByRole("menuitem", { name: "Company Profile & Public Link" })).toBeInTheDocument();
   });
 
   it("pads the mobile top bar for the notch/Dynamic Island via env(safe-area-inset-top), the physical top-of-viewport element on phone (Slice 5c)", async () => {
@@ -654,12 +670,13 @@ describe("App — V2 top-nav shell covers Settings", () => {
     expect(screen.queryByRole("heading", { name: "Getting started" })).not.toBeInTheDocument();
   });
 
-  it("keeps the desktop top-nav header (and no <aside> sidebar) after navigating to Settings", async () => {
+  it("keeps the desktop top-nav header (and no <aside> sidebar) after navigating to Settings via the account menu", async () => {
     const user = userEvent.setup();
     const { container } = renderApp();
 
     const header = await waitFor(() => getDesktopHeader(container));
-    await user.click(within(header).getByRole("button", { name: /Settings/ }));
+    await user.click(within(header).getByRole("button", { name: /account menu/i }));
+    await user.click(within(header).getByRole("menuitem", { name: "Company Profile & Public Link" }));
 
     await screen.findByRole("heading", { name: "Settings", level: 1 });
     expect(window.location.hash).toBe("#/settings");

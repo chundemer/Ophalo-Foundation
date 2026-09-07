@@ -12,23 +12,21 @@ import { PriceBook } from "./pages/PriceBook";
 import { CatalogItemDetail } from "./pages/CatalogItemDetail";
 import { OfferingAssemblyDetail } from "./pages/OfferingAssemblyDetail";
 import { MobileNavMenu } from "./components/layout/MobileNavMenu";
+import { AccountMenu, getBusinessSettingsSections, type BusinessSettingsSectionId } from "./components/layout/AccountMenu";
 import { LiveAnnouncerRegion } from "./components/a11y/LiveAnnouncerRegion";
-import { Plus, Inbox, Settings as SettingsIcon, Tag, Menu, LogOut } from "lucide-react";
+import { Plus, Inbox, Tag, Menu } from "lucide-react";
 import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClient";
 import { redirectToSignInOnce } from "./lib/redirectToSignIn";
 
 // ADR-462: AccountCapabilityPackageEnrollment.FeatureKeys.PriceBookQuotesMaterials.
 const PRICE_BOOK_FEATURE_KEY = "keep.price_book_quotes_materials";
 
-// Application-shell nav boundary is Tailwind's md:/768px — the same breakpoint that gates the
-// mobile top bar's hamburger trigger (the only way to open MobileNavMenu) and the desktop
-// sidebar/aside. This is a different boundary from RequestWorkbenchShell's 1001px request-
-// workspace pane split; do not conflate the two (correction, 2026-08-26). Slice 5c: the phone
-// menu omits Price Book/Settings/Account Administration (which lives inside Settings, with no
-// independent entry) unconditionally — there is no reachable width where the phone menu opens
-// and desktop/tablet nav (sidebar) is also available, so the omission does not need to be width-
-// gated in code; it already only ever renders in the phone menu.
-const PHONE_OMITTED_NAV_IDS: ReadonlySet<NavItem["id"]> = new Set(["pricebook", "settings"]);
+// ADR-499: the phone overflow menu now carries the same navigation as desktop — Requests, the
+// entitled Price Book pill, and (for Owner/Admin) the Business Settings sections through the same
+// AccountMenu grouping. This deliberately reverses the 2026-08-26 omission of Price Book/Settings
+// from the phone menu: below md:/768px the overflow menu is the only navigation surface, so a
+// narrow-viewport Owner previously had no path at all to Team, Response Policy, or Company
+// Profile.
 
 // Shell-level access flags (isReadOnly, isPastDue) are intentionally not derived here.
 // GET /keep/setup/onboarding checks Keep.SettingsManage before account access, so Operators
@@ -123,15 +121,15 @@ export interface NavItem {
 // Build 112: Price Book is a first-class top-level item, visible only to an Owner/Admin whose
 // account carries the PriceBookQuotesMaterials entitlement — `entitled` is the client-side
 // discovery check only; every catalog API remains the authority.
+// ADR-499: nav items are operating workspaces only. Requests is always present; Price Book is a
+// first-class pill for an Owner/Admin whose account carries the entitlement. Business Settings is
+// no longer a nav item — it lives in AccountMenu.
 export function getNavItems(role: AccountRole, entitled: boolean): NavItem[] {
   const items: NavItem[] = [
     { id: "requests", label: "Requests", icon: <Inbox className="h-4 w-4" /> },
   ];
-  if (role === "owner" || role === "admin") {
-    if (entitled) {
-      items.push({ id: "pricebook", label: "Price Book", icon: <Tag className="h-4 w-4" /> });
-    }
-    items.push({ id: "settings", label: "Settings", icon: <SettingsIcon className="h-4 w-4" /> });
+  if ((role === "owner" || role === "admin") && entitled) {
+    items.push({ id: "pricebook", label: "Price Book", icon: <Tag className="h-4 w-4" /> });
   }
   return items;
 }
@@ -187,7 +185,7 @@ function AppShell() {
     capabilityPackages?.some((c) => c.featureKey === PRICE_BOOK_FEATURE_KEY && c.enabled) ?? false;
 
   const navItems = getNavItems(role, priceBookEntitled);
-  const phoneNavItems = navItems.filter((item) => !PHONE_OMITTED_NAV_IDS.has(item.id));
+  const businessSettingsSections = getBusinessSettingsSections(role);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   // Incremented only by an explicit Requests navigation. The wide workbench consumes this as a
@@ -255,6 +253,12 @@ function AppShell() {
 
   function navigateToSettings(section?: "public-profile" | "policy" | "team") {
     navigate({ page: "settings", section });
+  }
+
+  // AccountMenu Business Settings entries deep-link the existing #/settings routes; public-profile
+  // is the default section, so it navigates to the clean #/settings URL.
+  function navigateToSettingsSection(section: BusinessSettingsSectionId) {
+    navigate({ page: "settings", section: section === "public-profile" ? undefined : section });
   }
 
   function navigateToRequests() {
@@ -432,57 +436,35 @@ function AppShell() {
                 ) : null;
               })()}
             </button>
-            {(role === "owner" || role === "admin") && (
-              <>
-                {priceBookEntitled && (
-                  <button
-                    type="button"
-                    onClick={() => navigate({ page: "pricebook" })}
-                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
-                      activeNavId === "pricebook"
-                        ? "bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)] font-semibold"
-                        : "text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
-                    }`}
-                  >
-                    <Tag className="h-4 w-4" />
-                    Price Book
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => navigate({ page: "settings" })}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
-                    activeNavId === "settings"
-                      ? "bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)] font-semibold"
-                      : "text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
-                  }`}
-                >
-                  <SettingsIcon className="h-4 w-4" />
-                  Settings
-                </button>
-              </>
+            {(role === "owner" || role === "admin") && priceBookEntitled && (
+              <button
+                type="button"
+                onClick={() => navigate({ page: "pricebook" })}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
+                  activeNavId === "pricebook"
+                    ? "bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)] font-semibold"
+                    : "text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
+                }`}
+              >
+                <Tag className="h-4 w-4" />
+                Price Book
+              </button>
             )}
           </nav>
 
           <div className="ml-auto flex items-center gap-3">
             {role !== "unknown" && (
-              <span className="text-xs text-[var(--ophalo-muted)] font-medium">
-                {me?.userName
-                  ? `${me.userName} · ${roleLabel(role)}`
-                  : me?.businessName
-                    ? `${me.businessName} · ${roleLabel(role)}`
-                    : roleLabel(role)}
-              </span>
+              <AccountMenu
+                businessName={me?.businessName}
+                userName={me?.userName}
+                roleLabel={roleLabel(role)}
+                sections={businessSettingsSections}
+                settingsActive={activeNavId === "settings"}
+                onNavigateSection={navigateToSettingsSection}
+                onSignOut={signOut}
+                isSigningOut={isSigningOut}
+              />
             )}
-            <button
-              type="button"
-              onClick={signOut}
-              disabled={isSigningOut}
-              className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              {isSigningOut ? "Signing out…" : "Sign out"}
-            </button>
             {/* PWA UI-quality correction (2026-08-12): Price Book, Catalog Item Detail, and
                 Offering/Assembly Detail each carry their own dominant contextual CTA — a second
                 global "New Request" competes with it, so it's dropped only on those three routes.
@@ -653,18 +635,17 @@ function AppShell() {
       )}
 
       {/* Mobile overflow nav (Session 2e.4, build-log/112: no manually-known URL required).
-          Settings and Price Book (and, since Account Administration lives inside Settings, that
-          too) are unconditionally omitted from `items` — phone pilot posture locked/corrected
-          2026-08-26. This menu only ever opens
-          below md:/768px (the header holding its trigger is `md:hidden`), which is also the only
-          width where the desktop sidebar/aside — where these routes remain reachable — is absent;
-          there is no width where both this menu and the sidebar are unavailable. */}
+          ADR-499: below md:/768px this menu is the only navigation surface, so it carries the same
+          items as desktop — Requests, the entitled Price Book pill, and (Owner/Admin) the Business
+          Settings sections — reversing the 2026-08-26 omission of Settings/Price Book. */}
       {mobileMenuOpen && (
         <MobileNavMenu
-          items={phoneNavItems}
+          items={navItems}
           activeId={activeNavId}
           roleLabel={roleLabel(role)}
+          sections={businessSettingsSections}
           onNavigate={(id) => id === "requests" ? navigateToRequests() : navigate({ page: id })}
+          onNavigateSection={navigateToSettingsSection}
           onSignOut={signOut}
           isSigningOut={isSigningOut}
           onClose={() => setMobileMenuOpen(false)}
