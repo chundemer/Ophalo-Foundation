@@ -16,6 +16,77 @@ build-log also settles feedback payload **retention/deletion policy**, the conte
 and — within the ADR-293 no-ticket-lifecycle boundary — a **bounded automatic retry plus an alert on
 a growing unsent backlog** for failed feedback delivery (no operator status/resolve UI).
 
+**Amendment (2026-09-07, BL149 — implementation decisions).** The implementation build-log
+([BL149](../build-log/149-gap-038-in-product-feedback-help-updates-implementation.md)) settles the
+items this ADR deferred to it. Where the following differ from the body text below, these govern;
+BL149 holds the full detail.
+
+- **Remote content source (§1).** The founder JSON document lives in the existing R2 bucket
+  (ADR-471) at key `platform/updates.json`, read through a dedicated read-only `IUpdatesContentSource`.
+  It carries a top-level `"schema": 1`; content-shape changes are additive (ADR-501 §3), a breaking
+  change bumps `schema`. Founder publishes by overwriting the object (Cloudflare dashboard /
+  `wrangler`), no deploy. Rollback = restore the previous R2 object version.
+- **Fetch / cache / last-known-good (§1).** 5 s server-side fetch timeout; parsed payload cached
+  in-process for 5 min. **Last-known-good is best-effort and per-instance** (`IMemoryCache`), not
+  shared or durable — a cold instance that hits a broken source before it ever cached a good
+  payload serves an **empty feed**, not stale content. This is accepted for a not-a-pilot-gate
+  surface; durable cross-instance LKG is explicitly out of scope. "One malformed edit never blanks
+  the surface" holds for any warm instance; it is not an absolute guarantee.
+- **Guide images / CSP (§4, §Consequences).** There is no app CSP today and GAP-038 does **not**
+  introduce one. Guide images are **served through the backend** at
+  `GET /updates/guides/img/<name>` (Foundation-owned), streaming from R2 under the fixed prefix
+  `platform/updates/guides/img/`, restricted to `image/png|jpeg|webp`, a ~2 MB object cap, with
+  `Content-Type` forced from the allowlist. The renderer emits only `/updates/guides/img/<name>`
+  relative URLs; any other image URL is dropped. **Withdrawn:** "served from an allowlisted asset
+  origin (one `img-src` entry added to the app CSP)" and "the proxy route rejects any image URL not
+  on the allowlisted origin" — replaced by the constrained backend proxy above. An app-wide CSP
+  baseline is deferred to a dedicated hardening ticket (DEF entry to be filed).
+- **Markdown renderer (§4).** `snarkdown` + `DOMPurify` (both new `ophalo-app` deps). Hard
+  allowlist: tags `p, strong, em, ul, ol, li, a, img, br`; attrs `href, src, alt` only (no
+  `style`/`class`/`id`/`on*`/`target`/`data-*`). `a[href]` must be `https:` or an in-app relative
+  route; `img[src]` must match `^/updates/guides/img/…`. Every rendered link gets
+  `rel="noopener noreferrer"`. Remote markdown is treated as untrusted input; sanitise before DOM
+  insertion.
+- **Feedback delivery (§5) — persist-first, at-least-once.** The endpoint validates, persists a
+  `pending` row (minimal `feedback` table on `OpHaloDbContext`, strict non-null, no backfill) with a
+  generated delivery id, and **commits it before any delivery attempt**. It then optionally attempts
+  one synchronous send carrying the delivery id (receiver dedupes). On confirmed success it scrubs
+  `message` + `context_json` immediately, keeping metadata only. On failure or an ambiguous result
+  the full row is left for a retry `BackgroundService` (backoff 1 → 5 → 15 → 60 → 180 min, then
+  `abandoned`). Retention: `delivered` metadata-only rows hard-deleted after **7 days**; `abandoned`
+  rows (body retained for recovery) after **30 days** — the 30-day window requires a
+  privacy/retention disclosure line in the pilot notice copy. Backlog alert fires at ≥3 rows
+  `pending` older than 15 min, or immediately on any `abandoned`; the alert carries **no feedback
+  text** (environment, failure type, count, oldest age, correlation id only).
+- **Response codes (§5).** `503` only when persistence fails *before* any delivery attempt (webhook
+  not called, client may retry — the sole non-"sent" outcome); `202` once persisted, whether or not
+  the immediate send succeeded. At-least-once delivery is explicit: a notification may be duplicated
+  and the receiver dedupes on the delivery id.
+- **Founder channel.** A **generic** `IFounderNotifier` — a typed `HttpClient` to one incoming-
+  webhook URL (`FounderChannel:WebhookUrl`, founder-provisioned like the Sentry DSN), taking a
+  structured event, not a Slack/Discord-shaped payload. Introduced with the feedback slice, not the
+  content path. The §1 "compact alert to the founder channel" on content-fetch failure is
+  retrofitted onto this notifier once it exists; until then content failures are captured via
+  structured logging / Sentry.
+- **Visual values (§2).** Trigger dot: 6 px circle in `--ophalo-accent`, `top:-1px;right:-1px` on
+  the desktop account-menu and `MobileNavMenu` triggers, `aria-hidden`, " (updates available)"
+  appended to the accessible name. Row suffix: ` · {N} new`, `0.8125rem`, muted-text token (name
+  confirmed against the GAP-054 menu component), not a pill. Banner: `--ophalo-attention-bg`
+  background, `1px solid --ophalo-attention`, `role="status"`. Guide image frame: `max-width:480px`,
+  neutral 1 px border, 8 px padding, identical in both themes, `loading="lazy"`.
+- **Non-help friction entry points (§5).** Exactly two for v1: the `#/help` header "Report a
+  problem" action, and a "Send feedback" row in the account menu / `MobileNavMenu` (all roles).
+  In-workflow per-surface entry points (request-detail overflow, capture surfaces) are deferred
+  until feedback data shows contextual reporting is needed.
+- **Sequencing (§Consequences).** GAP-038 ships as **three** independently-compiling slices, not
+  two: **038-1a** content backend (proxy + image proxy + `IUpdatesContentSource` + schema validator
+  + DTOs; no founder-channel infra), **038-1b** content frontend (feed hook, watermark, dot, menu
+  row, `#/help` page, renderer, banner), **038-2** feedback path (`POST /feedback` + table +
+  migration + `IFounderNotifier` + retry service + alert + entry points). Order 1a → 1b → 2.
+
+Status stays **Locked**; this amendment refines the deferred implementation details and does not
+reopen the core decision.
+
 ## Decision
 
 GAP-038 ships one authenticated pilot-support loop with **zero database impact on the read/awareness

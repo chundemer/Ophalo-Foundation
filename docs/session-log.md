@@ -28,11 +28,19 @@ Foundation-owned; ADR-500 amended). Preflight done 2026-09-07: all named fronten
 (`MobileNavMenu`, `RequestListContent`, `App.tsx` hash router, `--ophalo-accent`/`--ophalo-attention`
 tokens) and backend patterns (minimal-API endpoints, typed HttpClient, `OpHaloDbContext`) confirmed;
 no founder-channel webhook and no CSP config exist yet. Failed-delivery scope settled: bounded retry
-+ backlog alert, no operator UI (inside the ADR-293 boundary). Next step is the implementation
-build-log after GAP-054 commits — settles remote source, asset origin, markdown renderer,
-content-fetch timeout, retry/retention policy, visual values, non-help friction entry points, plus
-ready-to-build exit criteria (see workboard GAP-038). Split into feed+awareness+page / friction if
-over the batch gate. GAP-072 still needs a discovery ADR.
++ backlog alert, no operator UI (inside the ADR-293 boundary). Implementation
+build-log started ([BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md)):
+D1–D8 open decisions drafted with recommendations (R2 content source, backend-proxied guide images
+to drop the CSP dependency, `snarkdown`+`dompurify`, 5s/5min proxy, minimal `feedback` table + retry
+BackgroundService, proposed visual values, two shell entry points, 038-1/038-2 slice split).
+D1–D8 resolved after a review pass (delete-on-success → null-body-on-success + 7-day metadata sweep;
+explicit retry backoff 1/5/15/60/180 min; generic webhook notifier; guide-image proxy constrained
+to a fixed R2 prefix + MIME/size caps; CSP baseline deferred to its own DEF ticket). Split into
+three slices: 038-1a content backend (no founder-channel infra) → 038-1b content frontend → 038-2
+feedback path. D5 resolved: persist-first, at-least-once, scrub-on-success (`503`/`202` cases
+specified). Per-slice exit criteria in BL149. Before 038-1a: R2 object-versioning, `GET /updates`
++ image-proxy contracts, `updates.json` JSON-schema + publishing rules, 038-1a file list. GAP-054
+commit must land first. GAP-072 still needs a discovery ADR.
 
 ## Hot blocker
 
