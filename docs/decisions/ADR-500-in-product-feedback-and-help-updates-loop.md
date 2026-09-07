@@ -6,7 +6,15 @@
 consolidates the full end-to-end contract into one document.
 **Related:** ADR-293 (Friction Flash intake), ADR-294 (Pilot Updates page), ADR-499 (account menu —
 reserves the Help & Updates entry), ADR-495 (Sentry telemetry boundary — same PII discipline),
-ADR-236 (per-user product settings attach to `AccountUser`, not identity), DEF-072, DEF-073
+ADR-236 (per-user product settings attach to `AccountUser`, not identity), DEF-072, DEF-073,
+ADR-501 (route shape + compatibility policy)
+
+**Amendment (2026-09-07, ADR-501):** the routes below are `GET /updates` and `POST /feedback`
+(**Foundation**-owned, flat, no `/api/v1` prefix — see ADR-501). Every `/api/v1/updates` and
+`/api/v1/feedback` reference in this document reads as that corrected form. The implementation
+build-log also settles feedback payload **retention/deletion policy**, the content-fetch **timeout**,
+and — within the ADR-293 no-ticket-lifecycle boundary — a **bounded automatic retry plus an alert on
+a growing unsent backlog** for failed feedback delivery (no operator status/resolve UI).
 
 ## Decision
 

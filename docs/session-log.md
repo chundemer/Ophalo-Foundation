@@ -21,8 +21,18 @@ awaiting diff review + commit. Entry point: [BL148](build-log/148-gap-054-app-sh
 ## Next
 
 Order is locked in the workboard Next list: GAP-038 → GAP-040 → GAP-063 → GAP-048 → GAP-049 →
-GAP-072 → GAP-047. GAP-038 discovery ADR is now locked ([ADR-500](decisions/ADR-500-in-product-feedback-and-help-updates-loop.md));
-next step is its implementation build-log after GAP-054 commits. GAP-072 still needs a discovery ADR.
+GAP-072 → GAP-047. GAP-038 discovery ADR locked ([ADR-500](decisions/ADR-500-in-product-feedback-and-help-updates-loop.md));
+route/compatibility policy locked ([ADR-501](decisions/ADR-501-api-route-and-compatibility-policy.md):
+no `/api/v1` prefix, flat routes, domain-owned — GAP-038's `GET /updates` + `POST /feedback` are
+Foundation-owned; ADR-500 amended). Preflight done 2026-09-07: all named frontend surfaces
+(`MobileNavMenu`, `RequestListContent`, `App.tsx` hash router, `--ophalo-accent`/`--ophalo-attention`
+tokens) and backend patterns (minimal-API endpoints, typed HttpClient, `OpHaloDbContext`) confirmed;
+no founder-channel webhook and no CSP config exist yet. Failed-delivery scope settled: bounded retry
++ backlog alert, no operator UI (inside the ADR-293 boundary). Next step is the implementation
+build-log after GAP-054 commits — settles remote source, asset origin, markdown renderer,
+content-fetch timeout, retry/retention policy, visual values, non-help friction entry points, plus
+ready-to-build exit criteria (see workboard GAP-038). Split into feed+awareness+page / friction if
+over the batch gate. GAP-072 still needs a discovery ADR.
 
 ## Hot blocker
 
