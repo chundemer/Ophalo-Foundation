@@ -1,6 +1,6 @@
 # BL149 — GAP-038: in-product feedback + Help & Updates loop — implementation build-log
 
-**Status:** Pre-work complete / implementation-ready for 038-1a (2026-09-08; Christian signed off).
+**Status:** 038-1a (content backend) landed 2026-09-08 — see the "038-1a completion record" below.
 D1–D8 remain resolved (D5 = persist-first). 038-1b and 038-2 retain their own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
@@ -490,6 +490,42 @@ unconfigured-R2 source resolves and returns the empty feed (no DI `500`).
 - [x] 038-1a changed-file list enumerated and checked against the CLAUDE.md batch gate.
 - [x] 038-1a test plan: proxy / schema-validation / last-known-good / image prefix+MIME+size
       rejection.
+
+### 038-1a completion record (landed 2026-09-08)
+
+Implemented exactly to the file gate above — **7 production + 2 test files, 9 total, no extra
+fake/fixture/package/migration/frontend file.** The one approved dependency,
+**`JsonSchema.Net` 9.4.0** (MIT, Draft 2020-12), was added to `src/OpHalo.Api/OpHalo.Api.csproj`;
+it is the only package added and it added no tenth file. `updates.schema.json` is embedded from
+`docs/contracts/` via a linked `EmbeddedResource` with a pinned `LogicalName`, validated as-is.
+
+- **Seam** (`IUpdatesContentSource`, Application): domain scalars only; feed and image reads each
+  take an explicit byte cap; always registered (real R2 adapter when `R2Settings.IsConfigured`,
+  `UnavailableUpdatesContentSource` otherwise — no `IsDevelopment` gate, so an unconfigured host
+  yields the contracted empty-feed / `503` path, never a DI `500`).
+- **R2 adapter** (Infrastructure): fixed keys `platform/updates.json` and
+  `platform/updates/guides/img/<name>` only; 5-second cancellation-aware timeout (caller
+  cancellation still propagates); capped-copy on both reads — an over-cap feed object is a read
+  failure → LKG/empty. Feed cap is 4 MiB (`UpdatesFeedCache.MaxFeedBytes`); image cap is the
+  contracted 2 MiB.
+- **Feed cache** (`UpdatesFeedCache`, Api): validate-then-deserialize; `RequireFormatValidation`
+  makes a bad `date-time` fail; post-schema duplicate-`id` rejection on each list; `IClock`-driven
+  5-minute fresh slot in `IMemoryCache` + a separate per-instance LKG string; `SemaphoreSlim`
+  stampede guard; `Reset()` for test isolation / a future founder cache-bust. Failures logged only
+  (notifier is 038-2).
+- **Endpoints** (Api): both flat routes behind `RequireAuthorization()`, no further scope;
+  documented guard precedence (regex `404` → missing `404` → unavailable/failed `503` → over-cap
+  `413` → MIME disagree `415` → `200`); forced MIME by extension, `Content-Disposition: inline`,
+  `X-Content-Type-Options: nosniff`, `Cache-Control` (`max-age=300` feed / `max-age=86400` image;
+  Kestrel serialises the parsed header as `max-age=N, private` — directive order is not
+  RFC-significant).
+- **Tests:** 14 `UpdatesFeedCacheTests` (fresh cache, TTL expiry, LKG replacement, cold empty,
+  malformed/schema-invalid/unknown-schema, date-time format assertion ×3, duplicate ids ×2, feed
+  over cap); 18 `UpdatesEndpointsTests` (contract headers + defaults, anon `401` ×2, unknown-schema
+  and cold-unavailable empty feed, feed over cap, image forced-MIME + security headers + bare-name
+  assertion, bad-name `404` ×5, missing `404`, over-cap `413`, MIME missing/mismatched `415` ×3,
+  provider `503`). Full unit (1847) + architecture (14) + full integration (1652, pre-cap; Updates
+  slice re-verified at 18/18 after the cap change) green.
 
 ### Required before 038-1b
 

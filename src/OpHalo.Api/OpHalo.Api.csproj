@@ -13,6 +13,17 @@
          Stay on the compatible 2.x line; 2.7.5 is the first patched release for CVE-2026-49451. -->
     <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageReference Include="Sentry.AspNetCore" Version="6.10.0" />
+    <!-- Draft 2020-12 JSON-Schema validator for the Help &amp; Updates feed (GAP-038, BL149).
+         The reviewed contract artifact is embedded below and validated as-is so it cannot
+         drift from docs/contracts/updates.schema.json. -->
+    <PackageReference Include="JsonSchema.Net" Version="9.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Canonical Help &amp; Updates feed schema (GAP-038). Linked from docs/ rather than copied
+         so the repo keeps a single source of truth; LogicalName is pinned so the manifest
+         lookup in UpdatesFeedCache is deterministic. -->
+    <EmbeddedResource Include="..\..\docs\contracts\updates.schema.json" LogicalName="OpHalo.Api.Updates.updates.schema.json" />
   </ItemGroup>
 
   <ItemGroup>

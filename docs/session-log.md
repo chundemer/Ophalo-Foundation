@@ -14,13 +14,15 @@ field record.
 
 ## Active
 
-**GAP-038 — in-product feedback + Help & Updates loop.** Slice 038-1a (content backend) is
-implementation-ready: Christian signed off the readiness package 2026-09-08 with four recorded
-corrections (image-name regex `\.`; `date-time` enforced as an assertion; unconfigured-R2 →
-empty-feed fallback not DI `500`; post-schema duplicate-`id` rejection) and one approved package
-(`JsonSchema.Net` on `OpHalo.Api.csproj`). Entry point:
-[BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md) — "Required before
-038-1a" section (9-file gate) and "Validation" subsection. GAP-054 slice 054-1 landed as `4f1caffb`.
+**GAP-038 — in-product feedback + Help & Updates loop.** Slice 038-1a (content backend) landed
+2026-09-08: `GET /updates` + `GET /updates/guides/img/{name}` behind the authenticated-shell
+boundary, a schema-validating (format-assertion + duplicate-`id`) last-known-good feed cache, and a
+fixed-key R2 content seam that is always resolvable. Exactly the BL149 9-file gate; `JsonSchema.Net`
+the only new package; feed and image reads both byte-capped. Evidence: BL149 completion record.
+Active slice is now **038-1b (content frontend)** — entry point
+[BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md) "Required before
+038-1b": the 038-1b file gate, the GAP-054 muted-text token name, and the 038-1b test plan are the
+open pre-work.
 
 ## Next
 
@@ -42,11 +44,10 @@ explicit retry backoff 1/5/15/60/180 min; generic webhook notifier; guide-image 
 to a fixed R2 prefix + MIME/size caps; CSP baseline deferred to its own DEF ticket). Split into
 three slices: 038-1a content backend (no founder-channel infra) → 038-1b content frontend → 038-2
 feedback path. D5 resolved: persist-first, at-least-once, scrub-on-success (`503`/`202` cases
-specified). Per-slice exit criteria in BL149. **038-1a is implementation-ready:** Christian signed
-off the contracts, schema, source-controlled publish/rollback path, cache/LKG behavior, exact
-authorization/image limits, file gate, and test plan. R2 has no restorable S3-style object
-versioning; repo history is the rollback path. GAP-054 slice 054-1 landed as `4f1caffb`; it is no
-longer a GAP-038 blocker. GAP-072 still needs a discovery ADR.
+specified). Per-slice exit criteria in BL149. **038-1a (content backend) landed 2026-09-08** (see the Active
+section and the BL149 completion record); 038-1b and 038-2 are the remaining GAP-038 slices. R2 has
+no restorable S3-style object versioning; repo history is the rollback path. GAP-054 slice 054-1
+landed as `4f1caffb`; it is no longer a GAP-038 blocker. GAP-072 still needs a discovery ADR.
 
 ## Hot blocker
 

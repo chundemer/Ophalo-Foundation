@@ -12,6 +12,7 @@ using OpHalo.Api.Auth;
 using OpHalo.Api.Diagnostics;
 using OpHalo.Api.Helpers;
 using OpHalo.Api.Keep;
+using OpHalo.Api.Updates;
 using OpHalo.Foundation.Application.Abstractions.Messaging;
 using OpHalo.Foundation.Application.Abstractions.Storage;
 using OpHalo.Foundation.Application.Abstractions.Security;
@@ -32,6 +33,8 @@ using OpHalo.Foundation.Infrastructure.Storage;
 using OpHalo.Foundation.Infrastructure.Members;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Foundation.Infrastructure.Push;
+using OpHalo.Foundation.Application.Updates;
+using OpHalo.Foundation.Infrastructure.Updates;
 using OpHalo.Foundation.Infrastructure.Security;
 using OpHalo.Foundation.Infrastructure.Services;
 using OpHalo.SharedKernel.Abstractions;
@@ -214,6 +217,23 @@ else if (r2Settings.IsConfigured)
     builder.Services.AddSingleton<IBusinessDocumentStorage, R2BusinessDocumentStorage>();
 }
 
+// --- Help & Updates content (GAP-038, BL149) ---
+// The seam is ALWAYS resolvable (BL149 correction #3): the real R2 adapter when R2 is
+// configured, an unavailable fallback otherwise. The fallback drives the contracted
+// empty-feed / 503 behaviour instead of a DI activation 500. Unlike IBusinessDocumentStorage,
+// this feed IS consumed (GET /updates), so "register nothing" is not an option.
+builder.Services.AddMemoryCache();
+if (r2Settings.IsConfigured)
+{
+    // R2Settings is already registered as a singleton by the business-document block above.
+    builder.Services.AddSingleton<IUpdatesContentSource, R2UpdatesContentSource>();
+}
+else
+{
+    builder.Services.AddSingleton<IUpdatesContentSource, UnavailableUpdatesContentSource>();
+}
+builder.Services.AddSingleton<UpdatesFeedCache>();
+
 // --- Auth ---
 builder.Services.AddHttpContextAccessor();
 
@@ -387,6 +407,7 @@ app.MapAccountEndpoints();
 app.MapAccountDeviceEndpoints();
 app.MapInternalEntitlementsEndpoints();
 app.MapBadgeEndpoints();
+app.MapUpdatesEndpoints();
 
 app.Run();
 
