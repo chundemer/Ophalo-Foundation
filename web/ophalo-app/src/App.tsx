@@ -8,6 +8,7 @@ import { RequestDetail } from "./pages/RequestDetail";
 import { ActualWorkWorkspacePage } from "./pages/ActualWorkWorkspacePage";
 import { AccessLimited } from "./pages/AccessLimited";
 import { Settings } from "./pages/Settings";
+import { Help } from "./pages/Help";
 import { PriceBook } from "./pages/PriceBook";
 import { CatalogItemDetail } from "./pages/CatalogItemDetail";
 import { OfferingAssemblyDetail } from "./pages/OfferingAssemblyDetail";
@@ -37,6 +38,8 @@ const PRICE_BOOK_FEATURE_KEY = "keep.price_book_quotes_materials";
 
 type AppRoute =
   | { page: "requests" }
+  // GAP-038 / BL149: the content-only Help & Updates surface, `#/help`, no params. All roles.
+  | { page: "help" }
   | { page: "settings"; section?: "public-profile" | "policy" | "team" }
   | { page: "pricebook"; tab?: "items" | "assemblies" | "nudges" }
   | { page: "pricebook-item"; catalogItemId: string; returnToAssembly?: string; returnToAssemblyReason?: "price" | "margin" }
@@ -71,6 +74,9 @@ export function getRouteFromLocation(): AppRoute {
   // Split the Price Book path from its query string before matching detail routes — otherwise
   // `#/pricebook?tab=assemblies` would fail every `#/pricebook/...` pattern and fall through.
   const [hashPath, hashQuery] = hash.split("?");
+  if (hashPath === "#/help") {
+    return { page: "help" };
+  }
   if (hashPath === "#/settings") {
     const section = new URLSearchParams(hashQuery ?? "").get("section");
     return {
@@ -240,6 +246,8 @@ function AppShell() {
     } else if (newRoute.page === "settings") {
       const suffix = newRoute.section ? `?section=${newRoute.section}` : "";
       history.pushState(null, "", `${base}#/settings${suffix}`);
+    } else if (newRoute.page === "help") {
+      history.pushState(null, "", `${base}#/help`);
     } else {
       history.pushState(null, "", base);
     }
@@ -342,7 +350,8 @@ function AppShell() {
     route.page === "pricebook" ||
     route.page === "pricebook-item" ||
     route.page === "pricebook-assembly" ||
-    route.page === "actual-work";
+    route.page === "actual-work" ||
+    route.page === "help";
 
   // BL136 4f-iii: the Actual Work workspace hosts the composer inline (not as a full-bleed
   // modal), so it needs the same bounded-height ancestor the wide Workbench uses — its header
@@ -549,6 +558,7 @@ function AppShell() {
             onNavigateToActualWorkspace={navigateToActualWorkspace}
           />
         )}
+        {route.page === "help" && <Help />}
         {route.page === "settings" && (
           <Settings
             callerRole={role}
@@ -611,6 +621,7 @@ function AppShell() {
           own "Add catalog item" action — showing global "New Request" there let an owner create
           the wrong thing. */}
       {route.page !== "detail" &&
+        route.page !== "help" &&
         route.page !== "pricebook" &&
         route.page !== "pricebook-item" &&
         route.page !== "pricebook-assembly" && (

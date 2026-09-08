@@ -257,6 +257,9 @@ import type {
   ActualWorkReviewBody,
   ActualWorkReplaceBody,
   ActualWorkReplacementCreatedResult,
+  UpdatesFeed,
+  UpdateEntry,
+  UpdateGuide,
 } from "./apiClient.types";
 
 export type {
@@ -412,12 +415,17 @@ export type {
   ActualWorkReviewBody,
   ActualWorkReplaceBody,
   ActualWorkReplacementCreatedResult,
+  UpdatesFeed,
+  UpdateEntry,
+  UpdateGuide,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
 
 export const api = {
   getMe: () => apiFetch<MeResponse>("/auth/me"),
+  // GAP-038 / BL149: Foundation-owned Help & Updates feed. No params; always a schema-valid body.
+  getUpdates: () => apiFetch<UpdatesFeed>("/updates"),
   logout: () => apiFetchVoid("/auth/logout", { method: "POST" }),
   getOnboardingChecklist: () =>
     apiFetch<OnboardingChecklist>("/keep/setup/onboarding"),

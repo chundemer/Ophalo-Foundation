@@ -613,6 +613,59 @@ Tests (exactly 4 — hard cap; total 6 + 2 + 4 = **12**, at the CLAUDE.md limit)
 **6 source + 2 manifest = 8 production files; 12 total.** No new fake/fixture. Any further new file
 requires re-splitting.
 
+#### 038-1b-i completion record (landed 2026-09-08)
+
+Implemented exactly to the file gate above — **6 source + 2 manifest + 4 test = 12 files, at the
+cap; no extra fake/fixture/component.** Two runtime deps only: **`snarkdown` 2.0.0** +
+**`dompurify` 3.4.15**, no `@types/dompurify`.
+
+- **`apiClient` (2 files):** `getUpdates()` → `apiFetch<UpdatesFeed>("/updates")`; `UpdatesFeed` /
+  `UpdateEntry` / `UpdateGuide` DTOs mirror `docs/contracts/updates.schema.json` and are re-exported
+  from `apiClient.ts`.
+- **`useUpdatesFeed.ts`:** react-query fetch (`staleTime` 5 min, matching the backend
+  `Cache-Control`); pure exported `groupSections` (fixed order known_issue → whats_new → coming_soon
+  → neutral "More updates"; known-issues sorted active-before-resolved, newest-first within each
+  group) and `computeFeedMax` (newest non-future `published_at`; guides excluded). `feedLastUpdated`
+  is the newest timestamp across entries **and** guides (display only). Watermark
+  (`keep_updates_watermark`, epoch-ms string, `WATERMARK_KEY` exported for 1b-ii) is read through a
+  try/catch that treats a missing key, a non-numeric value, or a throwing `localStorage` as "no
+  watermark"; `markSeen()` writes only `computeFeedMax` and only after `isSuccess` with a non-null
+  max — never on loading, error, or empty feed. `now` is injectable for deterministic 1b-ii tests.
+- **`UpdatesMarkdown.tsx`:** `snarkdown` → `DOMPurify.sanitize` with the literal allowlist (`p
+  strong em ul ol li a img br` / `href src alt`) and `ALLOWED_URI_REGEXP` dropping `javascript:` /
+  `data:` (link text kept). A post-sanitize image pass rewrites the single `guides/img/<name>` form
+  (name rule mirrors `UpdatesEndpoints.GuideImageName`) to `/updates/guides/img/<name>`, requires a
+  non-empty `alt`, adds `loading="lazy"`, and removes any other `<img>`. A capture-phase `error`
+  listener on the container (image errors don't bubble) sets `hidden` on a failed `<img>` so a
+  broken proxy response never tears the surrounding text. Component-scoped `<style>` applies the
+  480px-max / 1px-border / 8px-pad guide-image frame via `.updates-md img` (tokens
+  `--ophalo-border` / `--ophalo-accent`; `check:tokens` green).
+- **`Help.tsx`:** single sectioned scroll (grouped sections → Guides), header `Last updated {date}`
+  when present, per-entry / per-guide dates, "Resolved" tag on resolved known issues. Loading line;
+  `isError` → "Couldn't load updates, try again." + a "Try again" button calling `refetch()` with
+  the page header still rendered; `isSuccess` with no sections → calm per-section "No updates yet."
+  A mount effect calls `markSeen()` once `isSuccess`.
+- **`App.tsx`:** `{ page: "help" }` added to `AppRoute`, `getRouteFromLocation()` (`#/help`, query
+  ignored, unknown hash still → `requests`), `navigate()` branch (`#/help`), `<Help/>` in the
+  `<main>` ladder (all roles), `help` added to `usesTopNavShell`, `help` excluded from the mobile
+  "New Request" FAB.
+- **Tests (4 files, 24 cases):** `useUpdatesFeed` (10 — grouping/order, feed-max, last-updated
+  incl. guides, absent/corrupt/throwing storage, markSeen write vs. no-write on error/empty,
+  injected `now`); `UpdatesMarkdown` (7 — allowlist survivors, script/iframe/onerror/h1/table
+  dropped, `javascript:`/`data:` dropped, guide-image rewrite + `loading`, non-guide + empty-alt
+  image dropped, `error`-event hide with text intact); `Help` (4 — all sections + last-updated,
+  watermark moves on mount, cold empty per-section state + no watermark write, network error retry
+  recovers); `App.helpRoute` (3 — parse, query ignored, unknown-hash fallback). Both frontend test
+  files install an in-memory `localStorage` (jsdom's is not reliably present in this vitest env and
+  no other app code uses it yet). Full `ophalo-app` suite **1130/1130 green**; `pnpm typecheck` +
+  `check:tokens` green.
+
+**Drift from the BL149 test plan:** `App.helpRoute.test.ts` covers the `getRouteFromLocation`
+parse + fallback (matching the `App.actualWorkRoute.test.ts` precedent of testing the pure
+function); the `navigate` push is a one-line mirror of the `settings` branch and is exercised
+indirectly by the full-suite `App` tests rather than a dedicated case, to avoid a heavy `App`
+render in the route-grammar file.
+
 #### 038-1b-ii — menus + unread indicator + Requests banner (gate re-run before coding)
 
 Scope: extend `useUpdatesFeed.ts` (unseen count; banner-qualifying derivation — `highlight:true` AND

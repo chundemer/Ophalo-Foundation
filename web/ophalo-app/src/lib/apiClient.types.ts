@@ -1502,3 +1502,33 @@ export interface ActualWorkFinancialDispositionBody {
   kind: string;
   reason: string;
 }
+
+// GAP-038 / BL149 (038-1b-i). The Help & Updates feed served by `GET /updates`. The shape mirrors
+// `docs/contracts/updates.schema.json` exactly. The backend always returns a schema-valid payload
+// — a fresh read, a per-instance last-known-good copy, or the empty `{ schema: 1, entries: [],
+// guides: [] }` fallback — so the client never sees a partial or error-shaped body and there is
+// deliberately no frontend "stale content" state. `section` is an open lowercase token: V1 uses
+// `known_issue` / `whats_new` / `coming_soon`; any other value renders under a neutral heading.
+export interface UpdateEntry {
+  id: string;
+  published_at: string;
+  section: string;
+  status?: "active" | "resolved";
+  title: string;
+  body: string;
+  highlight?: boolean;
+  banner_until?: string;
+}
+
+export interface UpdateGuide {
+  id: string;
+  updated_at: string;
+  title: string;
+  body: string;
+}
+
+export interface UpdatesFeed {
+  schema: number;
+  entries: UpdateEntry[];
+  guides: UpdateGuide[];
+}
