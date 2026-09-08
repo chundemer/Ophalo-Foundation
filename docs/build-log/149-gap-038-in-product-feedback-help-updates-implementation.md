@@ -1,14 +1,14 @@
 # BL149 — GAP-038: in-product feedback + Help & Updates loop — implementation build-log
 
-**Status:** Discovery / spec — D1–D8 resolved (2026-09-07, incl. two review passes; D5 = persist-
-first). Per-slice provisioning + contract items owed before each slice starts (see exit criteria).
-Not yet approved to build.
+**Status:** Pre-work complete / implementation-ready for 038-1a (2026-09-08; Christian signed off).
+D1–D8 remain resolved (D5 = persist-first). 038-1b and 038-2 retain their own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
 end-to-end contract — Locked), [ADR-501](../decisions/ADR-501-api-route-and-compatibility-policy.md)
 (flat Foundation-owned routes — Locked). This build-log only settles the six items ADR-500 §Consequences
 defers to it, plus the ready-to-build exit criteria; it does not reopen anything locked.
-**Sequencing:** follows the GAP-054 account-menu commit (ADR-499). Not a pilot gate.
+**Sequencing:** GAP-054 slice 054-1 landed as `4f1caffb` (`feat(ophalo-app): account menu shell`),
+so its commit is no longer a GAP-038 blocker. Not a pilot gate.
 
 ## What is already locked (do not re-decide)
 
@@ -80,7 +80,8 @@ ADR-500 §4 assumes a CSP baseline exists ("add one `img-src` entry"); it does n
   `platform/updates/guides/img/`, serves only allowlisted image MIME types
   (`image/png`, `image/jpeg`, `image/webp`), enforces an object-size cap (proposed 2 MB), sets
   `Content-Type` from the allowlist (never from the object metadata) plus
-  `Content-Disposition: inline` and a long `Cache-Control`, and never takes an upstream URL from the
+  `Content-Disposition: inline` and `Cache-Control: private, max-age=86400`, and never takes an
+  upstream URL from the
   JSON — the renderer emits only `/updates/guides/img/<name>` relative URLs and anything else is
   dropped. Exfil / tracking-pixel boundary is held server-side.
 - **(B) Direct R2 public URL + first app CSP** — introduces `vercel.json` with a full CSP
@@ -268,14 +269,29 @@ entry points).
 ## Content-publication contract
 
 R2 is available, so there is no infra to procure — but the founder-maintained content still needs a
-governed publish path. This slice fixes:
+governed publish path. R2 has **no restorable S3-style object versioning** (the `wrangler` version
+value is upload metadata, not a rollback feature), so the repository is the canonical source and
+audit trail. This slice fixes:
 
+- **Canonical source.** `docs/content/updates.json` is the authoritative feed document, checked into
+  the repo. Guide image sources live under `docs/content/guides/img/`. R2 holds a published *copy*;
+  the repo is the source of truth and the change history.
 - **Object keys.** `platform/updates.json` for the feed document; guide images under
-  `platform/updates/guides/img/<name>` where `<name>` matches `[A-Za-z0-9._-]+` with an image
-  extension. The proxy resolves nothing outside these prefixes.
-- **Publish authority.** The founder only. Publishing = overwrite the object in R2 (Cloudflare
-  dashboard or `wrangler r2 object put`). No CMS, no PR gate on content (matches ADR-294). The R2
-  write credential is founder-held and separate from the app's read path.
+  `platform/updates/guides/img/<name>` where `<name>` matches
+  `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(png|jpe?g|webp)$`. The proxy resolves nothing outside these
+  prefixes.
+- **Immutable, content-addressed guide asset names.** A guide image name embeds a short content hash
+  (e.g. `record-actual-work-a1b2c3d4.png`) and is **never overwritten**. Editing a guide image means
+  publishing a *new* filename and repointing the guide body at it; the old object may be deleted once
+  no committed `updates.json` references it. This is what makes the one-day image cache
+  (`max-age=86400`) safe.
+- **Publish authority.** The founder only, and may commit directly to the repo (no PR gate on
+  content — matches ADR-294). Publishing is a small repo target (`make publish-updates` or
+  equivalent) that: (1) validates `docs/content/updates.json` against `updates.schema.json` with a
+  real **JSON-Schema validator** (not `jq`, which only checks JSON syntax); (2) fails the publish on
+  any schema error; (3) uploads the validated feed to `platform/updates.json` and uploads every
+  referenced guide image that is not already present in R2 (`wrangler r2 object put`). The R2 write
+  credential is founder-held and separate from the app's read path.
 - **Schema + versioning.** `updates.json` carries a top-level `"schema": 1`. The proxy validates
   against the JSON-schema for that version; an unknown/absent `schema` → treated as a validation
   failure → last-known-good served + alert. Schema changes are additive (ADR-501 §3); a breaking
@@ -283,10 +299,11 @@ governed publish path. This slice fixes:
 - **Cache invalidation.** In-process cache, 5-min TTL (D4); a publish is visible within ≤5 min with
   no deploy and no manual bust. (Optional future: a `POST /updates/refresh` founder-only cache-bust
   — not v1.)
-- **Rollback.** R2 object versioning is enabled on the bucket (confirm — founder task); a bad
-  publish is rolled back by restoring the previous object version. Independently, an instance that
-  *has* a good payload cached keeps serving it across a malformed publish (best-effort — a cold
-  instance in that window serves empty, see D4).
+- **Rollback.** `git checkout` the prior `docs/content/updates.json` and re-run the publish target.
+  Because guide asset names are immutable and content-addressed, the older feed's images are still
+  in R2 — no image restore is needed. Independently, an instance that *has* a good payload cached
+  keeps serving it across a malformed publish (best-effort — a cold instance in that window serves
+  empty, see D4).
 - **Content unavailable UX.** No instance has ever held a valid payload → `GET /updates` returns an
   empty feed (`entries: [], guides: []`); the `#/help` page renders a calm "No updates yet" empty
   state per section, the trigger dot is absent, no banner. Instance holds a stale last-known-good →
@@ -315,21 +332,129 @@ Resolved in this doc (pending Christian's sign-off on the doc as a whole):
 
 ### Required before 038-1a
 
-- [ ] R2 bucket object-versioning / rollback confirmed enabled (founder task).
-- [ ] `GET /updates` and `GET /updates/guides/img/<name>` full request/response contracts + status
+#### Drafted readiness package — pending Christian's review and sign-off
+
+This is pre-work only; it does not authorize implementation. The canonical schema is
+[updates.schema.json](../contracts/updates.schema.json). 038-1a embeds that exact artifact in the
+API so the validator cannot drift from the reviewed document.
+
+**Authorization.** Both Foundation-owned, flat routes use the existing authenticated-app
+`RequireAuthorization()` boundary. There is **no role, capability, or account-membership scope**
+beyond successful authentication: the feed contains no account-scoped data and is identical for all
+authenticated users. Anonymous callers receive `401`; a future global policy may return its normal
+`403`. Neither route is mounted on a public customer/tracker host or called by a public page.
+
+**`GET /updates`.** No request body, path parameters, or query parameters. `200 OK` returns JSON
+with `Content-Type: application/json; charset=utf-8` and `Cache-Control: private, max-age=300`:
+
+```json
+{
+  "schema": 1,
+  "entries": [{
+    "id": "upd-2026-09-07-01", "published_at": "2026-09-07T12:00:00Z",
+    "section": "known_issue", "status": "active", "title": "Customer text messages delayed",
+    "body": "Some carriers are queuing messages.", "highlight": true,
+    "banner_until": "2026-09-30T00:00:00Z"
+  }],
+  "guides": [{
+    "id": "guide-log-visit", "updated_at": "2026-09-06T16:12:00Z",
+    "title": "Log a completed visit", "body": "1. Open the request."
+  }]
+}
+```
+
+Source defaults are `status: "active"` and `highlight: false`; omitted `banner_until` stays absent.
+The only normal outcomes are `200` and `401`. A timeout, missing object, R2 error, malformed JSON,
+unknown schema, or schema failure never leaks `404`/`422`/`502`/`503`: return the per-instance
+last-known-good payload, or `{ "schema": 1, "entries": [], "guides": [] }` if none exists. An
+otherwise unhandled API fault uses the standard `500` problem response.
+
+**`GET /updates/guides/img/<name>`.** `<name>` is one decoded filename matching
+`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.(png|jpe?g|webp)$`. Slashes, backslashes, dot-only names,
+encoded traversal, arbitrary extensions, and query-controlled keys are rejected. A valid name maps
+only to `platform/updates/guides/img/<name>`; the endpoint never follows a feed URL or another R2
+prefix. No request body or query parameters are accepted. `200` streams a compliant object with a
+forced MIME type (`.png` → `image/png`; `.jpg`/`.jpeg` → `image/jpeg`; `.webp` → `image/webp`),
+`Content-Disposition: inline`, `X-Content-Type-Options: nosniff`, and
+`Cache-Control: private, max-age=86400`.
+
+The exact cap is **2,097,152 bytes (2 MiB)**, enforced before streaming when object length is known
+and while copying when it is not. The allowed MIME set is exactly **`image/png`, `image/jpeg`, and
+`image/webp`**; extension and stored MIME must agree. Outcomes: `401` unauthenticated; `404` for an
+invalid name or missing object (not distinguished); `413` over cap; `415` missing/disallowed/mismatched
+MIME; `503` R2/provider read failure; standard `500` for an unhandled fault. Images have no
+last-known-good fallback.
+
+**Failure, cache, and LKG.** Source reads have a cancellation-aware 5-second timeout. A valid parsed
+and schema-validated feed populates both a 5-minute per-instance fresh cache and a separate
+per-instance LKG slot. Fresh hits do not read R2; a later valid read replaces both slots. Any
+read/parse/validation failure retains LKG until a later valid read replaces it. It is neither shared
+nor durable: a cold/restarted/scaled-out instance without LKG returns the empty schema-1 feed.
+038-1a logs these failures to structured logs/Sentry only; notifier work is 038-2.
+
+**Publishing and rollback.** The canonical feed is `docs/content/updates.json` in the repo; the
+founder may commit it directly. A small publish target validates it against `updates.schema.json`
+with a real JSON-Schema validator (not `jq`), then, only on success, uploads the feed to
+`platform/updates.json` and every referenced-but-not-yet-present guide image to
+`platform/updates/guides/img/<name>` with the separate founder-held write credential
+(`wrangler r2 object put`). Guide asset names are immutable and content-addressed and are never
+overwritten. A publish normally appears within five minutes per instance. Roll back by
+`git checkout`-ing the prior `docs/content/updates.json` and re-running the publish target; the
+older feed's images are still in R2 because names are immutable. R2 has no restorable object
+versioning — the repo history *is* the rollback path, so no R2 bucket setting is a prerequisite.
+
+**038-1a file gate.** `updates.schema.json` and a seed `docs/content/updates.json`
+(`{ "schema": 1, "entries": [], "guides": [] }`) are pre-work artifacts and must land with this
+reviewed documentation before implementation begins. The publish target
+(`Makefile`/script + validator dependency) is founder tooling, tracked separately, and is **not**
+part of the 038-1a implementation file count. Excluding the pre-work commit, implementation changes
+exactly:
+
+1. `src/OpHalo.Api/Updates/UpdatesEndpoints.cs`
+2. `src/OpHalo.Api/Updates/UpdatesContracts.cs`
+3. `src/OpHalo.Foundation.Application/Updates/IUpdatesContentSource.cs`
+4. `src/OpHalo.Foundation.Infrastructure/Updates/R2UpdatesContentSource.cs`
+5. `src/OpHalo.Api/Updates/UpdatesFeedCache.cs` (schema validation, cache, LKG)
+6. `src/OpHalo.Api/Program.cs` (DI and endpoint mapping)
+7. `src/OpHalo.Api/OpHalo.Api.csproj` (embed schema)
+8. `tests/OpHalo.IntegrationTests/Api/UpdatesEndpointsTests.cs`
+9. `tests/OpHalo.UnitTests/Api/UpdatesFeedCacheTests.cs`
+
+That is **7 production files, 2 test files, 9 total**, one read-handler family with its
+constrained image alias: within the CLAUDE.md limit (8 production / 12 total). The fake
+`IUpdatesContentSource` is a nested test-only class in `UpdatesEndpointsTests.cs`, not a separate
+file. A new fake, fixture, package, migration, frontend file, or separate test file requires
+re-splitting or substitution.
+
+**038-1a tests.** An authenticated integration client with a fake `IUpdatesContentSource` covers
+valid proxy/cache headers, anonymous `401`, schema-invalid/unknown-schema LKG fallback, cold empty
+fallback, and successful forced image MIME/security headers. Focused cache tests cover the five-minute
+fresh cache and LKG replacement. Image cases assert invalid/prefix-escape name → `404`, missing →
+`404`, 2,097,153 bytes → `413`, missing/disallowed/mismatched MIME → `415`, provider failure →
+`503`, and that the source receives only the fixed prefix—not a client-controlled URL.
+
+- [x] Rollback path settled: repo is canonical (`docs/content/updates.json`), rollback is
+      `git checkout` + re-publish. R2 has no restorable object versioning; **no R2 bucket setting is
+      a prerequisite** (founder task removed).
+- [x] `GET /updates` and `GET /updates/guides/img/<name>` full request/response contracts + status
       codes written out here.
-- [ ] `updates.json` JSON-schema (`schema: 1`) written and committed; publishing rules recorded.
-- [ ] R2 failure / cache / last-known-good behaviour confirmed (incl. cold-instance empty feed).
-- [ ] Authz (authenticated-shell only), image size cap, allowed image MIME list — exact numbers.
-- [ ] 038-1a changed-file list enumerated and checked against the CLAUDE.md batch gate.
-- [ ] 038-1a test plan: proxy / schema-validation / last-known-good / image prefix+MIME+size rejection.
+- [x] `updates.json` JSON-schema (`schema: 1`) + seed `docs/content/updates.json` written and
+      committed; guide asset names immutable + content-addressed; publishing rules recorded. The
+      founder publish target validates with a real JSON-Schema validator and is tracked separately.
+- [x] R2 failure / cache / last-known-good behaviour confirmed (incl. cold-instance empty feed).
+- [x] Authz (authenticated-shell only), image size cap, allowed image MIME list — exact numbers.
+- [x] 038-1a changed-file list enumerated and checked against the CLAUDE.md batch gate.
+- [x] 038-1a test plan: proxy / schema-validation / last-known-good / image prefix+MIME+size
+      rejection.
 
 ### Required before 038-1b
 
 - [ ] 038-1b changed-file list enumerated and gate-checked.
 - [ ] GAP-054 menu component merged; muted-text token name confirmed for the row suffix.
 - [ ] 038-1b test plan: watermark, banner lifetime/dismissal, empty/stale/error states, renderer
-      sanitiser tests (XSS / disallowed-tag / bad-scheme payloads dropped).
+      sanitiser tests (XSS / disallowed-tag / bad-scheme payloads dropped), and graceful guide-image
+      degradation when the image proxy returns `404` or `503` (guide text and the rest of the page
+      remain usable; no broken-image UI noise).
 
 ### Required before 038-2
 

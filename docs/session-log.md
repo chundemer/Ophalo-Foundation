@@ -38,9 +38,11 @@ explicit retry backoff 1/5/15/60/180 min; generic webhook notifier; guide-image 
 to a fixed R2 prefix + MIME/size caps; CSP baseline deferred to its own DEF ticket). Split into
 three slices: 038-1a content backend (no founder-channel infra) → 038-1b content frontend → 038-2
 feedback path. D5 resolved: persist-first, at-least-once, scrub-on-success (`503`/`202` cases
-specified). Per-slice exit criteria in BL149. Before 038-1a: R2 object-versioning, `GET /updates`
-+ image-proxy contracts, `updates.json` JSON-schema + publishing rules, 038-1a file list. GAP-054
-commit must land first. GAP-072 still needs a discovery ADR.
+specified). Per-slice exit criteria in BL149. **038-1a is implementation-ready:** Christian signed
+off the contracts, schema, source-controlled publish/rollback path, cache/LKG behavior, exact
+authorization/image limits, file gate, and test plan. R2 has no restorable S3-style object
+versioning; repo history is the rollback path. GAP-054 slice 054-1 landed as `4f1caffb`; it is no
+longer a GAP-038 blocker. GAP-072 still needs a discovery ADR.
 
 ## Hot blocker
 
