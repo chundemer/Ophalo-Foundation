@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import type { AccountRole, KeepRequestSummary, KeepRequestViewCounts } from "../../lib/apiClient";
 import { Requests, type AppliedQueueSnapshot } from "../../pages/Requests";
 import { RequestDetail } from "../../pages/RequestDetail";
@@ -51,6 +51,9 @@ interface RequestWorkbenchShellProps {
   //  - onExitStaleDetail: the destination queue is empty — drop the detail and route.
   onOpenDestinationRequest?: (requestId: string, requestIds: string[]) => void;
   onExitStaleDetail?: () => void;
+  // 038-1b-iii: the Help & Updates highlight banner, rendered at the top of the full-width
+  // Requests list only. Suppressed in the 360px two-pane rail (see decision 2 in BL149).
+  updatesBanner?: ReactNode;
 }
 
 export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
@@ -71,6 +74,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
     onNavigateToActualWorkspace,
     onOpenDestinationRequest,
     onExitStaleDetail,
+    updatesBanner,
   } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isWide, setIsWide] = useState(false);
@@ -231,6 +235,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
             onUserQueueChange={handleUserQueueChange}
             selectedRequestId={detailRoute?.requestId}
             paneMode={paneMode}
+            banner={paneMode ? undefined : updatesBanner}
           />
         </div>
       )}

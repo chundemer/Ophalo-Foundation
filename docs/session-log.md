@@ -14,13 +14,14 @@ field record.
 
 ## Active
 
-**GAP-038 — in-product feedback + Help & Updates loop.** Slices 038-1a (content backend), **038-1b-i
-(Help content surface), and 038-1b-ii (unread count + Help & Updates menu rows + trigger dots) all
-landed 2026-09-08** — see the BL149 038-1a / 038-1b-i / 038-1b-ii completion records. 038-1b-ii was
-split at preflight (one slice was 12 files, at the ceiling): the Requests-list banner is now
-**038-1b-iii**. Active slice is **038-1b-iii** (banner qualification/dismissal + Requests-list slot)
-— entry point [BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md)
-"038-1b-iii". Feedback entry points + submission dialog stay in 038-2.
+**GAP-038 — in-product feedback + Help & Updates loop.** Slices 038-1a (content backend), 038-1b-i
+(Help content surface), 038-1b-ii (unread count + menu rows + trigger dots), and **038-1b-iii
+(Requests-list highlight banner) all landed 2026-09-08** — see the BL149 038-1a / 038-1b-i /
+038-1b-ii / 038-1b-iii completion records. All of 038-1b is done. Active slice is **038-2**
+(feedback path: `POST /feedback` + founder channel + persist-first delivery) — entry point
+[BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md) "Slice 038-2" and
+"Required before 038-2" (checklist not yet worked). Its file fan-out must be gate-checked and likely
+split.
 
 ## Next
 

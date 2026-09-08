@@ -16,6 +16,7 @@ import { MobileNavMenu } from "./components/layout/MobileNavMenu";
 import { AccountMenu, getBusinessSettingsSections, type BusinessSettingsSectionId } from "./components/layout/AccountMenu";
 import { LiveAnnouncerRegion } from "./components/a11y/LiveAnnouncerRegion";
 import { useUpdatesFeed } from "./hooks/useUpdatesFeed";
+import { UpdatesBanner } from "./components/updates/UpdatesBanner";
 import { Plus, Inbox, Tag, Menu } from "lucide-react";
 import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClient";
 import { redirectToSignInOnce } from "./lib/redirectToSignIn";
@@ -196,8 +197,22 @@ function AppShell() {
   // GAP-038 / BL149 (038-1b-ii): the shell-wide unseen-updates indicator. Shares react-query's
   // `["updates-feed"]` cache with the Help page; the watermark is advanced by Help on open, so
   // this count clears on the next shell render/route change after the page is visited.
-  const { unseenCount: helpUnseenCount } = useUpdatesFeed();
+  const {
+    unseenCount: helpUnseenCount,
+    bannerEntry: updatesBannerEntry,
+    bannerMoreCount: updatesBannerMoreCount,
+    dismissBanner: dismissUpdatesBanner,
+  } = useUpdatesFeed();
   const helpHasUnseen = helpUnseenCount > 0;
+  // 038-1b-iii: the highlight banner node, threaded into the Requests list via the workbench shell.
+  const updatesBanner = updatesBannerEntry ? (
+    <UpdatesBanner
+      entry={updatesBannerEntry}
+      moreCount={updatesBannerMoreCount}
+      onDismiss={() => dismissUpdatesBanner(updatesBannerEntry.id)}
+      onViewAll={() => navigate({ page: "help" })}
+    />
+  ) : null;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   // Incremented only by an explicit Requests navigation. The wide workbench consumes this as a
@@ -556,6 +571,7 @@ function AppShell() {
           <RequestWorkbenchShell
             role={role}
             route={route.page === "detail" ? { page: "detail", requestId: route.requestId, focusPanel: route.focusPanel } : { page: "requests" }}
+            updatesBanner={updatesBanner}
             viewCounts={viewCounts}
             onViewCountsUpdate={handleViewCountsUpdate}
             onSelectRequest={selectRequest}

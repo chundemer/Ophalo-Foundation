@@ -1,10 +1,9 @@
 # BL149 — GAP-038: in-product feedback + Help & Updates loop — implementation build-log
 
-**Status:** 038-1a (content backend), **038-1b-i** (Help content surface), and **038-1b-ii** (unread
-count + Help & Updates menu rows + trigger dots) all landed 2026-09-08. 038-1b-ii was split on
-2026-09-08 (Christian): the Requests-list banner (qualification + dismissal + list slot) is now
-**038-1b-iii**, a separate follow-up slice. Next GAP-038 slice: **038-1b-iii**, then **038-2**
-(feedback path). D1–D8 remain resolved (D5 = persist-first). 038-2 retains its own exit criteria.
+**Status:** 038-1a (content backend), **038-1b-i** (Help content surface), **038-1b-ii** (unread
+count + Help & Updates menu rows + trigger dots), and **038-1b-iii** (Requests-list highlight
+banner) all landed 2026-09-08. Next GAP-038 slice: **038-2** (feedback path). D1–D8 remain resolved
+(D5 = persist-first). 038-2 retains its own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
 end-to-end contract — Locked), [ADR-501](../decisions/ADR-501-api-route-and-compatibility-policy.md)
@@ -728,6 +727,46 @@ Implemented — **4 production + 3 test files** (under the gate):
   unseen > 0); `MobileNavMenu.test.tsx` (refactored to a `renderMenu` helper; +2 — always-present
   row routes; suffix only when unseen > 0). Full `ophalo-app` suite **1138/1138**; `pnpm typecheck`
   + `check:tokens` green.
+
+#### 038-1b-iii completion record — Requests-list highlight banner (landed 2026-09-08)
+
+Preflight decisions (Christian, 2026-09-08): (1) `banner_until` is a **hard override in both
+directions** — a future timestamp qualifies regardless of section/age, a past or unparseable one
+disqualifies regardless; (2) the banner is **suppressed in the two-pane / 360 px rail** and shows
+only in the full-width Requests list; (3) `whats_new` eligibility is **inclusive through 14 days**
+(`now − published_at ≤ 14d`). One drift from the original file list: `RequestWorkbenchShell.tsx`
+carries a one-prop passthrough (App and Requests are not directly connected).
+
+Implemented — **6 production + 3 test files** (under the 8/12 gate; one feature family):
+
+- **`useUpdatesFeed.ts`:** `DISMISSED_BANNERS_KEY` (`keep_dismissed_banners`), `readDismissedBanners()`
+  (JSON string array, `[]` on any error) + `writeDismissedBanners()`; pure exported
+  `computeBannerState(entries, dismissedIds, now)` → `{ entry, moreCount }` — `highlight === true`
+  AND not dismissed AND within lifetime (`isWithinBannerLifetime`: `banner_until` override, else
+  `known_issue` while `status:active`, else `whats_new` ≤14d and not future, else ineligible);
+  most-recently-published wins, the rest are `moreCount`. Hook holds `dismissedBannerIds` in
+  `useState(readDismissedBanners)` and exposes `bannerEntry` / `bannerMoreCount` / `dismissBanner`
+  (`null`/`0` unless `isSuccess`; dismiss persists + hides immediately, never touches the watermark;
+  reuses the existing injected `now`).
+- **`components/updates/UpdatesBanner.tsx`** (new): `role="status"` strip, `--ophalo-attention` /
+  `--ophalo-attention-bg` tokens, entry title + right-aligned "×" (`Dismiss this update`) +
+  "N more updates →" button (pluralised, `onViewAll`) shown only when `moreCount > 0`.
+- **`App.tsx`:** builds the `<UpdatesBanner>` node from the existing shell `useUpdatesFeed()` call
+  (`onDismiss` → `dismissBanner(entry.id)`, `onViewAll` → `navigate({ page: "help" })`) and passes
+  it as `updatesBanner` to the workbench shell.
+- **`components/requests/RequestWorkbenchShell.tsx`:** `updatesBanner?: ReactNode` prop → forwards
+  to `<Requests banner={paneMode ? undefined : updatesBanner}>` (rail suppression, decision 2).
+- **`pages/Requests.tsx`:** `banner?: ReactNode` prop → forwarded to `RequestListContent`.
+- **`components/requests/RequestListContent.tsx`:** `banner?: ReactNode` prop, rendered in a
+  `max-w-6xl` wrapper **above** the list's own `aria-live` region (so it is not re-announced with
+  list updates); nothing rendered when absent.
+- **Tests:** `useUpdatesFeed.test.ts` (+7 — `computeBannerState` highlight gate / known-issue +
+  whats_new lifetime incl. 14-day boundary / `banner_until` both directions / dismissed-id
+  exclusion; hook `bannerEntry`+`bannerMoreCount`, `dismissBanner` hides + persists + watermark
+  untouched, seeds from stored ids); `UpdatesBanner.test.tsx` (new — title in status region,
+  pluralised action only when `moreCount > 0`, `onViewAll`/`onDismiss` wiring);
+  `RequestListContent.test.tsx` (+1 — banner slot present/absent). Full `ophalo-app` suite
+  **1149/1149**; `pnpm typecheck` + `check:tokens` green.
 
 ### Required before 038-2
 

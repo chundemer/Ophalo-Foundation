@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type AccountRole, type RequestView, type KeepRequestViewCounts, type KeepRequestSummary, type KeepQuickAction } from "../lib/apiClient";
 import { RequestRow } from "../components/RequestRow";
@@ -100,6 +100,9 @@ interface RequestsProps {
   // Backlog item 2 (2026-08-21): the request currently open in Pane 2, so its Queue row can
   // carry a distinct selected treatment. Undefined outside paned two-pane rendering.
   selectedRequestId?: string;
+  // 038-1b-iii: Help & Updates highlight banner node, rendered above the list. The workbench shell
+  // only supplies it for the full-width list (never the two-pane rail).
+  banner?: ReactNode;
 }
 
 export function Requests({
@@ -113,6 +116,7 @@ export function Requests({
   onUserQueueChange,
   paneMode,
   selectedRequestId,
+  banner,
 }: RequestsProps) {
   const tabs = getTabsForRole(role);
   const [activeTab, setActiveTab] = useState<TabDef>(tabs[0]);
@@ -648,6 +652,7 @@ export function Requests({
           listRegionRef={listRegionRef}
           pageHeadingRef={pageHeadingRef}
           contextLabel={contextLabel}
+          banner={banner}
           heading={{
             headingText: pageHeadingText,
             isLoading,

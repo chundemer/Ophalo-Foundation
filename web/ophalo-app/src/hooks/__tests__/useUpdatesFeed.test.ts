@@ -8,8 +8,10 @@ import {
   groupSections,
   computeFeedMax,
   computeUnseenCount,
+  computeBannerState,
+  DISMISSED_BANNERS_KEY,
 } from "../useUpdatesFeed";
-import type { UpdatesFeed } from "../../lib/apiClient";
+import type { UpdatesFeed, UpdateEntry } from "../../lib/apiClient";
 
 const mockGetUpdates = vi.fn();
 
@@ -105,6 +107,51 @@ describe("computeUnseenCount", () => {
   it("counts only entries published strictly after the watermark", () => {
     // ki-new (09-05), cs-1 (09-07), future (12-01) are newer than 09-04.
     expect(computeUnseenCount(FEED.entries, Date.parse("2026-09-04T00:00:00Z"))).toBe(3);
+  });
+});
+
+describe("computeBannerState", () => {
+  const NOW_B = new Date("2026-09-08T00:00:00Z");
+  const e = (over: Partial<UpdateEntry> & { id: string }): UpdateEntry => ({
+    published_at: "2026-09-01T00:00:00Z",
+    section: "whats_new",
+    title: `T ${over.id}`,
+    body: "x",
+    highlight: true,
+    ...over,
+  });
+
+  it("ignores entries without highlight:true", () => {
+    const entries = [e({ id: "a", highlight: false }), e({ id: "b", highlight: undefined })];
+    expect(computeBannerState(entries, [], NOW_B)).toEqual({ entry: null, moreCount: 0 });
+  });
+
+  it("keeps an active known_issue and a whats_new within 14 days (inclusive), drops the rest", () => {
+    const entries = [
+      e({ id: "ki-active", section: "known_issue", status: "active", published_at: "2026-09-01T00:00:00Z" }),
+      e({ id: "ki-resolved", section: "known_issue", status: "resolved" }),
+      e({ id: "nw-fresh", section: "whats_new", published_at: "2026-09-05T00:00:00Z" }),
+      e({ id: "nw-boundary", section: "whats_new", published_at: "2026-08-25T00:00:00Z" }),
+      e({ id: "nw-stale", section: "whats_new", published_at: "2026-08-20T00:00:00Z" }),
+      e({ id: "cs", section: "coming_soon", published_at: "2026-09-06T00:00:00Z" }),
+    ];
+    const state = computeBannerState(entries, [], NOW_B);
+    expect(state.entry?.id).toBe("nw-fresh"); // newest qualifying
+    expect(state.moreCount).toBe(2); // ki-active + nw-boundary
+  });
+
+  it("treats banner_until as a hard override in both directions", () => {
+    const future = e({ id: "cs-future", section: "coming_soon", published_at: "2026-01-01T00:00:00Z", banner_until: "2026-10-01T00:00:00Z" });
+    const past = e({ id: "ki-past", section: "known_issue", status: "active", banner_until: "2026-09-01T00:00:00Z" });
+    expect(computeBannerState([future, past], [], NOW_B)).toEqual({ entry: future, moreCount: 0 });
+  });
+
+  it("excludes dismissed ids", () => {
+    const entries = [
+      e({ id: "keep", section: "whats_new", published_at: "2026-09-05T00:00:00Z" }),
+      e({ id: "gone", section: "whats_new", published_at: "2026-09-06T00:00:00Z" }),
+    ];
+    expect(computeBannerState(entries, ["gone"], NOW_B).entry?.id).toBe("keep");
   });
 });
 
@@ -221,5 +268,45 @@ describe("useUpdatesFeed", () => {
     expect(window.localStorage.getItem(WATERMARK_KEY)).toBe(
       String(Date.parse("2026-09-03T00:00:00Z")),
     );
+  });
+
+  const BANNER_FEED: UpdatesFeed = {
+    schema: 1,
+    entries: [
+      { id: "hl-new", published_at: "2026-09-06T00:00:00Z", section: "whats_new", title: "Newer", body: "x", highlight: true },
+      { id: "hl-old", published_at: "2026-09-02T00:00:00Z", section: "known_issue", status: "active", title: "Older", body: "x", highlight: true },
+      { id: "plain", published_at: "2026-09-07T00:00:00Z", section: "whats_new", title: "No highlight", body: "x" },
+    ],
+    guides: [],
+  };
+
+  it("exposes the newest qualifying highlight as bannerEntry with the remainder as bannerMoreCount", async () => {
+    mockGetUpdates.mockResolvedValue(BANNER_FEED);
+    const { result } = renderHook(() => useUpdatesFeed({ now: NOW }), { wrapper: wrapper() });
+
+    expect(result.current.bannerEntry).toBeNull(); // still loading
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.bannerEntry?.id).toBe("hl-new");
+    expect(result.current.bannerMoreCount).toBe(1);
+  });
+
+  it("dismissBanner hides the entry immediately and persists the id; watermark is untouched", async () => {
+    mockGetUpdates.mockResolvedValue(BANNER_FEED);
+    const { result } = renderHook(() => useUpdatesFeed({ now: NOW }), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    act(() => result.current.dismissBanner("hl-new"));
+    expect(result.current.bannerEntry?.id).toBe("hl-old"); // falls through to the next one
+    expect(result.current.bannerMoreCount).toBe(0);
+    expect(JSON.parse(window.localStorage.getItem(DISMISSED_BANNERS_KEY)!)).toEqual(["hl-new"]);
+    expect(window.localStorage.getItem(WATERMARK_KEY)).toBeNull();
+  });
+
+  it("starts from previously dismissed ids in storage", async () => {
+    window.localStorage.setItem(DISMISSED_BANNERS_KEY, JSON.stringify(["hl-new", "hl-old"]));
+    mockGetUpdates.mockResolvedValue(BANNER_FEED);
+    const { result } = renderHook(() => useUpdatesFeed({ now: NOW }), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.bannerEntry).toBeNull();
   });
 });

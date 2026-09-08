@@ -57,4 +57,16 @@ describe("RequestListContent", () => {
     render(<RequestListContent {...baseProps()} />);
     expect(screen.queryByLabelText("Refreshing requests")).not.toBeInTheDocument();
   });
+
+  it("renders the banner slot node when supplied, and nothing when absent", () => {
+    const { rerender } = render(<RequestListContent {...baseProps()} />);
+    expect(screen.queryByTestId("updates-banner-slot")).toBeNull();
+
+    rerender(
+      <RequestListContent
+        {...baseProps({ banner: <div data-testid="updates-banner-slot">hi</div> })}
+      />,
+    );
+    expect(screen.getByTestId("updates-banner-slot")).toBeInTheDocument();
+  });
 });

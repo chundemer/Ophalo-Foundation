@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { RefObject, ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { KeepRequestSummary, KeepRequestAvailableItem } from "../../lib/apiClient";
 import { AvailableRequestRow } from "../RequestRow";
@@ -53,6 +53,9 @@ interface RequestListContentProps {
   heading: RequestListHeadingState;
   rows: RequestListRowsState;
   pager: RequestListPagerState;
+  // 038-1b-iii: Help & Updates highlight banner, rendered above the list (outside the list's own
+  // live region so it is not re-announced with list updates). Absent when nothing qualifies.
+  banner?: ReactNode;
 }
 
 export function RequestListContent({
@@ -62,12 +65,16 @@ export function RequestListContent({
   heading,
   rows,
   pager,
+  banner,
 }: RequestListContentProps) {
   const { headingText, isLoading, isFetching, isError, isForbidden, emptyState, onClearFilters } = heading;
 
   return (
     <>
       {isFetching && !isLoading && !isError && <RequestListRefetchBar />}
+      {banner && (
+        <div className="max-w-6xl mx-auto w-full px-4 pt-4 sm:px-6">{banner}</div>
+      )}
       {/* Content — scrollable, canvas background shows between cards */}
       <div
         ref={listRegionRef}
