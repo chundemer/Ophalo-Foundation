@@ -13,6 +13,8 @@ function renderMenu(overrides: Partial<React.ComponentProps<typeof AccountMenu>>
     sections: ownerSections,
     settingsActive: false,
     onNavigateSection: vi.fn(),
+    onNavigateHelp: vi.fn(),
+    helpUnseenCount: 0,
     onSignOut: vi.fn(),
     isSigningOut: false,
     ...overrides,
@@ -46,6 +48,8 @@ describe("AccountMenu", () => {
         sections={ownerSections}
         settingsActive={false}
         onNavigateSection={vi.fn()}
+        onNavigateHelp={vi.fn()}
+        helpUnseenCount={0}
         onSignOut={vi.fn()}
         isSigningOut={false}
       />,
@@ -107,6 +111,33 @@ describe("AccountMenu", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+
+  it("shows an all-roles Help & Updates row that routes on click", async () => {
+    const user = userEvent.setup();
+    const onNavigateHelp = vi.fn();
+    renderMenu({ sections: [], userName: "Sam", roleLabel: "Operator", onNavigateHelp });
+
+    await user.click(screen.getByRole("button", { name: /account menu/i }));
+    await user.click(screen.getByRole("menuitem", { name: /Help & Updates/ }));
+    expect(onNavigateHelp).toHaveBeenCalledTimes(1);
+  });
+
+  it("adds the ' · N new' suffix and the '(updates available)' trigger name only when unseen > 0", async () => {
+    const user = userEvent.setup();
+    const { rerender, props } = renderMenu({ helpUnseenCount: 0 });
+
+    expect(
+      screen.queryByRole("button", { name: /updates available/i }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /account menu/i }));
+    expect(screen.getByRole("menuitem", { name: /Help & Updates/ }).textContent).not.toMatch(/new/);
+
+    rerender(<AccountMenu {...props} helpUnseenCount={3} />);
+    expect(screen.getByRole("button", { name: /updates available/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /Help & Updates/ }).textContent,
+    ).toContain("· 3 new");
   });
 
   it("moves focus between items with ArrowDown/ArrowUp", async () => {

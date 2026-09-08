@@ -10,115 +10,71 @@ const items: NavItem[] = [
   { id: "settings", label: "Settings", icon: null },
 ];
 
+function renderMenu(overrides: Partial<React.ComponentProps<typeof MobileNavMenu>> = {}) {
+  const props: React.ComponentProps<typeof MobileNavMenu> = {
+    items,
+    activeId: "requests",
+    roleLabel: "Owner",
+    onNavigate: vi.fn(),
+    onNavigateHelp: vi.fn(),
+    helpUnseenCount: 0,
+    onSignOut: vi.fn(),
+    isSigningOut: false,
+    onClose: vi.fn(),
+    ...overrides,
+  };
+  return { props, ...render(<MobileNavMenu {...props} />) };
+}
+
 describe("MobileNavMenu", () => {
   it("renders every provided nav item", () => {
-    render(
-      <MobileNavMenu
-        items={items}
-        activeId="requests"
-        roleLabel="Owner"
-        onNavigate={vi.fn()}
-        onSignOut={vi.fn()}
-        isSigningOut={false}
-        onClose={vi.fn()}
-      />,
-    );
+    renderMenu();
     expect(screen.getByText("Requests")).toBeInTheDocument();
     expect(screen.getByText("Price Book")).toBeInTheDocument();
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });
 
   it("omits Price Book when the caller didn't include it (unentitled account)", () => {
-    render(
-      <MobileNavMenu
-        items={items.filter((i) => i.id !== "pricebook")}
-        activeId="requests"
-        roleLabel="Owner"
-        onNavigate={vi.fn()}
-        onSignOut={vi.fn()}
-        isSigningOut={false}
-        onClose={vi.fn()}
-      />,
-    );
+    renderMenu({ items: items.filter((i) => i.id !== "pricebook") });
     expect(screen.queryByText("Price Book")).not.toBeInTheDocument();
   });
 
   it("calls onNavigate with the selected item's id and does not call onClose itself", async () => {
     const user = userEvent.setup();
-    const onNavigate = vi.fn();
-    const onClose = vi.fn();
-    render(
-      <MobileNavMenu
-        items={items}
-        activeId="requests"
-        roleLabel="Owner"
-        onNavigate={onNavigate}
-        onSignOut={vi.fn()}
-        isSigningOut={false}
-        onClose={onClose}
-      />,
-    );
+    const { props } = renderMenu();
 
     await user.click(screen.getByText("Price Book"));
 
-    expect(onNavigate).toHaveBeenCalledWith("pricebook");
+    expect(props.onNavigate).toHaveBeenCalledWith("pricebook");
+    expect(props.onClose).not.toHaveBeenCalled();
   });
 
   it("calls onClose on Escape", async () => {
     const user = userEvent.setup();
-    const onClose = vi.fn();
-    render(
-      <MobileNavMenu
-        items={items}
-        activeId="requests"
-        roleLabel="Owner"
-        onNavigate={vi.fn()}
-        onSignOut={vi.fn()}
-        isSigningOut={false}
-        onClose={onClose}
-      />,
-    );
+    const { props } = renderMenu();
 
     await user.keyboard("{Escape}");
 
-    expect(onClose).toHaveBeenCalled();
+    expect(props.onClose).toHaveBeenCalled();
   });
 
   it("renders the role label", () => {
-    render(
-      <MobileNavMenu
-        items={items}
-        activeId="requests"
-        roleLabel="Admin"
-        onNavigate={vi.fn()}
-        onSignOut={vi.fn()}
-        isSigningOut={false}
-        onClose={vi.fn()}
-      />,
-    );
+    renderMenu({ roleLabel: "Admin" });
     expect(screen.getByText("Admin")).toBeInTheDocument();
   });
 
   it("renders the Business Settings group and routes sections through onNavigateSection (ADR-499)", async () => {
     const user = userEvent.setup();
     const onNavigateSection = vi.fn();
-    render(
-      <MobileNavMenu
-        items={items.filter((i) => i.id !== "settings")}
-        activeId="requests"
-        roleLabel="Owner"
-        sections={[
-          { id: "public-profile", label: "Company Profile & Public Link" },
-          { id: "policy", label: "Response Policy (SLAs)" },
-          { id: "team", label: "Team Seats & Permissions" },
-        ]}
-        onNavigate={vi.fn()}
-        onNavigateSection={onNavigateSection}
-        onSignOut={vi.fn()}
-        isSigningOut={false}
-        onClose={vi.fn()}
-      />,
-    );
+    renderMenu({
+      items: items.filter((i) => i.id !== "settings"),
+      sections: [
+        { id: "public-profile", label: "Company Profile & Public Link" },
+        { id: "policy", label: "Response Policy (SLAs)" },
+        { id: "team", label: "Team Seats & Permissions" },
+      ],
+      onNavigateSection,
+    });
 
     expect(screen.getByText("Business Settings")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Team Seats & Permissions" }));
@@ -126,37 +82,36 @@ describe("MobileNavMenu", () => {
   });
 
   it("omits the Business Settings group when no sections are provided", () => {
-    render(
-      <MobileNavMenu
-        items={items.filter((i) => i.id !== "settings")}
-        activeId="requests"
-        roleLabel="Operator"
-        onNavigate={vi.fn()}
-        onSignOut={vi.fn()}
-        isSigningOut={false}
-        onClose={vi.fn()}
-      />,
-    );
+    renderMenu({ items: items.filter((i) => i.id !== "settings"), roleLabel: "Operator" });
     expect(screen.queryByText("Business Settings")).not.toBeInTheDocument();
   });
 
   it("offers sign out in the mobile menu", async () => {
     const user = userEvent.setup();
-    const onSignOut = vi.fn();
-    render(
-      <MobileNavMenu
-        items={items}
-        activeId="requests"
-        roleLabel="Admin"
-        onNavigate={vi.fn()}
-        onSignOut={onSignOut}
-        isSigningOut={false}
-        onClose={vi.fn()}
-      />,
-    );
+    const { props } = renderMenu({ roleLabel: "Admin" });
 
     await user.click(screen.getByRole("button", { name: "Sign out" }));
 
-    expect(onSignOut).toHaveBeenCalledTimes(1);
+    expect(props.onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an always-present Help & Updates row that routes through onNavigateHelp", async () => {
+    const user = userEvent.setup();
+    // No sections (Operator) — the row is still present.
+    const { props } = renderMenu({
+      items: items.filter((i) => i.id !== "settings"),
+      roleLabel: "Operator",
+    });
+
+    await user.click(screen.getByRole("button", { name: /Help & Updates/ }));
+    expect(props.onNavigateHelp).toHaveBeenCalledTimes(1);
+  });
+
+  it("adds the ' · N new' suffix on the Help & Updates row only when unseen > 0", () => {
+    const { rerender, props } = renderMenu({ helpUnseenCount: 0 });
+    expect(screen.getByRole("button", { name: /Help & Updates/ }).textContent).not.toMatch(/new/);
+
+    rerender(<MobileNavMenu {...props} helpUnseenCount={2} />);
+    expect(screen.getByRole("button", { name: /Help & Updates/ }).textContent).toContain("· 2 new");
   });
 });

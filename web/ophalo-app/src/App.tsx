@@ -15,6 +15,7 @@ import { OfferingAssemblyDetail } from "./pages/OfferingAssemblyDetail";
 import { MobileNavMenu } from "./components/layout/MobileNavMenu";
 import { AccountMenu, getBusinessSettingsSections, type BusinessSettingsSectionId } from "./components/layout/AccountMenu";
 import { LiveAnnouncerRegion } from "./components/a11y/LiveAnnouncerRegion";
+import { useUpdatesFeed } from "./hooks/useUpdatesFeed";
 import { Plus, Inbox, Tag, Menu } from "lucide-react";
 import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClient";
 import { redirectToSignInOnce } from "./lib/redirectToSignIn";
@@ -192,6 +193,11 @@ function AppShell() {
 
   const navItems = getNavItems(role, priceBookEntitled);
   const businessSettingsSections = getBusinessSettingsSections(role);
+  // GAP-038 / BL149 (038-1b-ii): the shell-wide unseen-updates indicator. Shares react-query's
+  // `["updates-feed"]` cache with the Help page; the watermark is advanced by Help on open, so
+  // this count clears on the next shell render/route change after the page is visited.
+  const { unseenCount: helpUnseenCount } = useUpdatesFeed();
+  const helpHasUnseen = helpUnseenCount > 0;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   // Incremented only by an explicit Requests navigation. The wide workbench consumes this as a
@@ -392,10 +398,16 @@ function AppShell() {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            aria-label="Open navigation menu"
+            aria-label={`Open navigation menu${helpHasUnseen ? " (updates available)" : ""}`}
             aria-expanded={mobileMenuOpen}
-            className="flex items-center justify-center h-9 w-9 rounded-md text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+            className="relative flex items-center justify-center h-9 w-9 rounded-md text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
           >
+            {helpHasUnseen && (
+              <span
+                className="absolute right-[-1px] top-[-1px] h-1.5 w-1.5 rounded-full bg-[var(--ophalo-accent)]"
+                aria-hidden="true"
+              />
+            )}
             <Menu className="h-5 w-5" />
           </button>
         </header>
@@ -470,6 +482,8 @@ function AppShell() {
                 sections={businessSettingsSections}
                 settingsActive={activeNavId === "settings"}
                 onNavigateSection={navigateToSettingsSection}
+                onNavigateHelp={() => navigate({ page: "help" })}
+                helpUnseenCount={helpUnseenCount}
                 onSignOut={signOut}
                 isSigningOut={isSigningOut}
               />
@@ -657,6 +671,8 @@ function AppShell() {
           sections={businessSettingsSections}
           onNavigate={(id) => id === "requests" ? navigateToRequests() : navigate({ page: id })}
           onNavigateSection={navigateToSettingsSection}
+          onNavigateHelp={() => navigate({ page: "help" })}
+          helpUnseenCount={helpUnseenCount}
           onSignOut={signOut}
           isSigningOut={isSigningOut}
           onClose={() => setMobileMenuOpen(false)}

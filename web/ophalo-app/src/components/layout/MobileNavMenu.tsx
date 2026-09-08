@@ -1,3 +1,4 @@
+import { HelpCircle } from "lucide-react";
 import { KeepModal } from "../keep/KeepModal";
 import type { NavItem } from "../../App";
 import type { BusinessSettingsSection, BusinessSettingsSectionId } from "./AccountMenu";
@@ -11,6 +12,10 @@ interface MobileNavMenuProps {
   sections?: BusinessSettingsSection[];
   onNavigate: (id: NavItem["id"]) => void;
   onNavigateSection?: (id: BusinessSettingsSectionId) => void;
+  /** GAP-038 / BL149 (038-1b-ii): all-roles row opening `#/help`. */
+  onNavigateHelp: () => void;
+  /** Unseen feed entries; > 0 shows the ` · N new` suffix on the Help & Updates row. */
+  helpUnseenCount: number;
   onSignOut: () => void;
   isSigningOut: boolean;
   onClose: () => void;
@@ -29,6 +34,8 @@ export function MobileNavMenu({
   sections = [],
   onNavigate,
   onNavigateSection,
+  onNavigateHelp,
+  helpUnseenCount,
   onSignOut,
   isSigningOut,
   onClose,
@@ -56,6 +63,18 @@ export function MobileNavMenu({
             <span>{item.label}</span>
           </button>
         ))}
+
+        <button
+          type="button"
+          onClick={onNavigateHelp}
+          className="w-full flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-left font-medium text-[var(--ophalo-muted)] transition-colors hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+        >
+          <HelpCircle className="h-4 w-4" />
+          <span>Help &amp; Updates</span>
+          {helpUnseenCount > 0 && (
+            <span className="text-[0.8125rem] text-[var(--ophalo-muted)]">· {helpUnseenCount} new</span>
+          )}
+        </button>
 
         {sections.length > 0 && onNavigateSection && (
           <>

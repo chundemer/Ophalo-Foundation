@@ -1,9 +1,10 @@
 # BL149 — GAP-038: in-product feedback + Help & Updates loop — implementation build-log
 
-**Status:** 038-1a (content backend) landed 2026-09-08. 038-1b prework resolved 2026-09-08: split
-into **038-1b-i** (Help content surface — file gate below, implementation-ready) → **038-1b-ii**
-(menus + unread indicator + Requests banner — gate re-run before coding). D1–D8 remain resolved
-(D5 = persist-first). 038-2 retains its own exit criteria.
+**Status:** 038-1a (content backend), **038-1b-i** (Help content surface), and **038-1b-ii** (unread
+count + Help & Updates menu rows + trigger dots) all landed 2026-09-08. 038-1b-ii was split on
+2026-09-08 (Christian): the Requests-list banner (qualification + dismissal + list slot) is now
+**038-1b-iii**, a separate follow-up slice. Next GAP-038 slice: **038-1b-iii**, then **038-2**
+(feedback path). D1–D8 remain resolved (D5 = persist-first). 038-2 retains its own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
 end-to-end contract — Locked), [ADR-501](../decisions/ADR-501-api-route-and-compatibility-policy.md)
@@ -666,9 +667,19 @@ function); the `navigate` push is a one-line mirror of the `settings` branch and
 indirectly by the full-suite `App` tests rather than a dedicated case, to avoid a heavy `App`
 render in the route-grammar file.
 
-#### 038-1b-ii — menus + unread indicator + Requests banner (gate re-run before coding)
+#### 038-1b-ii / 038-1b-iii — menus + unread indicator (done) / Requests banner (follow-up)
 
-Scope: extend `useUpdatesFeed.ts` (unseen count; banner-qualifying derivation — `highlight:true` AND
+**2026-09-08 preflight + Christian decision:** the one-slice count was 7 production + 5 test = 12,
+exactly at the CLAUDE.md ceiling, so the slice was split. **038-1b-ii = the menu indicator only**
+(`useUpdatesFeed` unseen count, `AccountMenu` + `MobileNavMenu` rows, desktop + mobile trigger dots,
+`App.tsx` wiring — 4 prod + 3 test) — landed, see the completion record below. **038-1b-iii = the
+banner** (`useUpdatesFeed` banner-qualifying derivation + `dismissBanner`/`keep_dismissed_banners`,
+new `components/updates/UpdatesBanner.tsx`, `pages/Requests.tsx` + `components/requests/RequestListContent.tsx`
+`banner` slot prop, `App.tsx` render + dismiss — ~5 prod + 3 test). Trigger-dot was implemented
+inline ×2 (no shared component).
+
+Original combined scope (038-1b-iii inherits the banner half): extend `useUpdatesFeed.ts` (unseen
+count; banner-qualifying derivation — `highlight:true` AND
 within lifetime [`known_issue` while `status:active`; `whats_new` ≤14d from `published_at`;
 `banner_until` hard override] AND not in `keep_dismissed_banners`; **lifetime derivation takes an
 injected/current `now` for deterministic 14-day / `banner_until` tests**); `components/updates/UpdatesBanner.tsx`;
@@ -683,6 +694,40 @@ qualifying entry + "N more updates →" `#/help` link when >1; dismiss "×" adds
 `keep_dismissed_banners`, hides the banner, does **not** move the watermark; `role="status"`;
 lifetime expiry hides without dismissal; no qualifying entries → nothing renders; row present for all
 roles → navigates `#/help`; suffix + dot shown only when unseen > 0; zero unseen → no dot, no suffix.
+
+#### 038-1b-ii completion record — menu indicator only (landed 2026-09-08)
+
+Christian's 2026-09-08 decision **split 038-1b-ii**: this slice is the unread count + Help & Updates
+menu rows + trigger dots + App wiring; the banner (qualification, dismissal, Requests-list slot)
+becomes **038-1b-iii**, a separate follow-up. Watermark v1 behaviour accepted: the indicator clears
+on the next shell render / route change after the Help page is opened (Help owns `markSeen`).
+
+Implemented — **4 production + 3 test files** (under the gate):
+
+- **`useUpdatesFeed.ts`:** added exported pure `computeUnseenCount(entries, watermark)` (entries
+  with a finite `published_at` strictly after the watermark; null watermark → all) and a
+  `unseenCount` return field — `computeFeedMax`-style, guides never counted, `0` unless
+  `isSuccess`. `watermark` is now read once per render into a local and reused for both the
+  returned value and the count.
+- **`AccountMenu.tsx`:** new `onNavigateHelp` + `helpUnseenCount` props. A new **all-roles**
+  "Help & Updates" `menuitem` is the first item (above Business Settings, own divider) — `itemsRef`
+  indices shifted by one, `itemCount = sections.length + 2`. ` · {N} new` suffix
+  (`text-[0.8125rem] text-[var(--ophalo-muted)]`, not a pill) and a 6px `--ophalo-accent` trigger
+  dot (`absolute -1px/-1px`, `aria-hidden`) show only when `helpUnseenCount > 0`; the trigger
+  accessible name gains " (updates available)" in that case.
+- **`MobileNavMenu.tsx`:** same two props; an always-present "Help & Updates" button after the nav
+  items, before the Business Settings block, with the same ` · {N} new` suffix. The trigger dot for
+  this menu is on the hamburger button (App.tsx).
+- **`App.tsx`:** `useUpdatesFeed()` in the shell (shares the `["updates-feed"]` query cache);
+  `helpUnseenCount` + `onNavigateHelp={() => navigate({ page: "help" })}` passed to both menus; the
+  mobile hamburger button gets `relative` + the same conditional `--ophalo-accent` dot and
+  " (updates available)" accessible-name suffix.
+- **Tests:** `useUpdatesFeed.test.ts` (+4 — `computeUnseenCount` null/subset, hook `unseenCount`
+  loading→success→post-`markSeen` on re-render, `0` on transport error); `AccountMenu.test.tsx`
+  (+2 — all-roles row routes via `onNavigateHelp`; suffix + "(updates available)" only when
+  unseen > 0); `MobileNavMenu.test.tsx` (refactored to a `renderMenu` helper; +2 — always-present
+  row routes; suffix only when unseen > 0). Full `ophalo-app` suite **1138/1138**; `pnpm typecheck`
+  + `check:tokens` green.
 
 ### Required before 038-2
 

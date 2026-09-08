@@ -50,6 +50,12 @@ export interface UseUpdatesFeedResult {
   /** Persisted watermark (epoch ms), or null when unset / unreadable. */
   watermark: number | null;
   /**
+   * Count of feed `entries` published after the stored watermark (guides never count). Drives the
+   * shell "Help & Updates · N new" suffix and the trigger dot. An absent / unreadable watermark
+   * makes every entry unseen. Only ever over-reports, never the reverse.
+   */
+  unseenCount: number;
+  /**
    * Advance the watermark to the newest *past* entry (`published_at <= now`). Guides never move
    * it. No-ops on loading / error / empty feed, or when storage is unavailable — the watermark is
    * only ever written after a successful load that yielded a valid maximum.
@@ -111,6 +117,17 @@ export function groupSections(entries: UpdateEntry[]): UpdatesSection[] {
   return sections;
 }
 
+/** Number of entries published strictly after `watermark` (null watermark → all entries). */
+export function computeUnseenCount(entries: UpdateEntry[], watermark: number | null): number {
+  let count = 0;
+  for (const entry of entries) {
+    const t = Date.parse(entry.published_at);
+    if (!Number.isFinite(t)) continue;
+    if (watermark === null || t > watermark) count += 1;
+  }
+  return count;
+}
+
 /** Newest `published_at` across entries that are not future-dated relative to `now`. */
 export function computeFeedMax(entries: UpdateEntry[], now: Date): number | null {
   const nowMs = now.getTime();
@@ -157,6 +174,9 @@ export function useUpdatesFeed(options: { now?: Date } = {}): UseUpdatesFeedResu
   const sections = useMemo(() => groupSections(feed.entries), [feed.entries]);
   const feedLastUpdated = useMemo(() => computeLastUpdated(feed), [feed]);
 
+  const watermark = readWatermark();
+  const unseenCount = query.isSuccess ? computeUnseenCount(feed.entries, watermark) : 0;
+
   const feedMaxRef = useRef<number | null>(null);
   feedMaxRef.current = query.isSuccess
     ? computeFeedMax(feed.entries, nowRef.current ?? new Date())
@@ -178,7 +198,8 @@ export function useUpdatesFeed(options: { now?: Date } = {}): UseUpdatesFeedResu
     sections,
     guides: feed.guides,
     feedLastUpdated,
-    watermark: readWatermark(),
+    watermark,
+    unseenCount,
     markSeen,
   };
 }

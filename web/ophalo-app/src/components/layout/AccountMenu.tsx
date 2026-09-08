@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Building2, ChevronDown, Clock, LogOut, Users } from "lucide-react";
+import { Building2, ChevronDown, Clock, HelpCircle, LogOut, Users } from "lucide-react";
 
 // ADR-499: the authenticated shell separates operating workspaces (Requests / Price Book pills)
 // from account- and business-level concerns. This menu owns the latter — workspace identity, the
@@ -44,6 +44,10 @@ interface AccountMenuProps {
    *  removed Settings nav pill used to carry. */
   settingsActive: boolean;
   onNavigateSection: (id: BusinessSettingsSectionId) => void;
+  /** GAP-038 / BL149 (038-1b-ii): opens the all-roles `#/help` Help & Updates surface. */
+  onNavigateHelp: () => void;
+  /** Unseen feed entries. > 0 shows the ` · N new` row suffix and the trigger dot. */
+  helpUnseenCount: number;
   onSignOut: () => void;
   isSigningOut: boolean;
 }
@@ -55,9 +59,12 @@ export function AccountMenu({
   sections,
   settingsActive,
   onNavigateSection,
+  onNavigateHelp,
+  helpUnseenCount,
   onSignOut,
   isSigningOut,
 }: AccountMenuProps) {
+  const hasUnseen = helpUnseenCount > 0;
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -92,7 +99,7 @@ export function AccountMenu({
     if (open) itemsRef.current[0]?.focus();
   }, [open]);
 
-  const itemCount = sections.length + 1; // sections + Sign out
+  const itemCount = sections.length + 2; // Help & Updates + sections + Sign out
 
   function focusItem(index: number) {
     const clamped = (index + itemCount) % itemCount;
@@ -140,13 +147,21 @@ export function AccountMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        aria-label={businessName ? `${businessName} — account menu` : "Account menu"}
-        className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
+        aria-label={`${businessName ? `${businessName} — account menu` : "Account menu"}${
+          hasUnseen ? " (updates available)" : ""
+        }`}
+        className={`relative flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
           open || settingsActive
             ? "border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]"
             : "border-transparent hover:bg-[var(--ophalo-canvas)]"
         }`}
       >
+        {hasUnseen && (
+          <span
+            className="absolute right-[-1px] top-[-1px] h-1.5 w-1.5 rounded-full bg-[var(--ophalo-accent)]"
+            aria-hidden="true"
+          />
+        )}
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--keep-accent)]" aria-hidden="true" />
         <span className="flex flex-col leading-tight">
           {businessLine && (
@@ -174,6 +189,28 @@ export function AccountMenu({
             </p>
           </div>
 
+          <button
+            ref={(el) => {
+              itemsRef.current[0] = el;
+            }}
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              close(false);
+              onNavigateHelp();
+            }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] focus-visible:outline-none focus-visible:bg-[var(--ophalo-canvas)]"
+          >
+            <HelpCircle className="h-4 w-4 shrink-0 text-[var(--ophalo-muted)]" aria-hidden="true" />
+            <span>Help &amp; Updates</span>
+            {hasUnseen && (
+              <span className="text-[0.8125rem] text-[var(--ophalo-muted)]">
+                · {helpUnseenCount} new
+              </span>
+            )}
+          </button>
+          <div className="my-1.5 h-px bg-[var(--ophalo-border)]" />
+
           {sections.length > 0 && (
             <>
               <p className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--ophalo-muted)]">
@@ -185,7 +222,7 @@ export function AccountMenu({
                   <button
                     key={section.id}
                     ref={(el) => {
-                      itemsRef.current[i] = el;
+                      itemsRef.current[i + 1] = el;
                     }}
                     type="button"
                     role="menuitem"
@@ -206,7 +243,7 @@ export function AccountMenu({
 
           <button
             ref={(el) => {
-              itemsRef.current[sections.length] = el;
+              itemsRef.current[sections.length + 1] = el;
             }}
             type="button"
             role="menuitem"

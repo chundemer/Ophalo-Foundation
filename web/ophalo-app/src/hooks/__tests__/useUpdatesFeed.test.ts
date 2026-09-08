@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import { createElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useUpdatesFeed, WATERMARK_KEY, groupSections, computeFeedMax } from "../useUpdatesFeed";
+import {
+  useUpdatesFeed,
+  WATERMARK_KEY,
+  groupSections,
+  computeFeedMax,
+  computeUnseenCount,
+} from "../useUpdatesFeed";
 import type { UpdatesFeed } from "../../lib/apiClient";
 
 const mockGetUpdates = vi.fn();
@@ -91,6 +97,17 @@ describe("computeFeedMax", () => {
   });
 });
 
+describe("computeUnseenCount", () => {
+  it("counts every entry when there is no watermark", () => {
+    expect(computeUnseenCount(FEED.entries, null)).toBe(FEED.entries.length);
+  });
+
+  it("counts only entries published strictly after the watermark", () => {
+    // ki-new (09-05), cs-1 (09-07), future (12-01) are newer than 09-04.
+    expect(computeUnseenCount(FEED.entries, Date.parse("2026-09-04T00:00:00Z"))).toBe(3);
+  });
+});
+
 describe("useUpdatesFeed", () => {
   it("exposes grouped sections, guides, and the feed last-updated time (entries + guides)", async () => {
     mockGetUpdates.mockResolvedValue(FEED);
@@ -106,6 +123,31 @@ describe("useUpdatesFeed", () => {
     expect(result.current.guides).toHaveLength(1);
     // Guide updated_at (2027) is the newest timestamp anywhere in the feed.
     expect(result.current.feedLastUpdated).toBe("2027-01-01T00:00:00Z");
+  });
+
+  it("exposes unseenCount: all entries with no watermark, 0 while not successful, the subset after markSeen", async () => {
+    mockGetUpdates.mockResolvedValue(FEED);
+    const { result, rerender } = renderHook(() => useUpdatesFeed({ now: NOW }), {
+      wrapper: wrapper(),
+    });
+
+    expect(result.current.unseenCount).toBe(0); // still loading
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.unseenCount).toBe(FEED.entries.length);
+
+    // markSeen writes the newest past entry (cs-1, 09-07); ki-new/nw-1/misc-1/ki-old are then seen,
+    // only the future entry stays unseen. The watermark is read per-render, so the count reflects
+    // the write on the next render (the shell re-renders on route change).
+    act(() => result.current.markSeen());
+    rerender();
+    expect(result.current.unseenCount).toBe(1);
+  });
+
+  it("reports unseenCount 0 on a transport error", async () => {
+    mockGetUpdates.mockRejectedValue(new Error("offline"));
+    const { result } = renderHook(() => useUpdatesFeed({ now: NOW }), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.unseenCount).toBe(0);
   });
 
   it("reports no watermark when the key is absent", async () => {
