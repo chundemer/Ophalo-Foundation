@@ -4,7 +4,7 @@
 Locked decisions → [decision-index](decisions/decision-index.md). Working guardrails → CLAUDE.md.
 If a line here would need editing when the workboard changes, it belongs in the workboard, not here.
 
-**Updated 2026-09-07.**
+**Updated 2026-09-08.**
 
 ## Baseline
 
@@ -14,9 +14,13 @@ field record.
 
 ## Active
 
-**GAP-054 — account menu / app shell.** Slice 054-1 implemented and browser-verified 2026-09-07;
-awaiting diff review + commit. Entry point: [BL148](build-log/148-gap-054-app-shell-navigation-discovery.md)
-(changed-file list in the "Slice 054-1" section), [ADR-499](decisions/ADR-499-authenticated-app-shell-account-menu.md).
+**GAP-038 — in-product feedback + Help & Updates loop.** Slice 038-1a (content backend) is
+implementation-ready: Christian signed off the readiness package 2026-09-08 with four recorded
+corrections (image-name regex `\.`; `date-time` enforced as an assertion; unconfigured-R2 →
+empty-feed fallback not DI `500`; post-schema duplicate-`id` rejection) and one approved package
+(`JsonSchema.Net` on `OpHalo.Api.csproj`). Entry point:
+[BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md) — "Required before
+038-1a" section (9-file gate) and "Validation" subsection. GAP-054 slice 054-1 landed as `4f1caffb`.
 
 ## Next
 

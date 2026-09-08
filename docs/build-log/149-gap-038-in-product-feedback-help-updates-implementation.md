@@ -332,11 +332,29 @@ Resolved in this doc (pending Christian's sign-off on the doc as a whole):
 
 ### Required before 038-1a
 
-#### Drafted readiness package — pending Christian's review and sign-off
+#### Readiness package — Christian signed off 2026-09-08 (with four recorded corrections)
 
-This is pre-work only; it does not authorize implementation. The canonical schema is
-[updates.schema.json](../contracts/updates.schema.json). 038-1a embeds that exact artifact in the
-API so the validator cannot drift from the reviewed document.
+The canonical schema is [updates.schema.json](../contracts/updates.schema.json). 038-1a embeds that
+exact artifact in the API so the validator cannot drift from the reviewed document. Sign-off carries
+four corrections, all folded into the text below:
+
+1. **(critical)** image-name regex is `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(png|jpe?g|webp)$` —
+   literal `\.`, not `\\.`.
+2. **(critical)** `format: "date-time"` is enforced as a validation **assertion**, not annotation.
+3. **(high)** unconfigured-R2 (`Development`/test) yields the empty-feed fallback, never a DI `500`.
+4. **(high)** post-schema semantic check rejects duplicate `entries[].id` / `guides[].id`.
+
+Plus one new package approved: `JsonSchema.Net` on `OpHalo.Api.csproj` (see the file gate).
+
+**Non-blocking pressure points, carried into their slices:**
+
+- *Guide image path syntax.* Source markdown uses `guides/img/foo.png`; the renderer contract
+  permits `/updates/guides/img/foo.png`. **038-1b** must explicitly transform only the former into
+  the latter (or the source syntax is standardized then). Not an 038-1a concern.
+- *Founder write credential vs. app read credential.* Existing R2 setup appears read/write-capable.
+  Code may proceed against the current credential, but production publishing must use a separate
+  founder-held write credential, not the API's read credential — operational verification owed
+  before the publish target ships (founder tooling, tracked separately).
 
 **Authorization.** Both Foundation-owned, flat routes use the existing authenticated-app
 `RequireAuthorization()` boundary. There is **no role, capability, or account-membership scope**
@@ -370,7 +388,7 @@ last-known-good payload, or `{ "schema": 1, "entries": [], "guides": [] }` if no
 otherwise unhandled API fault uses the standard `500` problem response.
 
 **`GET /updates/guides/img/<name>`.** `<name>` is one decoded filename matching
-`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.(png|jpe?g|webp)$`. Slashes, backslashes, dot-only names,
+`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(png|jpe?g|webp)$`. Slashes, backslashes, dot-only names,
 encoded traversal, arbitrary extensions, and query-controlled keys are rejected. A valid name maps
 only to `platform/updates/guides/img/<name>`; the endpoint never follows a feed URL or another R2
 prefix. No request body or query parameters are accepted. `200` streams a compliant object with a
@@ -391,6 +409,25 @@ per-instance LKG slot. Fresh hits do not read R2; a later valid read replaces bo
 read/parse/validation failure retains LKG until a later valid read replaces it. It is neither shared
 nor durable: a cold/restarted/scaled-out instance without LKG returns the empty schema-1 feed.
 038-1a logs these failures to structured logs/Sentry only; notifier work is 038-2.
+
+**Validation — required configuration and semantic checks (Christian sign-off 2026-09-08).**
+
+- *Validator.* `JsonSchema.Net` (MIT, Draft 2020-12) is added to `src/OpHalo.Api/OpHalo.Api.csproj`
+  — the project file is already inside the 038-1a gate; this is the **package gate amendment** the
+  gate paragraph below now records. The embedded `updates.schema.json` artifact is validated as-is
+  so it cannot drift from the reviewed contract.
+- *Date-time is an assertion, not an annotation.* Draft 2020-12 treats `format` as annotation-only
+  unless format-assertion is explicitly enabled. Configure the validator so `format: "date-time"`
+  **fails validation**. Test: an `entries[].published_at` (and a `guides[].updated_at`) that is not a
+  valid RFC 3339 date-time is rejected → LKG fallback.
+- *Duplicate IDs (JSON Schema cannot express this).* After schema validation, reject a feed with any
+  duplicate value in `entries[].id` or in `guides[].id` (each list unique on its own). Duplicates
+  would corrupt client-side banner dismissal and watermark state. Test both lists.
+- *Unconfigured R2 (Development/test).* `IUpdatesContentSource` must **always** be resolvable. When
+  R2 config is absent, register an unavailable-source implementation that yields the contracted
+  empty-feed fallback path — never a DI activation `500`. It may live inside an already-gated
+  production file (`R2UpdatesContentSource.cs` or `Program.cs` DI), so it does not expand the file
+  count.
 
 **Publishing and rollback.** The canonical feed is `docs/content/updates.json` in the repo; the
 founder may commit it directly. A small publish target validates it against `updates.schema.json`
@@ -415,23 +452,30 @@ exactly:
 3. `src/OpHalo.Foundation.Application/Updates/IUpdatesContentSource.cs`
 4. `src/OpHalo.Foundation.Infrastructure/Updates/R2UpdatesContentSource.cs`
 5. `src/OpHalo.Api/Updates/UpdatesFeedCache.cs` (schema validation, cache, LKG)
-6. `src/OpHalo.Api/Program.cs` (DI and endpoint mapping)
-7. `src/OpHalo.Api/OpHalo.Api.csproj` (embed schema)
+6. `src/OpHalo.Api/Program.cs` (DI, `AddMemoryCache()`, endpoint mapping)
+7. `src/OpHalo.Api/OpHalo.Api.csproj` (embed schema + `JsonSchema.Net` package reference)
 8. `tests/OpHalo.IntegrationTests/Api/UpdatesEndpointsTests.cs`
 9. `tests/OpHalo.UnitTests/Api/UpdatesFeedCacheTests.cs`
 
 That is **7 production files, 2 test files, 9 total**, one read-handler family with its
 constrained image alias: within the CLAUDE.md limit (8 production / 12 total). The fake
 `IUpdatesContentSource` is a nested test-only class in `UpdatesEndpointsTests.cs`, not a separate
-file. A new fake, fixture, package, migration, frontend file, or separate test file requires
-re-splitting or substitution.
+file.
+
+**Package gate amendment (Christian sign-off 2026-09-08).** One new package — `JsonSchema.Net`
+(MIT, Draft 2020-12) — is approved for `OpHalo.Api.csproj`, which is already in the list above; it
+adds no tenth file. This is the only approved package addition. Any *further* new fake, fixture,
+package, migration, frontend file, or separate test file requires re-splitting or substitution.
 
 **038-1a tests.** An authenticated integration client with a fake `IUpdatesContentSource` covers
 valid proxy/cache headers, anonymous `401`, schema-invalid/unknown-schema LKG fallback, cold empty
 fallback, and successful forced image MIME/security headers. Focused cache tests cover the five-minute
 fresh cache and LKG replacement. Image cases assert invalid/prefix-escape name → `404`, missing →
 `404`, 2,097,153 bytes → `413`, missing/disallowed/mismatched MIME → `415`, provider failure →
-`503`, and that the source receives only the fixed prefix—not a client-controlled URL.
+`503`, and that the source receives only the fixed prefix—not a client-controlled URL. Validation
+tests additionally cover: invalid `published_at` / `updated_at` date-time → rejected (format
+assertion enabled); duplicate `entries[].id` → rejected; duplicate `guides[].id` → rejected;
+unconfigured-R2 source resolves and returns the empty feed (no DI `500`).
 
 - [x] Rollback path settled: repo is canonical (`docs/content/updates.json`), rollback is
       `git checkout` + re-publish. R2 has no restorable object versioning; **no R2 bucket setting is
