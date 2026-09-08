@@ -1,7 +1,9 @@
 # BL149 — GAP-038: in-product feedback + Help & Updates loop — implementation build-log
 
-**Status:** 038-1a (content backend) landed 2026-09-08 — see the "038-1a completion record" below.
-D1–D8 remain resolved (D5 = persist-first). 038-1b and 038-2 retain their own exit criteria.
+**Status:** 038-1a (content backend) landed 2026-09-08. 038-1b prework resolved 2026-09-08: split
+into **038-1b-i** (Help content surface — file gate below, implementation-ready) → **038-1b-ii**
+(menus + unread indicator + Requests banner — gate re-run before coding). D1–D8 remain resolved
+(D5 = persist-first). 038-2 retains its own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
 end-to-end contract — Locked), [ADR-501](../decisions/ADR-501-api-route-and-compatibility-policy.md)
@@ -527,14 +529,107 @@ it is the only package added and it added no tenth file. `updates.schema.json` i
   provider `503`). Full unit (1847) + architecture (14) + full integration (1652, pre-cap; Updates
   slice re-verified at 18/18 after the cap change) green.
 
-### Required before 038-1b
+### 038-1b prework — resolved 2026-09-08 (Christian sign-off)
 
-- [ ] 038-1b changed-file list enumerated and gate-checked.
-- [ ] GAP-054 menu component merged; muted-text token name confirmed for the row suffix.
-- [ ] 038-1b test plan: watermark, banner lifetime/dismissal, empty/stale/error states, renderer
-      sanitiser tests (XSS / disallowed-tag / bad-scheme payloads dropped), and graceful guide-image
-      degradation when the image proxy returns `404` or `503` (guide text and the rest of the page
-      remain usable; no broken-image UI noise).
+- [x] Muted-text token confirmed: **`--ophalo-muted`** (`#5d6878`), the token every muted line in
+      `AccountMenu.tsx` already uses; defined in `src/styles/app.css` and
+      `web/shared/styles/ophalo-tokens.css` (in sync). The row suffix `· N new` is
+      `text-[var(--ophalo-muted)]` at `text-[0.8125rem]`. No new token — `--ophalo-accent`,
+      `--ophalo-attention`, `--ophalo-attention-bg`, `--ophalo-border` all already defined + synced,
+      so `check:tokens` stays green. The app is single-theme (no dark blocks), so the guide-image
+      "constant frame in both themes" note is automatically satisfied.
+- [x] **038-1b is over the CLAUDE.md batch gate** (12 production files + 2 deps) and splits into two
+      independently shippable slices: **038-1b-i** (content surface — the `#/help` page reachable by
+      URL, no indicator/banner/feedback button) → **038-1b-ii** (menus + unread indicator + Requests
+      banner). Order: 1b-i → 1b-ii back-to-back. Announcements are visible via `#/help` after 1b-i;
+      users are nudged to it after 1b-ii. Both land well ahead of the heavy-change month.
+- [x] **"Report a problem" / "Send feedback" entry points + the submission dialog stay in 038-2**
+      (this doc, "Slice 038-2" and line ~259). The 038-1b-i Help page is **content-only**: sectioned
+      scroll + feed last-updated time + per-entry dates, no header action. ADR-500 §4 prose reads as
+      if the header action ships with the page; the build-log slice split is authoritative.
+
+Repo facts (preflight 2026-09-08):
+
+- Routing: `AppRoute` union + `getRouteFromLocation()` + `navigate()` in `App.tsx`; content routes
+  render from the `route.page ===` ladder in `<main>` (`App.tsx:485–608`). `src/App.actualWorkRoute.test.ts`
+  is the precedent for a route-parse test file.
+- Data: `@tanstack/react-query` `useQuery` is the app pattern; `api` object + `apiFetch<T>` in
+  `lib/apiClient.ts`, types in `apiClient.types.ts`.
+- **No `localStorage` helper exists in `src`.** Watermark + dismissed-banner persistence is new code;
+  it is **folded into `hooks/useUpdatesFeed.ts`** (not a separate module) to hold the 1b-i file count.
+- Menus: `AccountMenu.tsx` (desktop) and `MobileNavMenu.tsx` (hamburger trigger `App.tsx:383` + modal
+  list). The "Help & Updates" row is **all-roles** — a new always-present item, not a `sections` entry.
+- Banner: `RequestListContent.tsx` is presentational with a fixed props contract, rendered only by
+  `pages/Requests.tsx:647`. Insertion = a `banner?: React.ReactNode` slot prop filled by `Requests.tsx`.
+- `snarkdown` + `dompurify` absent — 2 runtime deps (ADR-500 §4 locked). **Do not add
+  `@types/dompurify`** — deprecated; DOMPurify ships its own declarations.
+- Guide-image path transform (`guides/img/foo.png` → `/updates/guides/img/foo.png`, drop everything
+  else) is 038-1b-i's job (BL149 non-blocking pressure point).
+- **No frontend-observable "stale last-known-good" state:** `GET /updates` deliberately returns the
+  same successful shape for fresh and LKG content. 1b-i tests normal successful rendering only; LKG is
+  a backend concern already covered in 038-1a.
+
+#### 038-1b-i file gate — Help content surface
+
+Source (6):
+
+1. `src/lib/apiClient.ts` — `getUpdates()` → `GET /updates`
+2. `src/lib/apiClient.types.ts` — `UpdatesFeed` / `UpdateEntry` / `UpdateGuide` DTOs
+3. `src/hooks/useUpdatesFeed.ts` — react-query fetch + section grouping + feed last-updated +
+   `keep_updates_watermark` read/write (localStorage, try/catch, absent-key safe); accepts an
+   injected `now` for deterministic `published_at` comparisons
+4. `src/components/updates/UpdatesMarkdown.tsx` — `snarkdown` + `DOMPurify` hard allowlist (tags
+   `p strong em ul ol li a img br`; attrs `href src alt`), `javascript:`/`data:` href drop, guide
+   `![alt](guides/img/x)` → `/updates/guides/img/x` rewrite + non-empty-`alt` requirement +
+   `loading="lazy"` + capped max-width + neutral frame, **plus a real `error`-event handler
+   (event delegation) that hides a failed `<img>`** — sanitized `dangerouslySetInnerHTML` alone
+   cannot degrade a broken image
+5. `src/pages/Help.tsx` — single sectioned scroll (Known issues active→resolved → Updates → Coming
+   soon → Guides), feed last-updated + per-entry dates, empty ("No updates yet" per section) and
+   network-error ("Couldn't load updates, try again" + retry) states; opening the page moves the
+   watermark to `feedMax`
+6. `src/App.tsx` — `{ page: "help" }` in `AppRoute` + `getRouteFromLocation()` (`#/help`, no params)
+   + `navigate()` + render `<Help/>` in the `<main>` ladder
+
+Manifests (2): `web/ophalo-app/package.json`, `web/ophalo-app/pnpm-lock.yaml` (`snarkdown` +
+`dompurify` only; no `@types/dompurify`).
+
+Tests (exactly 4 — hard cap; total 6 + 2 + 4 = **12**, at the CLAUDE.md limit):
+
+1. `src/hooks/__tests__/useUpdatesFeed.test.ts` — fetch success shape; section grouping + order;
+   feed last-updated; watermark absent → all entries unseen; opening/`markSeen` sets watermark to
+   `feedMax` and moves only past `entries` (guides never move it); corrupt/absent localStorage →
+   treated as empty, no throw; injected `now` honored
+2. `src/components/updates/__tests__/UpdatesMarkdown.test.tsx` — allowed tags survive; `<script>`
+   `<iframe>` `onerror=` `<h1>` `<table>` raw HTML dropped/escaped; `javascript:`/`data:` hrefs
+   dropped; `guides/img/x.png` → `/updates/guides/img/x.png` with `loading="lazy"`; non-`guides/img/`
+   path and empty `alt` → image dropped; **`<img>` `error` event → image hidden, surrounding guide
+   text intact**
+3. `src/pages/__tests__/Help.test.tsx` — each section renders; network error → retry affordance,
+   rest of page unaffected; cold empty feed → calm per-section empty state; mount moves the watermark
+4. `src/App.helpRoute.test.ts` — `#/help` parses to `{ page: "help" }`; `navigate` pushes `#/help`;
+   an unknown hash still falls back to `{ page: "requests" }`
+
+**6 source + 2 manifest = 8 production files; 12 total.** No new fake/fixture. Any further new file
+requires re-splitting.
+
+#### 038-1b-ii — menus + unread indicator + Requests banner (gate re-run before coding)
+
+Scope: extend `useUpdatesFeed.ts` (unseen count; banner-qualifying derivation — `highlight:true` AND
+within lifetime [`known_issue` while `status:active`; `whats_new` ≤14d from `published_at`;
+`banner_until` hard override] AND not in `keep_dismissed_banners`; **lifetime derivation takes an
+injected/current `now` for deterministic 14-day / `banner_until` tests**); `components/updates/UpdatesBanner.tsx`;
+trigger-dot (shared tiny component or inline ×2 — decide at preflight); `AccountMenu.tsx` +
+`MobileNavMenu.tsx` (row + `· N new` suffix + `--ophalo-accent` dot + " (updates available)" on the
+trigger accessible name); `App.tsx` wiring; `pages/Requests.tsx` + `components/requests/RequestListContent.tsx`
+(`banner` slot prop). ~7–8 production files — **at the ceiling; re-run the mechanical file/test
+fan-out gate before coding and split the banner from the menu-indicator if it counts over.**
+
+1b-ii test plan: unseen count = `entries` with `published_at > watermark`; banner shows most-recent
+qualifying entry + "N more updates →" `#/help` link when >1; dismiss "×" adds id to
+`keep_dismissed_banners`, hides the banner, does **not** move the watermark; `role="status"`;
+lifetime expiry hides without dismissal; no qualifying entries → nothing renders; row present for all
+roles → navigates `#/help`; suffix + dot shown only when unseen > 0; zero unseen → no dot, no suffix.
 
 ### Required before 038-2
 

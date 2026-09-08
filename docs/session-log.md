@@ -19,10 +19,13 @@ field record.
 boundary, a schema-validating (format-assertion + duplicate-`id`) last-known-good feed cache, and a
 fixed-key R2 content seam that is always resolvable. Exactly the BL149 9-file gate; `JsonSchema.Net`
 the only new package; feed and image reads both byte-capped. Evidence: BL149 completion record.
-Active slice is now **038-1b (content frontend)** — entry point
-[BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md) "Required before
-038-1b": the 038-1b file gate, the GAP-054 muted-text token name, and the 038-1b test plan are the
-open pre-work.
+038-1b prework resolved 2026-09-08: muted-text token is `--ophalo-muted`; 038-1b is over the batch
+gate and splits into **038-1b-i** (Help content surface — content-only `#/help` page, no
+indicator/banner/feedback button) → **038-1b-ii** (menus + unread indicator + Requests banner).
+Active slice is **038-1b-i**, implementation-ready — entry point
+[BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md) "038-1b-i file
+gate": 6 source + 2 manifest + 4 test files (12, at the cap). 038-1b-ii re-runs its file/test
+fan-out gate before coding. Feedback entry points + dialog stay in 038-2.
 
 ## Next
 
