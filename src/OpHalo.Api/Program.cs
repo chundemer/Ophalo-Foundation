@@ -10,6 +10,7 @@ using Npgsql;
 using OpHalo.Api.Accounts;
 using OpHalo.Api.Auth;
 using OpHalo.Api.Diagnostics;
+using OpHalo.Api.Feedback;
 using OpHalo.Api.Helpers;
 using OpHalo.Api.Keep;
 using OpHalo.Api.Updates;
@@ -34,6 +35,9 @@ using OpHalo.Foundation.Infrastructure.Members;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Foundation.Infrastructure.Push;
 using OpHalo.Foundation.Application.Feedback;
+using OpHalo.Foundation.Application.Notifications;
+using OpHalo.Foundation.Infrastructure.Notifications;
+using System.Security.Claims;
 using OpHalo.Foundation.Application.Updates;
 using OpHalo.Foundation.Infrastructure.Feedback;
 using OpHalo.Foundation.Infrastructure.Updates;
@@ -236,11 +240,26 @@ else
 }
 builder.Services.AddSingleton<UpdatesFeedCache>();
 
-// --- Feedback (GAP-038, BL149, 038-2a-ii) ---
-// Persistence seam only; the submission service, endpoint and notifier land in 038-2b behind
-// Feedback:Enabled=false. Scoped registration with no startup connection — safe to wire ahead
-// of the consumer.
+// --- Feedback (GAP-038, BL149, 038-2a-ii / 038-2b) ---
+// Persist-first feedback path. The POST /feedback route is only mapped when Feedback:Enabled is
+// true (default false → framework 404); the UI and flag activation land in 038-2d, the retry
+// worker / backlog alert / retention sweep in 038-2c. Scoped persistence seam, no startup
+// connection — safe to wire ahead of the consumer.
 builder.Services.AddScoped<IFeedbackPersistence, EfFeedbackPersistence>();
+builder.Services.AddScoped<FeedbackSubmissionService>();
+
+// Generic founder-channel notifier (BL149 "Founder channel"): a typed HttpClient posting a
+// compact structured event to a single founder-provisioned incoming webhook. Fail-soft — an
+// unconfigured or failing webhook never faults a request. FounderChannel:WebhookUrl is set in
+// deployed secret config only; production hardening (fail-fast when Feedback:Enabled without a
+// webhook) is owed in 038-2d alongside flag activation.
+var founderChannelSettings = builder.Configuration.GetSection("FounderChannel").Get<FounderChannelSettings>()
+    ?? new FounderChannelSettings();
+builder.Services.AddSingleton(founderChannelSettings);
+builder.Services.AddHttpClient<IFounderNotifier, FounderNotifier>(httpClient =>
+{
+    httpClient.Timeout = TimeSpan.FromSeconds(5);
+});
 
 // --- Auth ---
 builder.Services.AddHttpContextAccessor();
@@ -318,6 +337,34 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 10,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            });
+    });
+
+    // In-product feedback (GAP-038 / 038-2b): 10 submissions per authenticated account_user per
+    // fixed one-hour window. Partitioned directly off the authenticated principal's user-id claim
+    // (this policy runs after UseAuthentication), with an IP fallback for the pre-auth path.
+    options.AddPolicy<string>(FeedbackEndpoints.RateLimitPolicy, context =>
+    {
+        var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        string partitionKey;
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            partitionKey = "user:" + userId;
+        }
+        else
+        {
+            var proxies = context.RequestServices.GetRequiredService<IReadOnlyList<IPNetwork>>();
+            partitionKey = "ip:" + ClientIpResolver.Resolve(context, proxies);
+        }
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromHours(1),
                 PermitLimit = 10,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0,
@@ -416,6 +463,7 @@ app.MapAccountDeviceEndpoints();
 app.MapInternalEntitlementsEndpoints();
 app.MapBadgeEndpoints();
 app.MapUpdatesEndpoints();
+app.MapFeedbackEndpoints(app.Configuration);
 
 app.Run();
 

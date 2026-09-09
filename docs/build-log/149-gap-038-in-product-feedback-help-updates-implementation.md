@@ -3,10 +3,12 @@
 **Status:** 038-1a (content backend), **038-1b-i** (Help content surface), **038-1b-ii** (unread
 count + Help & Updates menu rows + trigger dots), and **038-1b-iii** (Requests-list highlight
 banner) all landed 2026-09-08. **038-2a-i** (feedback domain model) landed 2026-09-09; **038-2a-ii** (feedback persistence +
-`AddFeedbackSubmission` migration) landed 2026-09-09. 038-2 is
+`AddFeedbackSubmission` migration) landed 2026-09-09; **038-2b** (gated `POST /feedback` +
+`FeedbackSubmissionService` + `IFounderNotifier` + per-`account_user` rate limit,
+`Feedback:Enabled` default false) landed 2026-09-09. 038-2 is
 split five ways (2a-i → 2a-ii → 2b → 2c → 2d, see "038-2 slice split" below); next slice is
-**038-2b** (gated endpoint + submission service + notifier, `Feedback:Enabled=false`). D1–D8 remain resolved (D5 = persist-first). 038-2
-retains its own exit criteria.
+**038-2c** (retry `BackgroundService` + backlog/abandoned alert + retention sweep + D4 alert
+retrofit). D1–D8 remain resolved (D5 = persist-first). 038-2 retains its own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
 end-to-end contract — Locked), [ADR-501](../decisions/ADR-501-api-route-and-compatibility-policy.md)
@@ -203,11 +205,14 @@ Foundation entity on `OpHaloDbContext`. Strict non-null schema, no backfill (per
 - This is **not** a ticket dashboard: no status/resolve/assignee/SLA columns, no operator UI, no
   list endpoint. Matches ADR-500 §5 / ADR-293.
 
-*Founder channel — introduced in 038-2, not 038-1a.* One **generic** `IFounderNotifier` — a typed
-`HttpClient` that POSTs a compact JSON body to a single incoming-webhook URL from a new
-`FounderChannel:WebhookUrl` config key. **Not Slack- or Discord-shaped**: the abstraction takes a
-structured event (`environment`, `type`, `summary`, `count`, `oldest_age`, `correlation`), and a
-thin formatter renders it to the generic webhook body. Consumers: `POST /feedback` delivery, the
+*Founder channel — introduced in 038-2, not 038-1a.* One `IFounderNotifier` — a typed
+`HttpClient` that POSTs to a single incoming-webhook URL from a new `FounderChannel:WebhookUrl`
+config key. The abstraction takes a structured event (`environment`, `type`, `summary`, `count`,
+`oldest_age`, `correlation`, `context`); a **thin formatter in the infrastructure notifier**
+renders it to whatever the configured channel requires. The founder channel is a **Google Chat
+space** (038-2b, Christian): its incoming webhook requires a Chat message body, so the formatter
+emits `{ "text": "<labelled lines>" }`. Swapping channels is a formatter change, not a contract
+change. Consumers: `POST /feedback` delivery, the
 D5 backlog/abandoned alert, and (retrofitted into the D4 path once it exists) the content-source
 failure alert. Fail-soft everywhere — a notifier error never faults a request and never blocks the
 sweep. The webhook URL is founder-provisioned like the Sentry DSN (BL140 pattern); which service
@@ -897,8 +902,68 @@ Verification: `FeedbackSubmissionPersistenceTests` 4/4; architecture **14/14**; 
 
 ### Required before 038-2b
 
+- [x] `POST /feedback` full contract + rate limit — implemented per "038-2 slice split".
 - [ ] Webhook URL provisioned by the founder; `FounderChannel:WebhookUrl` in deployed secret
-      config only. **Founder task; needed for 038-2b delivery testing.**
+      config only. **Founder task; needed for 038-2b delivery testing** (code ships against a
+      fake notifier; real delivery is fail-soft so an unprovisioned webhook only means feedback
+      rows sit `pending` for the 038-2c retry worker).
+
+#### 038-2b completion record — gated endpoint + submission service + notifier (landed 2026-09-09)
+
+No drift from the split plan; P1–P5 from the 038-2b preflight signed off by Christian
+(2026-09-09), plus one refinement: the rate-limit partition is derived directly from the
+authenticated principal's `NameIdentifier` claim in the limiter callback (IP fallback), not by
+resolving `ICurrentUser` inside it. Implemented — **6 production + 3 test files**:
+
+- **`Foundation.Application/Notifications/IFounderNotifier.cs`** (new): `FounderEvent`
+  (`Type`, `Summary`, `Correlation`, `Count?`, `OldestAge?`, `Context?`) + `IFounderNotifier`
+  (`Task<bool> NotifyAsync`). Contract: fail-soft, never throws, `true` only on confirmed success.
+  Consumers past 2b: the 038-2c backlog/abandoned alert and the D4 content-source failure alert.
+- **`Foundation.Infrastructure/Notifications/FounderChannelSettings.cs`** (new): binds
+  `FounderChannel`; `IsConfigured` also validates absolute HTTP(S).
+- **`Foundation.Infrastructure/Notifications/FounderNotifier.cs`** (new): typed `HttpClient`,
+  5 s timeout (set in `Program.cs`). The founder channel is a **Google Chat space** (Christian,
+  2026-09-09), so `RenderText` folds the structured event into labelled lines
+  (`[env] type` / summary / `count:` / `oldest:` / `correlation:` / `context:`) and the notifier
+  POSTs the Google-Chat-required `{ "text": ... }` message body. Swapping channels is a
+  `RenderText` change only. Unconfigured / non-2xx / transport exception / timeout → `false` with
+  status-or-category-only logging (never the feedback body).
+- **`Foundation.Application/Feedback/FeedbackSubmissionService.cs`** (new): `SubmitAsync(message,
+  category, contextJson, ct)` → `Result<FeedbackSubmissionOutcome>` (`Delivered` / `Queued`).
+  Flow: auth check → `FeedbackSubmission.Create` (maps the domain `ArgumentException("message")`
+  to `feedback.message_required` / `feedback.message_too_long`) → `AddAsync` commit (failure →
+  `feedback.persist_failed`, notifier never called) → `MarkAttempted` → one `NotifyAsync` →
+  `MarkDelivered` (scrub) when confirmed → `UpdateAsync` (a failure here is logged and swallowed —
+  the row stays `pending` for retry, at-least-once). Notifier `Summary` = `[{Category}] {message}`,
+  `Correlation` = submission id.
+- **`Api/Feedback/FeedbackEndpoints.cs`** (new): `MapFeedbackEndpoints(IConfiguration)` maps
+  `POST /feedback` **only when `Feedback:Enabled` is true** (default false → framework 404).
+  `.RequireAuthorization()` + `.RequireRateLimiting("feedback")`. Request `{ message, category?,
+  context? }`; category resolved from `bug | confusing | missing_thing | too_slow | other`
+  (absent → `other`, unknown → `400 feedback.category_invalid`); `context` object re-serialised,
+  dropped to null (not rejected) above 4 KiB (P4). `200 {status:delivered}` / `202
+  {status:queued}` / `400` / `413` / `503` via ProblemDetails with a `code` extension.
+- **`Api/Program.cs`** (mod): `FeedbackSubmissionService` scoped; `FounderChannelSettings` bound +
+  singleton; `AddHttpClient<IFounderNotifier, FounderNotifier>` (5 s timeout); new `"feedback"`
+  rate-limiter policy — fixed 1 h window, 10 permits, `QueueLimit = 0`, partitioned by
+  `user:<NameIdentifier>` (post-`UseAuthentication`) with an `ip:` fallback; `MapFeedbackEndpoints`.
+  Production fail-fast when `Feedback:Enabled` without a webhook is **deferred to 038-2d** alongside
+  flag activation (noted inline).
+- **Tests:** `tests/OpHalo.UnitTests/Feedback/FeedbackSubmissionServiceTests.cs` (new, 9 cases —
+  unauthenticated, blank/over-length rejection without persisting, pre-delivery persist failure
+  never calls the notifier, confirmed delivery scrubs + persists twice, notifier payload shape,
+  unconfirmed → pending row keeps the body, post-delivery update failure still reports delivered);
+  `tests/OpHalo.UnitTests/Feedback/FounderNotifierTests.cs` (new, 6 cases — unconfigured no-request,
+  success posts a Google Chat `{ "text": ... }` body carrying summary/correlation/context,
+  `RenderText` includes `count`/`oldest` for 038-2c alerts, non-2xx / transport exception /
+  timeout all fail-soft);
+  `tests/OpHalo.IntegrationTests/Api/FeedbackEndpointsTests.cs` (new, 10 cases — flag-off 404,
+  401, `200` + scrub, `202` + pending body, category default, blank `400`, over-length `413`,
+  unknown category `400`, 11th-in-window `429`; `RateLimitTesting` host + fake `IFounderNotifier`).
+
+Verification: `FeedbackSubmissionServiceTests` 9/9 + `FounderNotifierTests` 6/6 (full unit
+**1884/1884**); `FeedbackEndpointsTests` 10/10; architecture **14/14**; `OpHalo.Api` +
+`OpHalo.IntegrationTests` + `OpHalo.UnitTests` build 0 warnings; `git diff --check` clean.
 
 ## Not in this build-log / this feature
 

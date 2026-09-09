@@ -19,15 +19,17 @@ field record.
 (Requests-list highlight banner) all landed 2026-09-08** — see the BL149 038-1a / 038-1b-i /
 038-1b-ii / 038-1b-iii completion records. All of 038-1b is done. **038-2a-i (feedback domain
 model — `FeedbackSubmission` entity + enums) landed 2026-09-09** (BL149 038-2a-i completion record).
-**038-2a-ii (feedback persistence + migration — `IFeedbackPersistence` [`AddAsync`/`UpdateAsync`],
-`EfFeedbackPersistence`, `FeedbackSubmissionConfiguration`, `DbSet`, `AddFeedbackSubmission`
-migration, scoped DI seam) landed 2026-09-09** (BL149 038-2a-ii completion record).
-Active slice is **038-2b — gated endpoint + submission service + notifier + rate limit +
-`FounderChannel:WebhookUrl` + `Feedback:Enabled=false`**. The approved, gate-bounded sequence is
-**038-2a-i → 038-2a-ii → 038-2b (gated endpoint + submission service + notifier, `Feedback:Enabled=false`) →
-038-2c (retry, alerts, retention, D4 retrofit) → 038-2d (frontend + privacy copy + flag
-activation)**. Contract signed off (BL149 "038-2 slice split"). Open founder task: provision
-`FounderChannel:WebhookUrl` (deployed secret only) before 038-2b. Entry point:
+**038-2a-ii (feedback persistence + migration) landed 2026-09-09** (BL149 038-2a-ii completion
+record). **038-2b (gated `POST /feedback` + `FeedbackSubmissionService` + `IFounderNotifier` /
+`FounderNotifier` + per-`account_user` 10/hour rate limit + `FounderChannel` config +
+`Feedback:Enabled` default-false route gate) landed 2026-09-09** (BL149 038-2b completion record).
+Active slice is **038-2c — retry `BackgroundService` (backoff 1/5/15/60/180 min) + backlog/abandoned
+founder-channel alert + 7-day-delivered / 30-day-abandoned retention sweep + D4 content-source
+failure alert retrofit onto `IFounderNotifier`**. The approved, gate-bounded sequence is
+**038-2a-i → 038-2a-ii → 038-2b → 038-2c → 038-2d (frontend + privacy copy + flag activation)**.
+Contract signed off (BL149 "038-2 slice split"). Open founder task: provision
+`FounderChannel:WebhookUrl` (deployed secret only) — needed for real delivery testing, not a code
+blocker (delivery is fail-soft). Entry point:
 [BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md).
 
 ## Next
