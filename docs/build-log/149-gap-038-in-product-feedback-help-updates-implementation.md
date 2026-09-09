@@ -2,8 +2,10 @@
 
 **Status:** 038-1a (content backend), **038-1b-i** (Help content surface), **038-1b-ii** (unread
 count + Help & Updates menu rows + trigger dots), and **038-1b-iii** (Requests-list highlight
-banner) all landed 2026-09-08. Next GAP-038 slice: **038-2** (feedback path). D1–D8 remain resolved
-(D5 = persist-first). 038-2 retains its own exit criteria.
+banner) all landed 2026-09-08. **038-2a-i** (feedback domain model) landed 2026-09-09. 038-2 is
+split five ways (2a-i → 2a-ii → 2b → 2c → 2d, see "038-2 slice split" below); next slice is
+**038-2a-ii** (feedback persistence + migration). D1–D8 remain resolved (D5 = persist-first). 038-2
+retains its own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
 end-to-end contract — Locked), [ADR-501](../decisions/ADR-501-api-route-and-compatibility-policy.md)
@@ -267,6 +269,44 @@ Each slice compiles and is independently shippable; each gets its own preflight 
 this build-log before it starts. If 038-2 is still over the gate once its file fan-out is counted,
 it splits into (endpoint + entity + migration + delivery) and (retry service + alert + sweep +
 entry points).
+
+**038-2 slice split (finalized 2026-09-09, Christian sign-off).** The 038-2a file fan-out was
+counted and is mechanically over the 8-production / 12-total gate (the 3 EF-generated migration
+artifacts leave only 5 for hand-written code). Five slices, each independently compiling:
+
+- **038-2a-i — feedback domain model (Core only):** `FeedbackSubmission` entity + `FeedbackCategory`
+  / `FeedbackDeliveryState` enums. Pure domain; no persistence, no HTTP. **Landed 2026-09-09.**
+- **038-2a-ii — feedback persistence + migration:** `IFeedbackPersistence` (Application, domain
+  scalars only), `EfFeedbackPersistence`, `FeedbackSubmissionConfiguration`, `DbSet` on
+  `OpHaloDbContext`, migration (strict non-null, no backfill; EF startup project
+  `src/OpHalo.Keep.Infrastructure` per ADR-049). Integration-tested.
+- **038-2b — gated endpoint + delivery:** `FeedbackSubmissionService` (validate → persist-first
+  commit → one synchronous delivery → scrub-on-success; `503`/`202`/`200`), generic
+  `IFounderNotifier` + `FounderNotifier` (typed `HttpClient` + generic-webhook formatter,
+  fail-soft), `POST /feedback` endpoint, per-`account_user` fixed-window rate limit (10/hour →
+  `429`), `FounderChannel:WebhookUrl` config, `Feedback:Enabled` feature flag **default false**
+  (route returns 404 while off). Endpoint exists but is unreachable by users until 2d.
+- **038-2c — operational completion:** retry `BackgroundService` (backoff 1/5/15/60/180 min),
+  backlog/abandoned founder-channel alert, 7-day-delivered / 30-day-abandoned retention sweep, and
+  the D4 content-source failure alert retrofitted onto `IFounderNotifier`.
+- **038-2d — feedback UI + activation:** "Report a problem" (`#/help` header) and "Send feedback"
+  (account menu / `MobileNavMenu`) entry points + submission dialog; the 30-day-retention privacy
+  line added to pilot notice copy; flip `Feedback:Enabled` on.
+
+Approved contract (Christian, 2026-09-09):
+
+- **D5 delivery** — persist-first, at-least-once, delivery-id (`= FeedbackSubmission.Id`) dedup at
+  the receiver, raw body (`message` + `context_json`) nulled on confirmed delivery.
+- **`POST /feedback`** — `message`: trimmed, required, 1–4,000 chars; blank/whitespace rejected;
+  over-limit → `413`. `category`: optional, constrained to
+  `bug | confusing | missing_thing | too_slow | other` (absent → stored `other`). Rate limit: 10
+  submissions per `account_user` per fixed one-hour window; excess → `429`.
+- **Webhook** — founder-provisioned; `FounderChannel:WebhookUrl` set only in deployed secret
+  configuration, never a committed config file.
+- **Privacy copy** (founder owns final approval): "If feedback cannot be delivered immediately, its
+  message and limited submission context may be retained for up to 30 days for recovery.
+  Successfully delivered feedback is minimized promptly, and its remaining delivery metadata is
+  deleted after seven days."
 
 ## Content-publication contract
 
@@ -770,14 +810,53 @@ Implemented — **6 production + 3 test files** (under the 8/12 gate; one featur
 
 ### Required before 038-2
 
-- [ ] D5 persistence/delivery decision signed off (persist-first as specified above).
-- [ ] Webhook URL provisioned by the founder (like the Sentry DSN); `FounderChannel:WebhookUrl` added.
-- [ ] `POST /feedback` full contract + size/rate limits — exact numbers.
-- [ ] Privacy / retention disclosure line added for the 30-day undelivered-feedback window.
-- [ ] `feedback` migration plan (strict non-null, no backfill) + EF startup-project check (ADR-049).
-- [ ] 038-2 changed-file list enumerated and gate-checked; split further if fan-out is over.
+- [x] D5 persistence/delivery decision signed off (persist-first, at-least-once, delivery-id dedup,
+      scrub-on-success — Christian 2026-09-09; see "038-2 slice split").
+- [ ] Webhook URL provisioned by the founder (like the Sentry DSN); `FounderChannel:WebhookUrl`
+      added in deployed secret config only. **Founder task; needed for 038-2b delivery testing.**
+- [x] `POST /feedback` full contract + size/rate limits — exact numbers (see "038-2 slice split":
+      1–4,000 trimmed / `413`, optional category enum, 10 per `account_user` per hour / `429`).
+- [x] Privacy / retention disclosure line drafted (founder final approval) — wording in "038-2
+      slice split"; placed in pilot notice copy in 038-2d.
+- [~] `feedback` migration plan (strict non-null, no backfill) + EF startup-project check (ADR-049)
+      — entity model landed in 038-2a-i; the migration itself is 038-2a-ii.
+- [x] 038-2 changed-file list enumerated and gate-checked; split five ways (2a-i … 2d).
 - [ ] 038-2 test plan: validation, persist-then-deliver, `503`/`202` cases, retry-sweep + backoff,
       scrub-on-success, at-least-once dedup, retention sweep, backlog/abandoned alert (no body).
+      **038-2b/2c concern; per-slice exit criteria written when each slice starts.**
+
+#### 038-2a-i completion record — feedback domain model (landed 2026-09-09)
+
+No drift from the split plan. Implemented — **3 production + 1 test file**:
+
+- **`Core/Entities/Feedback/FeedbackSubmission.cs`** (new): sealed entity, does not extend
+  `BaseEntity` (own delivery lifecycle, never soft-deleted, hard-deleted by the 038-2c sweep).
+  `Id` (`Guid.CreateVersion7`, doubles as the delivery/correlation id), `AccountId`,
+  `AccountUserId`, `Message?`, `Category`, `ContextJson?` (opaque non-PII JSON string),
+  `CreatedAtUtc`, `DeliveryState`, `AttemptCount`, `LastAttemptAtUtc?`, `NextAttemptAtUtc?`
+  (`= CreatedAtUtc` on create — immediately retry-eligible), `DeliveredAtUtc?`.
+  `Create(accountId, accountUserId, message, category, contextJson, nowUtc)` — trims message,
+  rejects blank / `> 4_000` (`ArgumentException`, like `PostAuthContinuation`), rejects empty
+  account ids, undefined category, non-UTC / default `nowUtc`; whitespace `contextJson` → null.
+  Lifecycle mutators, all valid only from `Pending` (else `InvalidOperationException`):
+  `MarkAttempted` (++count, stamp `LastAttemptAtUtc`), `MarkDelivered` (terminal `Delivered`,
+  stamp `DeliveredAtUtc`, **null `Message` + `ContextJson`**, clear `NextAttemptAtUtc`),
+  `ScheduleRetry(nextAttemptAtUtc)`, `MarkAbandoned` (terminal `Abandoned`, **body retained**,
+  clear `NextAttemptAtUtc`). Both terminal transitions additionally require at least one recorded
+  attempt (`AttemptCount > 0`) so a never-attempted row can never be marked delivered/abandoned
+  (P1 review fix, 2026-09-09). Consts `MessageMinLength = 1`, `MessageMaxLength = 4_000`.
+  Type named `FeedbackSubmission` (not `Feedback`) so it never collides with the `Feedback`
+  namespace segment in consuming code.
+- **`Core/Entities/Feedback/Enums/FeedbackCategory.cs`** (new): `Bug/Confusing/MissingThing/TooSlow/Other`.
+- **`Core/Entities/Feedback/Enums/FeedbackDeliveryState.cs`** (new): `Pending/Delivered/Abandoned`.
+- **Tests:** `tests/OpHalo.UnitTests/Feedback/FeedbackTests.cs` (new, 22 cases) — Create validation
+  matrix (trim-before-measure, exact-max, over-max, blank, empty ids, undefined category, non-UTC),
+  context-json normalisation, and the delivery lifecycle: attempt count, deliver+scrub,
+  schedule retry, abandon-retains-body, both terminal transitions rejected before any attempt (P1),
+  and every non-`Pending` transition rejected after both `Delivered` and `Abandoned` (P2).
+
+Verification: `FeedbackTests` 22/22; full unit **1869/1869**; architecture **14/14**;
+`git diff --check` clean.
 
 ## Not in this build-log / this feature
 

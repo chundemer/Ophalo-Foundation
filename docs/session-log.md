@@ -4,7 +4,7 @@
 Locked decisions → [decision-index](decisions/decision-index.md). Working guardrails → CLAUDE.md.
 If a line here would need editing when the workboard changes, it belongs in the workboard, not here.
 
-**Updated 2026-09-08.**
+**Updated 2026-09-09.**
 
 ## Baseline
 
@@ -17,11 +17,17 @@ field record.
 **GAP-038 — in-product feedback + Help & Updates loop.** Slices 038-1a (content backend), 038-1b-i
 (Help content surface), 038-1b-ii (unread count + menu rows + trigger dots), and **038-1b-iii
 (Requests-list highlight banner) all landed 2026-09-08** — see the BL149 038-1a / 038-1b-i /
-038-1b-ii / 038-1b-iii completion records. All of 038-1b is done. Active slice is **038-2**
-(feedback path: `POST /feedback` + founder channel + persist-first delivery) — entry point
-[BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md) "Slice 038-2" and
-"Required before 038-2" (checklist not yet worked). Its file fan-out must be gate-checked and likely
-split.
+038-1b-ii / 038-1b-iii completion records. All of 038-1b is done. **038-2a-i (feedback domain
+model — `FeedbackSubmission` entity + enums) landed 2026-09-09** (BL149 038-2a-i completion record).
+Active slice is **038-2a-ii — feedback persistence + migration**: `IFeedbackPersistence`
+(domain scalars only), `EfFeedbackPersistence`, `FeedbackSubmissionConfiguration`, `DbSet` on
+`OpHaloDbContext`, migration (strict non-null, no backfill; EF startup project
+`src/OpHalo.Keep.Infrastructure` per ADR-049). The approved, gate-bounded sequence is **038-2a-i →
+038-2a-ii → 038-2b (gated endpoint + submission service + notifier, `Feedback:Enabled=false`) →
+038-2c (retry, alerts, retention, D4 retrofit) → 038-2d (frontend + privacy copy + flag
+activation)**. Contract signed off (BL149 "038-2 slice split"). Open founder task: provision
+`FounderChannel:WebhookUrl` (deployed secret only) before 038-2b. Entry point:
+[BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md).
 
 ## Next
 
@@ -40,13 +46,13 @@ to drop the CSP dependency, `snarkdown`+`dompurify`, 5s/5min proxy, minimal `fee
 BackgroundService, proposed visual values, two shell entry points, 038-1/038-2 slice split).
 D1–D8 resolved after a review pass (delete-on-success → null-body-on-success + 7-day metadata sweep;
 explicit retry backoff 1/5/15/60/180 min; generic webhook notifier; guide-image proxy constrained
-to a fixed R2 prefix + MIME/size caps; CSP baseline deferred to its own DEF ticket). Split into
-three slices: 038-1a content backend (no founder-channel infra) → 038-1b content frontend → 038-2
-feedback path. D5 resolved: persist-first, at-least-once, scrub-on-success (`503`/`202` cases
-specified). Per-slice exit criteria in BL149. **038-1a (content backend) landed 2026-09-08** (see the Active
-section and the BL149 completion record); 038-1b and 038-2 are the remaining GAP-038 slices. R2 has
-no restorable S3-style object versioning; repo history is the rollback path. GAP-054 slice 054-1
-landed as `4f1caffb`; it is no longer a GAP-038 blocker. GAP-072 still needs a discovery ADR.
+to a fixed R2 prefix + MIME/size caps; CSP baseline deferred to its own DEF ticket). D5 is
+persist-first, at-least-once, scrub-on-success (`503`/`202` cases specified). The original three
+slices are 038-1a content backend (no founder-channel infra) → 038-1b content frontend → 038-2
+feedback path; 038-2 is now gate-split as recorded in Active. **038-1a and all 038-1b slices landed
+2026-09-08** (see the BL149 completion records). R2 has no restorable S3-style object versioning;
+repo history is the rollback path. GAP-054 slice 054-1 landed as `4f1caffb`; it is no longer a
+GAP-038 blocker. GAP-072 still needs a discovery ADR.
 
 ## Hot blocker
 
