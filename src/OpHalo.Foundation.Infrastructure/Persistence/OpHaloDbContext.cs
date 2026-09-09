@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using OpHalo.Foundation.Core.Entities.Accounts;
+using OpHalo.Foundation.Core.Entities.Feedback;
 using OpHalo.Foundation.Core.Entities.Shared;
 using OpHalo.Foundation.Core.Entities.Users;
 using OpHalo.SharedKernel.Abstractions;
@@ -42,6 +43,7 @@ public sealed class OpHaloDbContext(
     public DbSet<MobileHandoffCode> MobileHandoffCodes => Set<MobileHandoffCode>();
     public DbSet<PostAuthContinuation> PostAuthContinuations => Set<PostAuthContinuation>();
     public DbSet<AccountUserDevice> AccountUserDevices => Set<AccountUserDevice>();
+    public DbSet<FeedbackSubmission> FeedbackSubmissions => Set<FeedbackSubmission>();
     public DbSet<User> Users => Set<User>();
     public DbSet<AccountEntitlements> AccountEntitlements => Set<AccountEntitlements>();
     public DbSet<AccountCapabilityPackageEnrollment> AccountCapabilityPackageEnrollments => Set<AccountCapabilityPackageEnrollment>();

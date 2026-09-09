@@ -2,9 +2,10 @@
 
 **Status:** 038-1a (content backend), **038-1b-i** (Help content surface), **038-1b-ii** (unread
 count + Help & Updates menu rows + trigger dots), and **038-1b-iii** (Requests-list highlight
-banner) all landed 2026-09-08. **038-2a-i** (feedback domain model) landed 2026-09-09. 038-2 is
+banner) all landed 2026-09-08. **038-2a-i** (feedback domain model) landed 2026-09-09; **038-2a-ii** (feedback persistence +
+`AddFeedbackSubmission` migration) landed 2026-09-09. 038-2 is
 split five ways (2a-i → 2a-ii → 2b → 2c → 2d, see "038-2 slice split" below); next slice is
-**038-2a-ii** (feedback persistence + migration). D1–D8 remain resolved (D5 = persist-first). 038-2
+**038-2b** (gated endpoint + submission service + notifier, `Feedback:Enabled=false`). D1–D8 remain resolved (D5 = persist-first). 038-2
 retains its own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
@@ -818,8 +819,8 @@ Implemented — **6 production + 3 test files** (under the 8/12 gate; one featur
       1–4,000 trimmed / `413`, optional category enum, 10 per `account_user` per hour / `429`).
 - [x] Privacy / retention disclosure line drafted (founder final approval) — wording in "038-2
       slice split"; placed in pilot notice copy in 038-2d.
-- [~] `feedback` migration plan (strict non-null, no backfill) + EF startup-project check (ADR-049)
-      — entity model landed in 038-2a-i; the migration itself is 038-2a-ii.
+- [x] `feedback` migration plan (strict non-null, no backfill) + EF startup-project check (ADR-049)
+      — entity model landed in 038-2a-i; `AddFeedbackSubmission` migration landed in 038-2a-ii.
 - [x] 038-2 changed-file list enumerated and gate-checked; split five ways (2a-i … 2d).
 - [ ] 038-2 test plan: validation, persist-then-deliver, `503`/`202` cases, retry-sweep + backoff,
       scrub-on-success, at-least-once dedup, retention sweep, backlog/abandoned alert (no body).
@@ -857,6 +858,47 @@ No drift from the split plan. Implemented — **3 production + 1 test file**:
 
 Verification: `FeedbackTests` 22/22; full unit **1869/1869**; architecture **14/14**;
 `git diff --check` clean.
+
+#### 038-2a-ii completion record — feedback persistence + migration (landed 2026-09-09)
+
+No drift from the split plan. Interface surface held to D-a (`AddAsync` + `UpdateAsync` only; the
+retry-worker due-query and retention-sweep delete stay in 038-2c). Implemented — **8 production
+(5 hand-written: `IFeedbackPersistence`, `EfFeedbackPersistence`, `FeedbackSubmissionConfiguration`,
+`OpHaloDbContext`, `Program.cs`; plus 3 generated/updated migration artifacts:
+`AddFeedbackSubmission.cs`, `.Designer.cs`, `OpHaloDbContextModelSnapshot.cs`) + 1 integration test
++ 3 docs = 12 changed files, at the batch gate**:
+
+- **`Foundation.Application/Feedback/IFeedbackPersistence.cs`** (new): domain-typed seam —
+  `AddAsync(FeedbackSubmission, ct)` (persist-first Pending commit) + `UpdateAsync(FeedbackSubmission, ct)`
+  (lifecycle mutations / body scrub). No EF types ([[feedback_persistence_seam_no_infra_types]]).
+- **`Foundation.Infrastructure/Feedback/EfFeedbackPersistence.cs`** (new): `(OpHaloDbContext db)`;
+  `Add` / `Update` + `SaveChangesAsync` per call.
+- **`Foundation.Infrastructure/Persistence/Configurations/FeedbackSubmissionConfiguration.cs`** (new):
+  `feedback_submissions`, non-`BaseEntity` (no soft-delete filter, no timestamp interception),
+  `Id` `ValueGeneratedNever`, `Category` + `DeliveryState` `HasConversion<string>().HasMaxLength(20)`
+  (D-b), composite index `(delivery_state, next_attempt_at_utc)` for the 038-2c retry scan (D-c),
+  `account_id` + `account_user_id` FKs both `OnDelete(Cascade)` (D-d).
+- **`OpHaloDbContext.cs`** (mod): `DbSet<FeedbackSubmission> FeedbackSubmissions`.
+- **`Program.cs`** (mod): `AddScoped<IFeedbackPersistence, EfFeedbackPersistence>()` — scoped seam,
+  no startup connection, safe ahead of the 038-2b consumer (D-e).
+- **Migration `20260909103305_AddFeedbackSubmission`:** `CreateTable` only, no backfill / no column
+  defaults. Non-null: `id, account_id, account_user_id, category, created_at_utc, delivery_state,
+  attempt_count`. Nullable by design: `message` (`varchar(4000)`), `context_json` (`text`),
+  `last_attempt_at_utc, next_attempt_at_utc, delivered_at_utc`. Both FKs `ReferentialAction.Cascade`;
+  EF also emitted the two single-column FK indexes. `dotnet ef` run by Christian with
+  `--startup-project src/OpHalo.Keep.Infrastructure` (ADR-049).
+- **Tests:** `tests/OpHalo.IntegrationTests/Persistence/FeedbackSubmissionPersistenceTests.cs`
+  (new, 4 cases) — `AddAsync` round-trip with enum names stored as text; `UpdateAsync` persisting
+  the confirmed-delivery scrub as SQL `NULL`; strict schema rejecting a null-`category` insert
+  (`23502`); `account_user` delete cascading to the feedback row.
+
+Verification: `FeedbackSubmissionPersistenceTests` 4/4; architecture **14/14**; `OpHalo.Api` +
+`OpHalo.IntegrationTests` build 0 warnings; `git diff --check` clean.
+
+### Required before 038-2b
+
+- [ ] Webhook URL provisioned by the founder; `FounderChannel:WebhookUrl` in deployed secret
+      config only. **Founder task; needed for 038-2b delivery testing.**
 
 ## Not in this build-log / this feature
 

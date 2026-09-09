@@ -19,11 +19,12 @@ field record.
 (Requests-list highlight banner) all landed 2026-09-08** — see the BL149 038-1a / 038-1b-i /
 038-1b-ii / 038-1b-iii completion records. All of 038-1b is done. **038-2a-i (feedback domain
 model — `FeedbackSubmission` entity + enums) landed 2026-09-09** (BL149 038-2a-i completion record).
-Active slice is **038-2a-ii — feedback persistence + migration**: `IFeedbackPersistence`
-(domain scalars only), `EfFeedbackPersistence`, `FeedbackSubmissionConfiguration`, `DbSet` on
-`OpHaloDbContext`, migration (strict non-null, no backfill; EF startup project
-`src/OpHalo.Keep.Infrastructure` per ADR-049). The approved, gate-bounded sequence is **038-2a-i →
-038-2a-ii → 038-2b (gated endpoint + submission service + notifier, `Feedback:Enabled=false`) →
+**038-2a-ii (feedback persistence + migration — `IFeedbackPersistence` [`AddAsync`/`UpdateAsync`],
+`EfFeedbackPersistence`, `FeedbackSubmissionConfiguration`, `DbSet`, `AddFeedbackSubmission`
+migration, scoped DI seam) landed 2026-09-09** (BL149 038-2a-ii completion record).
+Active slice is **038-2b — gated endpoint + submission service + notifier + rate limit +
+`FounderChannel:WebhookUrl` + `Feedback:Enabled=false`**. The approved, gate-bounded sequence is
+**038-2a-i → 038-2a-ii → 038-2b (gated endpoint + submission service + notifier, `Feedback:Enabled=false`) →
 038-2c (retry, alerts, retention, D4 retrofit) → 038-2d (frontend + privacy copy + flag
 activation)**. Contract signed off (BL149 "038-2 slice split"). Open founder task: provision
 `FounderChannel:WebhookUrl` (deployed secret only) before 038-2b. Entry point:

@@ -33,7 +33,9 @@ using OpHalo.Foundation.Infrastructure.Storage;
 using OpHalo.Foundation.Infrastructure.Members;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Foundation.Infrastructure.Push;
+using OpHalo.Foundation.Application.Feedback;
 using OpHalo.Foundation.Application.Updates;
+using OpHalo.Foundation.Infrastructure.Feedback;
 using OpHalo.Foundation.Infrastructure.Updates;
 using OpHalo.Foundation.Infrastructure.Security;
 using OpHalo.Foundation.Infrastructure.Services;
@@ -233,6 +235,12 @@ else
     builder.Services.AddSingleton<IUpdatesContentSource, UnavailableUpdatesContentSource>();
 }
 builder.Services.AddSingleton<UpdatesFeedCache>();
+
+// --- Feedback (GAP-038, BL149, 038-2a-ii) ---
+// Persistence seam only; the submission service, endpoint and notifier land in 038-2b behind
+// Feedback:Enabled=false. Scoped registration with no startup connection — safe to wire ahead
+// of the consumer.
+builder.Services.AddScoped<IFeedbackPersistence, EfFeedbackPersistence>();
 
 // --- Auth ---
 builder.Services.AddHttpContextAccessor();
