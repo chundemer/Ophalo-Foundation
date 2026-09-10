@@ -9,9 +9,17 @@ banner) all landed 2026-09-08. **038-2a-i** (feedback domain model) landed 2026-
 retry `BackgroundService` on the 5/15/60/180-min backoff + abandon, backlog/abandoned founder
 alert, 7-/30-day retention sweep) landed 2026-09-10. 038-2 is split five ways (2a-i → 2a-ii → 2b →
 2c → 2d, see "038-2 slice split" below); 2c was further split at preflight into **2c-i** (done) and
-**2c-ii** (D4 content-source failure alert retrofit) — **2c-ii landed 2026-09-10**. Next slice is
-**038-2d** (frontend + privacy copy + flag activation). D1–D8 remain resolved (D5 =
-persist-first). 038-2 retains its own exit criteria.
+**2c-ii** (D4 content-source failure alert retrofit) — **2c-ii landed 2026-09-10**. **038-2d**
+(frontend + privacy copy + flag activation) was split three ways at preflight (2d-i backend
+activation guard → 2d-ii submit dialog + Help entry → 2d-iii menu entry points, see "038-2d
+preflight + split"). **038-2d-i landed 2026-09-10**: production fail-fast when `Feedback:Enabled`
+without a valid `FounderChannel:WebhookUrl` (in `ProductionConfigurationValidator`); flag on in
+`appsettings.Development.json` only — committed production default stays false, activated via the
+paired Railway variables. **038-2d-ii landed 2026-09-10**: `api.submitFeedback` + `FeedbackDialog`
+(`KeepModal`, verbatim ADR-500 retention line, 200/202 thanked identically, `ApiError` message map)
++ "Report a problem" `#/help` header entry, gated on `VITE_FEEDBACK_ENABLED`; `ophalo-app` suite
+1162/1162. Next slice is **038-2d-iii** ("Send feedback" account-menu + `MobileNavMenu` rows).
+D1–D8 remain resolved (D5 = persist-first). 038-2 retains its own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
 end-to-end contract — Locked), [ADR-501](../decisions/ADR-501-api-route-and-compatibility-policy.md)
@@ -1119,6 +1127,115 @@ lands with 038-2"). Scope held to **1 production file** — no `Program.cs` chan
 Verification: `UpdatesFeedCacheTests` 18/18; full unit **1900/1900**; `Updates` integration
 32/32; architecture **14/14**; `OpHalo.Api` + `OpHalo.UnitTests` build 0 warnings;
 `git diff --check` clean.
+
+#### 038-2d preflight + split — feedback UI + activation (2026-09-10)
+
+**Mechanical preflight (no drift).** `FeedbackEndpoints.MapFeedbackEndpoints` still gates on
+`configuration.GetValue<bool>("Feedback:Enabled")` (route unmapped → framework 404);
+`FounderChannelSettings.IsConfigured` (absolute HTTP(S)) is the activation predicate;
+`ProductionConfigurationValidator.ValidateOrThrow` already runs in the production-only startup gate
+(skipped for Development / Testing / RateLimitTesting) and its 038-2b comment explicitly owes the
+fail-fast here. Frontend: `api` object (`apiFetch` / `apiFetchVoid`) in `lib/apiClient.ts`;
+`#/help` = `Help.tsx`; `AccountMenu` / `MobileNavMenu` both take `onNavigateHelp` + `helpUnseenCount`
+and are wired in `App.tsx`; `VITE_`-prefixed env flags are the established client-config pattern
+(`VITE_SENTRY_DSN`). Drift note: `AccountMenu` uses positional `itemsRef` index math
+(`itemCount = sections.length + 2`) — a new row shifts every index and the keyboard-nav wiring must
+be reworked, not appended.
+
+**038-2d as specified is over the CLAUDE.md batch gate** (~11 production + ~6 tests: apiClient ×2,
+`FeedbackDialog`, Help header action, `AccountMenu`, `MobileNavMenu`, `App.tsx`, `Program.cs`,
+`appsettings`). **Split three ways** (Christian sign-off, 2026-09-10):
+
+- **038-2d-i — backend activation guard.** Production fail-fast when `Feedback:Enabled` is true
+  without a valid `FounderChannel:WebhookUrl`; `Feedback:Enabled` on in `appsettings.Development.json`
+  only. **Landed 2026-09-10** (completion record below).
+- **038-2d-ii — submit dialog + Help entry point.** `api.submitFeedback` + request/response types,
+  `FeedbackDialog` (message / category / verbatim ADR-500 retention line as muted text /
+  200·202·4xx·413·429·503 states), App-level open state + client-context assembly, "Report a
+  problem" on the `#/help` header. Entry point gated on `VITE_FEEDBACK_ENABLED`.
+- **038-2d-iii — menu entry points.** "Send feedback" row in `AccountMenu` (+ `itemsRef` rework)
+  and `MobileNavMenu`, reusing the App handler from 2d-ii; both gated on `VITE_FEEDBACK_ENABLED`.
+
+**Decisions (Christian, 2026-09-10):**
+- Committed production default for `Feedback:Enabled` stays **false**. Production activation is a
+  founder task: set the paired Railway variables `Feedback__Enabled=true` and
+  `FounderChannel__WebhookUrl` together in the pilot deploy window (Sentry-DSN model, GAP-039).
+- Frontend entry points are gated on the build-time `VITE_FEEDBACK_ENABLED` flag (option (a)), set
+  in the same deploy window — no `/auth/me` field.
+- The FeedbackDialog retention line uses the **full locked ADR-500 wording, verbatim**, as muted
+  text: *"If feedback cannot be delivered immediately, its message and limited submission context
+  may be retained for up to 30 days for recovery. Successfully delivered feedback is minimized
+  promptly, and its remaining delivery metadata is deleted after seven days."*
+
+#### 038-2d-i completion record — backend activation guard (landed 2026-09-10)
+
+No drift from the split. No `Program.cs` change — the guard rides the existing
+`ProductionConfigurationValidator` call in the production-only startup gate. Implemented —
+**3 production + 1 test file**:
+
+- **`Api/Diagnostics/ProductionConfigurationValidator.cs`** (mod): when `Feedback:Enabled` is true,
+  `GetMissingKeys` now requires a syntactically valid absolute HTTP(S) `FounderChannel:WebhookUrl`
+  and otherwise reports `FounderChannel__WebhookUrl (required when Feedback__Enabled is true)` /
+  `(not a valid URL)` — mirrors the Sentry-DSN check. `Feedback:Enabled` false (committed default)
+  → no requirement. Delivery stays fail-soft; this only catches a half-configured *activation* at
+  startup instead of from a growing backlog alert.
+- **`Api/appsettings.json`** (mod): explicit `"Feedback": { "Enabled": false }` +
+  `"FounderChannel": { "WebhookUrl": "" }` sections (Resend / Sentry convention — documents the two
+  paired activation variables).
+- **`Api/appsettings.Development.json`** (mod): `"Feedback": { "Enabled": true }` so local dev
+  serves `POST /feedback` for the 038-2d-ii/iii frontend work (the production gate is skipped in
+  Development, so the missing dev webhook does not fault startup).
+- **Tests:** `tests/OpHalo.UnitTests/Diagnostics/ProductionConfigurationValidatorTests.cs` (+9 —
+  feedback-disabled needs no webhook; enabled + absent/blank webhook reports the paired variable
+  (Theory ×3); enabled + malformed webhook reports invalid (Theory ×3); enabled + valid webhook
+  not reported).
+
+Verification: `ProductionConfigurationValidatorTests` 22/22; `OpHalo.Api` build 0 warnings;
+`git diff --check` clean. (Frontend suite / architecture untouched — no frontend or layer change.)
+
+#### 038-2d-ii completion record — feedback dialog + Help entry point (landed 2026-09-10)
+
+No drift from the split. Implemented — **6 production + 3 test files**:
+
+- **`web/ophalo-app/src/lib/apiClient.types.ts`** (mod): `FeedbackCategory`,
+  `SubmitFeedbackRequest` (`message` + optional `category` + optional `context`),
+  `SubmitFeedbackResponse` (`{ status: "delivered" | "queued" }`).
+- **`web/ophalo-app/src/lib/apiClient.ts`** (mod): `api.submitFeedback` — `POST /feedback` via
+  `apiFetch` (200 and 202 both `response.ok`, so the parsed `{status}` is returned; 400/413/429/503
+  throw an `ApiError` carrying the ProblemDetails `code`). Names added to both the import and
+  re-export blocks.
+- **`web/ophalo-app/src/components/feedback/FeedbackDialog.tsx`** (new): `KeepModal`-based dialog —
+  "What got in your way?" textarea (required, client-side over-4,000 warning + Send disabled),
+  optional category `<select>` (`No category` → omitted from the request), the **verbatim ADR-500
+  retention line** as muted text, `role="alert"` error region, Cancel + Send. On success the body
+  is replaced with a single **neutral** thank-you + Close ("Thanks for taking the time to share
+  this. We read every note.") — identical for `200` (delivered) and `202` (queued): a 202 is
+  durable queueing, not confirmed delivery, so no "sent to the team" wording (P1 review, Christian
+  2026-09-10). `ApiError` → message map: 413 / `feedback.message_too_long` → shorten-it; 429 → try
+  again later (form kept, retryable); 503 → could not save, try again (form kept); else → generic.
+- **`web/ophalo-app/src/pages/Help.tsx`** (mod): optional `onReportProblem` prop → a "Report a
+  problem" button in the page header (flex row). Absent prop → no button (existing tests unchanged).
+- **`web/ophalo-app/src/App.tsx`** (mod): `feedbackEnabled = import.meta.env.VITE_FEEDBACK_ENABLED
+  === "true"`; `feedbackOpen` / `feedbackContext` state; `openFeedback()` snapshots the client
+  context at open time (`route` = `location.hash`, `request_id` when on a detail route, `app_build`
+  = `__SENTRY_RELEASE__`, `deploy_env` = `__DEPLOY_ENV__`, `platform` = `navigator.userAgent`,
+  `submitted_at`); `<Help onReportProblem={feedbackEnabled ? openFeedback : undefined} />`;
+  `<FeedbackDialog>` rendered when open. The account-menu / `MobileNavMenu` "Send feedback" rows
+  are **038-2d-iii** (they reuse `openFeedback`).
+- **`web/ophalo-app/src/env.d.ts`** (mod): `VITE_FEEDBACK_ENABLED?: string`.
+- **Tests:** `components/feedback/__tests__/FeedbackDialog.test.tsx` (new, 9 — retention line
+  verbatim + Send gating; trimmed message + category + context submit then neutral thanks; category
+  omitted + queued (202) shows the *same* neutral thanks and asserts no "sent to the team" /
+  "delivered" wording; over-limit blocks + warns; 429 retryable alert; 413 map; **503 → try again,
+  form kept**; generic map; Cancel). `pages/__tests__/Help.test.tsx` (+2 — no button without the
+  prop; button fires `onReportProblem`). `App.feedback.test.tsx` (new, 2 — flag off hides the entry
+  point; flag on opens the dialog from the `#/help` header).
+  Note: the dialog awaits `api.submitFeedback` in a raw try/catch, and a shared-mock `beforeEach`
+  reset makes vitest mis-attribute the caught rejection as unhandled — the test assigns a fresh
+  per-test spy to a holder instead.
+
+Verification: `pnpm typecheck` + `check:tokens` green; full `ophalo-app` suite **1162/1162**
+(126 files); `git diff --check` clean. Backend untouched (038-2d-i owns the flag/guard).
 
 ## Not in this build-log / this feature
 

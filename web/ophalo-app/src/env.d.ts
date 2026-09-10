@@ -10,6 +10,11 @@ interface ImportMetaEnv {
   // preview builds, in which case `initSentry()` is a no-op. A production Vercel build
   // fails without it — see `vite.config.ts`.
   readonly VITE_SENTRY_DSN?: string;
+  // GAP-038 / BL149 (038-2d): build-time gate for the in-product feedback entry points
+  // ("Report a problem" on #/help, "Send feedback" in the account menu). Absent / anything
+  // other than "true" hides them. Set in the pilot deploy window alongside the paired API
+  // variables Feedback__Enabled=true and FounderChannel__WebhookUrl.
+  readonly VITE_FEEDBACK_ENABLED?: string;
 }
 
 interface ImportMeta {

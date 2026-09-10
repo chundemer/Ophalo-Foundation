@@ -99,6 +99,27 @@ describe("Help page", () => {
     expect(window.localStorage.getItem(WATERMARK_KEY)).toBeNull();
   });
 
+  it("shows no 'Report a problem' action unless the shell passes onReportProblem", async () => {
+    mockGetUpdates.mockResolvedValue(FEED);
+    renderHelp();
+    await screen.findByText("Texts delayed");
+    expect(screen.queryByRole("button", { name: "Report a problem" })).not.toBeInTheDocument();
+  });
+
+  it("renders 'Report a problem' and calls onReportProblem when the shell provides it", async () => {
+    mockGetUpdates.mockResolvedValue(FEED);
+    const onReportProblem = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <Help onReportProblem={onReportProblem} />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "Report a problem" }));
+    expect(onReportProblem).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a retry affordance on a network error and recovers", async () => {
     mockGetUpdates.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(FEED);
     renderHelp();

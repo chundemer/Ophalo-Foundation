@@ -260,6 +260,9 @@ import type {
   UpdatesFeed,
   UpdateEntry,
   UpdateGuide,
+  FeedbackCategory,
+  SubmitFeedbackRequest,
+  SubmitFeedbackResponse,
 } from "./apiClient.types";
 
 export type {
@@ -418,6 +421,9 @@ export type {
   UpdatesFeed,
   UpdateEntry,
   UpdateGuide,
+  FeedbackCategory,
+  SubmitFeedbackRequest,
+  SubmitFeedbackResponse,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -426,6 +432,14 @@ export const api = {
   getMe: () => apiFetch<MeResponse>("/auth/me"),
   // GAP-038 / BL149: Foundation-owned Help & Updates feed. No params; always a schema-valid body.
   getUpdates: () => apiFetch<UpdatesFeed>("/updates"),
+  // GAP-038 / BL149 (038-2d): in-product feedback. 200 → {status:"delivered"}, 202 →
+  // {status:"queued"} (both `response.ok`); 400/413/429/503 throw an ApiError carrying the
+  // ProblemDetails `code`. Route is unmapped (404) unless the server has `Feedback:Enabled`.
+  submitFeedback: (body: SubmitFeedbackRequest) =>
+    apiFetch<SubmitFeedbackResponse>("/feedback", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   logout: () => apiFetchVoid("/auth/logout", { method: "POST" }),
   getOnboardingChecklist: () =>
     apiFetch<OnboardingChecklist>("/keep/setup/onboarding"),

@@ -30,13 +30,20 @@ backoff + abandon-at-6, rate-limited backlog/abandoned founder alert (no body), 
 sweep. **038-2c-ii landed 2026-09-10** (BL149 038-2c-ii completion record): `UpdatesFeedCache`
 consecutive-failure counter + body-free `content_source_failure` founder alert on the 3rd+ failure,
 per-instance 1/30-min throttle (separate bucket), awaited after `_fetchGate` release — 1 prod + 1
-test file. All of 038-2c done. Active slice is **038-2d — frontend + privacy copy +
-`Feedback:Enabled` flag activation + production fail-fast when enabled without a webhook**. The
-approved, gate-bounded sequence is
-**038-2a-i → 038-2a-ii → 038-2b → 038-2c-i → 038-2c-ii → 038-2d**.
-Contract signed off (BL149 "038-2 slice split"). Open founder task: provision
-`FounderChannel:WebhookUrl` (deployed secret only) — needed for real delivery testing, not a code
-blocker (delivery is fail-soft). Entry point:
+test file. All of 038-2c done. **038-2d** split three ways at preflight (2d-i backend activation guard →
+2d-ii submit dialog + Help entry → 2d-iii menu entry points; BL149 "038-2d preflight + split").
+**038-2d-i landed 2026-09-10** — production fail-fast when `Feedback:Enabled` is on without a valid
+`FounderChannel:WebhookUrl`; flag on in `appsettings.Development.json` only. **038-2d-ii landed
+2026-09-10** — `api.submitFeedback` + `FeedbackDialog` (`KeepModal`, verbatim ADR-500 retention
+line, 200/202 thanked identically, `ApiError` message map) + "Report a problem" `#/help` header
+entry, gated on `VITE_FEEDBACK_ENABLED`; `ophalo-app` 1162/1162. Active slice is
+**038-2d-iii — "Send feedback" rows in `AccountMenu` (+ `itemsRef` rework) and `MobileNavMenu`,
+reusing the shell `openFeedback` handler, gated on `VITE_FEEDBACK_ENABLED`**.
+The approved, gate-bounded sequence is
+**038-2a-i → 038-2a-ii → 038-2b → 038-2c-i → 038-2c-ii → 038-2d-i → 038-2d-ii → 038-2d-iii**.
+Contract signed off (BL149 "038-2 slice split" + "038-2d preflight + split"). Founder activation
+task (pilot deploy window): set `Feedback__Enabled=true` + `FounderChannel__WebhookUrl` +
+`VITE_FEEDBACK_ENABLED` together. Entry point:
 [BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md).
 
 ## Next

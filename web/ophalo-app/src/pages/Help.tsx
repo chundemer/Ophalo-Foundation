@@ -5,10 +5,13 @@ import type { UpdateEntry, UpdateGuide } from "../lib/apiClient";
 
 // GAP-038 / BL149 (038-1b-i) — the Help & Updates content surface, reachable at `#/help`.
 //
-// Content only: a single sectioned scroll (Known issues → Updates → Coming soon → any other
-// section → Guides), the feed's last-updated time, and per-entry dates. No "Report a problem"
-// header action, no unread indicator, no Requests banner — those are 038-1b-ii / 038-2. Opening
-// the page advances the read watermark once the feed has loaded successfully.
+// Content: a single sectioned scroll (Known issues → Updates → Coming soon → any other section →
+// Guides), the feed's last-updated time, and per-entry dates. Opening the page advances the read
+// watermark once the feed has loaded successfully.
+//
+// 038-2d-ii: the header carries a "Report a problem" action when the shell passes `onReportProblem`
+// (only when the `VITE_FEEDBACK_ENABLED` build flag is on). The unread indicator and Requests
+// banner are 038-1b-ii / 038-1b-iii and live in the shell, not here.
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -73,7 +76,13 @@ function EmptySection({ heading }: { heading: string }) {
   );
 }
 
-export function Help() {
+interface HelpProps {
+  /** 038-2d-ii: opens the feedback dialog. Absent unless the shell's `VITE_FEEDBACK_ENABLED`
+   *  build flag is on, in which case the header shows a "Report a problem" action. */
+  onReportProblem?: () => void;
+}
+
+export function Help({ onReportProblem }: HelpProps = {}) {
   const feed = useUpdatesFeed();
   const { isSuccess, markSeen } = feed;
 
@@ -83,12 +92,23 @@ export function Help() {
 
   return (
     <div className="mx-auto w-full max-w-2xl px-5 py-8">
-      <header className="mb-6">
-        <h1 className="font-serif text-2xl font-semibold text-[var(--ophalo-ink)]">Help &amp; Updates</h1>
-        {feed.feedLastUpdated && (
-          <p className="mt-1 text-[0.8125rem] text-[var(--ophalo-muted)]">
-            Last updated {formatDate(feed.feedLastUpdated)}
-          </p>
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-2xl font-semibold text-[var(--ophalo-ink)]">Help &amp; Updates</h1>
+          {feed.feedLastUpdated && (
+            <p className="mt-1 text-[0.8125rem] text-[var(--ophalo-muted)]">
+              Last updated {formatDate(feed.feedLastUpdated)}
+            </p>
+          )}
+        </div>
+        {onReportProblem && (
+          <button
+            type="button"
+            onClick={onReportProblem}
+            className="shrink-0 rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-[0.8125rem] font-medium text-[var(--ophalo-navy)] hover:bg-[var(--ophalo-canvas)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+          >
+            Report a problem
+          </button>
         )}
       </header>
 

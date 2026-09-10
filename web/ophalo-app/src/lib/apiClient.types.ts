@@ -1532,3 +1532,29 @@ export interface UpdatesFeed {
   entries: UpdateEntry[];
   guides: UpdateGuide[];
 }
+
+// GAP-038 / BL149 (038-2d). `POST /feedback` — authenticated, rate-limited (10 / account_user /
+// hour → 429), fail-soft. `message` is required, trimmed, 1–4,000 chars (blank → 400
+// `feedback.message_required`, over-limit → 413 `feedback.message_too_long`). `category` is
+// optional and constrained; an absent value is stored as `other`. `context` is an opaque non-PII
+// blob (route, app build, platform, timestamp) — the server re-serialises it and silently drops it
+// when it exceeds 4 KiB, never rejecting the submission for it.
+export type FeedbackCategory =
+  | "bug"
+  | "confusing"
+  | "missing_thing"
+  | "too_slow"
+  | "other";
+
+export interface SubmitFeedbackRequest {
+  message: string;
+  category?: FeedbackCategory;
+  context?: Record<string, unknown>;
+}
+
+// `delivered` — the founder channel confirmed receipt synchronously (200). `queued` — persisted
+// and will be retried by the delivery worker (202). The UI thanks the user identically for both;
+// it never shows a fabricated "sent".
+export interface SubmitFeedbackResponse {
+  status: "delivered" | "queued";
+}

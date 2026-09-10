@@ -17,6 +17,7 @@ import { AccountMenu, getBusinessSettingsSections, type BusinessSettingsSectionI
 import { LiveAnnouncerRegion } from "./components/a11y/LiveAnnouncerRegion";
 import { useUpdatesFeed } from "./hooks/useUpdatesFeed";
 import { UpdatesBanner } from "./components/updates/UpdatesBanner";
+import { FeedbackDialog } from "./components/feedback/FeedbackDialog";
 import { Plus, Inbox, Tag, Menu } from "lucide-react";
 import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClient";
 import { redirectToSignInOnce } from "./lib/redirectToSignIn";
@@ -215,6 +216,15 @@ function AppShell() {
   ) : null;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  // GAP-038 / BL149 (038-2d-ii): the in-product feedback dialog. Entry points ("Report a problem"
+  // on #/help; "Send feedback" in the account menu — 038-2d-iii) are shown only when the build was
+  // made with VITE_FEEDBACK_ENABLED=true. Client context is snapshotted at open time — the dialog
+  // is modal so the route cannot change under it.
+  const feedbackEnabled = import.meta.env.VITE_FEEDBACK_ENABLED === "true";
+  const [feedbackContext, setFeedbackContext] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   // Incremented only by an explicit Requests navigation. The wide workbench consumes this as a
   // fresh-entry intent without remounting its Queue pane (so filters and scroll still persist).
   const [requestEntryIntent, setRequestEntryIntent] = useState(0);
@@ -344,6 +354,18 @@ function AppShell() {
     history.replaceState(null, "", base);
     setRoute({ page: "requests" });
     setNavContext(null);
+  }
+
+  function openFeedback() {
+    setFeedbackContext({
+      route: window.location.hash || "#/",
+      ...(route.page === "detail" ? { request_id: route.requestId } : {}),
+      app_build: __SENTRY_RELEASE__,
+      deploy_env: __DEPLOY_ENV__,
+      platform: navigator.userAgent,
+      submitted_at: new Date().toISOString(),
+    });
+    setFeedbackOpen(true);
   }
 
   const currentNavIdx =
@@ -588,7 +610,9 @@ function AppShell() {
             onNavigateToActualWorkspace={navigateToActualWorkspace}
           />
         )}
-        {route.page === "help" && <Help />}
+        {route.page === "help" && (
+          <Help onReportProblem={feedbackEnabled ? openFeedback : undefined} />
+        )}
         {route.page === "settings" && (
           <Settings
             callerRole={role}
@@ -663,6 +687,11 @@ function AppShell() {
         >
           <Plus className="h-6 w-6" />
         </button>
+      )}
+
+      {/* In-product feedback dialog (GAP-038 / 038-2d-ii) */}
+      {feedbackOpen && (
+        <FeedbackDialog onClose={() => setFeedbackOpen(false)} context={feedbackContext} />
       )}
 
       {/* Quick Capture modal/drawer */}
