@@ -109,6 +109,64 @@ public class ProductionConfigurationValidatorTests
     }
 
     [Fact]
+    public void GetMissingKeys_FeedbackDisabled_DoesNotRequireFounderChannelWebhook()
+    {
+        // Committed production default: Feedback:Enabled is false, so the route is never mapped
+        // and an absent FounderChannel__WebhookUrl is not a configuration error.
+        var missing = ProductionConfigurationValidator.GetMissingKeys(BuildConfiguration());
+
+        Assert.DoesNotContain(missing, m => m.StartsWith("FounderChannel__WebhookUrl"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void GetMissingKeys_FeedbackEnabledWithoutFounderChannelWebhook_ReportsPairedVariable(string? webhookUrl)
+    {
+        var config = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Feedback:Enabled"] = "true",
+            ["FounderChannel:WebhookUrl"] = webhookUrl,
+        });
+
+        var missing = ProductionConfigurationValidator.GetMissingKeys(config);
+
+        Assert.Contains(missing, m => m.StartsWith("FounderChannel__WebhookUrl"));
+    }
+
+    [Theory]
+    [InlineData("not-a-url")]
+    [InlineData("ftp://founder.example/hook")]
+    [InlineData("founder.example/hook")]
+    public void GetMissingKeys_FeedbackEnabledWithMalformedFounderChannelWebhook_ReportsInvalid(string webhookUrl)
+    {
+        var config = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Feedback:Enabled"] = "true",
+            ["FounderChannel:WebhookUrl"] = webhookUrl,
+        });
+
+        var missing = ProductionConfigurationValidator.GetMissingKeys(config);
+
+        Assert.Contains(missing, m => m.StartsWith("FounderChannel__WebhookUrl"));
+    }
+
+    [Fact]
+    public void GetMissingKeys_FeedbackEnabledWithValidFounderChannelWebhook_NotReported()
+    {
+        var config = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Feedback:Enabled"] = "true",
+            ["FounderChannel:WebhookUrl"] = "https://chat.googleapis.com/v1/spaces/AAAA/messages?key=k&token=t",
+        });
+
+        var missing = ProductionConfigurationValidator.GetMissingKeys(config);
+
+        Assert.DoesNotContain(missing, m => m.StartsWith("FounderChannel__WebhookUrl"));
+    }
+
+    [Fact]
     public void ValidateOrThrow_WithMissingValues_Throws()
     {
         var config = BuildConfiguration(new Dictionary<string, string?> { ["Resend:ApiKey"] = "" });

@@ -43,6 +43,21 @@ public static class ProductionConfigurationValidator
                  || (dsnUri.Scheme != Uri.UriSchemeHttps && dsnUri.Scheme != Uri.UriSchemeHttp))
             missing.Add("Sentry__Dsn (not a valid DSN)");
 
+        // GAP-038 / BL149 (038-2d): the in-product feedback path is activated by the paired
+        // Railway variables Feedback__Enabled=true and FounderChannel__WebhookUrl. Delivery itself
+        // is fail-soft, but turning the route on without a founder channel means every submission
+        // silently queues for retry against a black hole — a half-configured activation, caught at
+        // startup rather than discovered from a growing backlog alert.
+        if (configuration.GetValue<bool>("Feedback:Enabled"))
+        {
+            var webhookUrl = configuration["FounderChannel:WebhookUrl"];
+            if (string.IsNullOrWhiteSpace(webhookUrl))
+                missing.Add("FounderChannel__WebhookUrl (required when Feedback__Enabled is true)");
+            else if (!Uri.TryCreate(webhookUrl, UriKind.Absolute, out var webhookUri)
+                     || (webhookUri.Scheme != Uri.UriSchemeHttps && webhookUri.Scheme != Uri.UriSchemeHttp))
+                missing.Add("FounderChannel__WebhookUrl (not a valid URL)");
+        }
+
         return missing;
     }
 
