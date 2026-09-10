@@ -23,7 +23,7 @@ ahead of the HVAC supervised pilot.
 | 1 | Multi-tenancy, security & entitlement gating | Done 2026-09-10 | 3× Explore fan-out | 0 | 1 (F1.6) |
 | 2 | State concurrency & transactional integrity | Done 2026-09-10 | 3× Explore fan-out | 0 | 5 (F2.1–F2.5) |
 | 3 | Backend performance & database optimization | Done 2026-09-10 | 3× Explore fan-out | 0 (3 GA-blockers) | 6 (F3.1–F3.6) |
-| 4 | Client reflow, UX state & layout resilience | Not started | — | — | — |
+| 4 | Client reflow, UX state & layout resilience | Done 2026-09-10 | 3× Explore fan-out | 2 (F4.1–F4.2) | 8 (F4.3–F4.10) |
 | 5 | Edge cases & offline / network resilience | Not started | — | — | — |
 | 6 | Public surface & rate limiting | Not started | — | — | — |
 | 7 | File size & solution architecture (+ dependency scan) | Not started | — | — | — |
@@ -260,9 +260,67 @@ scale-out.
       crash does not blank the screen.
 - [ ] Optimistic UI reverts and shows an accessible toast when the API write fails.
 
+**Method:** plumbing pass + 3 parallel `Explore` agents (4A error boundaries, 4B conditional reflow
++ claims resolution, 4C optimistic UI + 409 recovery). Frontend = `web/ophalo-app`; auth entry =
+`web/ophalo-web`. **This is the weakest vector — the first with genuine pilot blockers.**
+
+**What holds (no action needed)**
+
+- Request-detail mutations are almost all **non-optimistic** (await server → replace with server
+  truth), consistently — so there is essentially no "failed write left on screen looking saved"
+  class of bug. The one optimistic surface (internal priority) reverts correctly on error with a
+  `role="alert"`.
+- `PrimaryActionControl` is a strong reference implementation: payload snapshot for exact-replay
+  Retry, `ConnectionFailureBanner`, retry success announced via a root-mounted `liveAnnouncer`.
+- The **Actual Work** and **Proposed Scope** composers have a genuinely well-built shared 409
+  recovery path (`reconcileAfterConflict`): refetch authoritative state, distinct reload-failure
+  notice with Retry, `role="status" aria-live="polite"`, blurred text fields survive via
+  autosave-on-blur + re-key from server.
+- Layout reflow for an absent Price Book package: nav item and request-detail pricing cards
+  conditionally render to `null` (no empty shells / dead toolbars); `#/pricebook` deep-links get
+  dedicated full-screen states. Onboarding hides cleanly.
+- Auth handoff (`exchange` / `continue`, cookie-based, full-document nav into the SPA), the
+  `401 → signin` redirect with a module-level loop guard, and mid-session removal all degrade
+  cleanly. `RequestDetailStates` / `RequestListContent` have proper 403 / 404 / generic error
+  states. No `React.lazy`, so no chunk-load-without-boundary gap.
+
 **Findings**
 
-_None recorded yet._
+| ID | Sev | Location | Issue | Scenario |
+| --- | --- | --- | --- | --- |
+| F4.1 | **blocker** | `RequestDetail.tsx:609-610` (draft state); `App.tsx:557`, `RequestWorkbenchShell.tsx:261` (no `key={requestId}`, no reset effect) | The customer-reply draft and internal-note text live in `RequestDetail` state; `RequestDetail` is **not keyed by `requestId`** and nothing resets the draft when the request changes. | Operator drafts "Hi Jane, we'll be there Tuesday…" on request A, clicks **Next**, the text is now in request B's composer → "Post & prepare SMS" posts A's message to **B's customer page and texts B's customer**. Wrong-customer communication, no conflict needed. Adding `key` without persistence instead *silently discards* the draft. |
+| F4.2 | **blocker** | `BusinessSection.tsx:341-342, 487-489, 537`; `UnifiedComposer.tsx:31-32, 230` | On a 409 the composer sets `disabled={conflictDisabled}` (not `readOnly`) and shows *"…Refresh to see the latest state. Your message is saved here."* The draft is only in React state — no `sessionStorage`, no `beforeunload` guard anywhere in the app. | Operator writes a 600-word reply to an upset customer, hits Post, gets a 409 (teammate changed status). Banner says "Refresh." They press Cmd-R → the entire reply is gone. **The app instructed the destructive action** and the disabled field can't even be selected to copy the text out. |
+| F4.3 | pilot-risk (blocker-severity if hit) | `ErrorBoundary.tsx:15, 28-30`; single use at `main.tsx:50` | One app-wide `ErrorBoundary`; `hasError` **never resets**; only affordance is a Reload button that reloads the **same hash route**. No region isolation. | A deterministic render crash on `#/request/<id>` (bad payload shape, unexpected enum) → fallback → Reload → same crash, forever. No path back to the list without hand-editing the URL. Separately: any render error anywhere white-screens the whole workbench and loses queue scroll / filters / composer state. |
+| F4.4 | pilot-risk | `App.tsx:171-177, 547-551` | The `["me"]` query is consumed without an `isError` branch; `role` falls back to `"unknown"` which renders a permanent "Loading…" spinner. | `/auth/me` returns 500 / times out after `AuthGuard` already passed from cache → the shell **hangs on a spinner forever**, no retry. |
+| F4.5 | pilot-risk | `AuthGuard.tsx:6-30` | `retry: false`; any error with `data` undefined → `redirectToSignInOnce()`. Transient 500 / network blip is indistinguishable from a real 401. | An API outage bounces every active user to the sign-in flow — looks like a mass logout. |
+| F4.6 | pilot-risk | `main.tsx` — `initSentry()` (:13), `createRoot(...!)` (:25), `void bootstrap()` (:59, no `.catch`) | Only the `VITE_PUBLIC_BASE_URL` config branch is guarded; every other bootstrap throw / rejection white-screens with no fallback (the `ErrorBoundary` never mounts). `main.config-failure.test.tsx` gives false confidence — it only covers the one handled branch. | Missing `#root`, a throwing `initSentry`, or a failed dev-mock import → blank page. |
+| F4.7 | pilot-risk | `useActualWorkCapture.ts:110`, `useProposedScopeCapture.ts:68`; `ActualWorkCard.tsx:45-47` | A non-403 **error** on the per-request capability probe renders `status:"error"` identically to `"hidden"` → `return null`. `RequestDetailActualWorkSection` surfaces history errors but not probe errors. | A transient 500 on `getActualWorkHistory` makes the entire "Record completed work" entry point **silently vanish** for an enrolled operator — no message, only a manual refresh recovers it. |
+| F4.8 | pilot-risk | `App.tsx:187-194` (`["capabilityPackages"]` `staleTime: 5min`, no `invalidateQueries` anywhere) vs the live per-request 403 probe | The two entitlement signals diverge; role/enrollment changes have no invalidation and no in-app "your access changed" affordance. | Enable Price Book mid-session → detail cards work immediately, nav pill + `#/pricebook` route stay locked for up to 5 min + a window-focus cycle. Downgrade admin→operator → stale nav pill still shows, click → 403 → a "couldn't check access / try again" message that misdescribes a permission change as an outage. |
+| F4.9 | pilot-risk | `conflictDisabled` / `noteConflictDisabled` / `priorityConflictDisabled` — set in ~10 places, reset in **zero** (`PrimaryActionControl.tsx:220`, `BusinessSection.tsx:110/290/488`, `UnifiedComposer.tsx:106`, `NotifyCustomerPanel.tsx:92/116`, `DetailPanels.tsx:829`, `RequestDetail.tsx:127/413`) | Once a 409 fires, the control is dead for the lifetime of the mounted component. `refetchOnWindowFocus` can silently refresh `detail` underneath it. | Operator gets a 409 on "Close request," alt-tabs away and back (detail refetches to current state), returns to a permanently greyed-out button with a stale "Refresh" message. Only a full browser reload fixes it → F4.1 / F4.2 for any composer. |
+| F4.10 | pilot-risk | `TeamSection.tsx:82, 313, 508`; `RequestDetail.tsx:571`; `ActualWorkComposer.tsx:795/981/1430/1530/1782/2107`; conditionally-mounted `aria-live` at `PrimaryActionControl.tsx:261`, `UnifiedComposer.tsx:207`, `BusinessSection.tsx:510` | Write-failure errors are shown visually but not announced — either no `role` at all, or a conditionally-mounted `aria-live` region (which does not fire; `liveAnnouncer.ts` exists precisely to work around this). | A screen-reader operator reassigns the owner, it 409s, "Updated by another team member" appears — nothing is spoken, the sheet just sits there. Fix is in-repo: route through `announcePolite()`. |
+| F4.11 | hardening | `main.tsx:15-22` | `QueryClient` has no global `QueryCache` / `MutationCache` `onError`. | Failed mutations with no local handler fail silently. |
+| F4.12 | hardening | `ExchangeClient.tsx:57-59`, `CompleteSignInScreen.tsx:61-63` | Auth redirect falls back to `http://localhost:5173` if `NEXT_PUBLIC_APP_BASE_URL` is unset — opposite of the app's fail-loud `ConfigurationError`. | A successful prod sign-in with the var unset silently sends users to localhost. |
+| F4.13 | hardening | `AuthGuard.tsx:6`, `App.tsx:171`, `Requests.tsx:285` | Three `["me"]` observers, three different `staleTime` / `retry` configs. Identity freshness is currently an accident of the inconsistency, not a policy; generates redundant `/auth/me` traffic. | Consolidate to one `useMe()` hook. |
+| F4.14 | hardening | `ProposedScopeComposer.tsx:76`, `ActualWorkComposer.tsx:252`, `ComposerSearchAndAdd.tsx:130` | `onError: () => onConflict()` treats *any* error (network, 400) as a concurrency conflict. | A dropped connection on submit surfaces the "reload failed" notice instead of "check your connection." Misleading, not data-losing. |
+| F4.15 | hardening | `PriceBook.tsx:376-389` | `#/pricebook` not-entitled copy always says "isn't included in your plan / talk to your account owner" — wrong for an operator/viewer deep-linking the URL (their `["capabilityPackages"]` query is disabled so `entitled` is always false). | Misleading if a URL is shared; no nav path leads there for those roles. |
+| F4.16 | hardening | `RequestDetail.tsx:622` holds `refetch`, never passed to conflict handlers | Outside the two composers with `reconcileAfterConflict`, every 409 handler says "Refresh" with no button to do it. | Compounds F4.1 / F4.2. |
+| F4.17 | hardening | `AccountMenu` — no workspace switcher | Multi-workspace users must sign out / back in to switch. | Acceptable for pilot; roadmap note. |
+
+**Disposition:**
+- **F4.1 + F4.2 are pilot blockers** — wrong-customer communication and instructed data loss on
+  customer-facing text. Recommend a **Now / Next** slot, not Deferred: `key={requestId}` +
+  per-request `sessionStorage` draft persistence + `readOnly` (not `disabled`) on conflict +
+  `beforeunload` / Prev-Next dirty guard reusing the existing `showDiscardConfirm` alertdialog
+  pattern. One coherent frontend slice.
+- F4.3 → workboard item: reset `ErrorBoundary` on route change + wrap the workbench / rail /
+  account-menu / modals in independent boundaries with a "back to list" affordance.
+- F4.4 + F4.5 + F4.6 → workboard item: identity-load error handling (retry on transient, don't
+  treat 500 as 401, guard `bootstrap()`).
+- F4.7 + F4.8 → workboard item: capability-probe error state (show a retry strip, don't silently
+  hide) + entitlement-signal invalidation on `["me"]` refresh.
+- F4.9 + F4.10 + F4.16 → workboard item: 409 recovery outside the two good composers (reset the
+  disabled flag on version change, in-app refresh button, announce via `announcePolite`).
+- F4.11–F4.15, F4.17 → hardening slice.
 
 ---
 

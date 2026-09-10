@@ -47,8 +47,9 @@ implementation slice — next is **GAP-040** (workboard Next). Entry point:
 
 ## Next
 
-Order is locked in the workboard Next list: GAP-038 → GAP-040 → GAP-063 → GAP-048 → GAP-049 →
-GAP-072 → GAP-047. GAP-038 discovery ADR locked ([ADR-500](decisions/ADR-500-in-product-feedback-and-help-updates-loop.md));
+Order is locked in the workboard Next list: GAP-038 → AUDIT-V4-A → GAP-040 → GAP-063 → GAP-048 →
+GAP-049 → GAP-072 → GAP-047. AUDIT-V4-A (request-detail composer draft safety — two production-audit
+pilot blockers on customer-facing text) inserted 2026-09-10; see [production-readiness audit](audits/production-readiness-audit.md) Vector 4. GAP-038 discovery ADR locked ([ADR-500](decisions/ADR-500-in-product-feedback-and-help-updates-loop.md));
 route/compatibility policy locked ([ADR-501](decisions/ADR-501-api-route-and-compatibility-policy.md):
 no `/api/v1` prefix, flat routes, domain-owned — GAP-038's `GET /updates` + `POST /feedback` are
 Foundation-owned; ADR-500 amended). Preflight done 2026-09-07: all named frontend surfaces
