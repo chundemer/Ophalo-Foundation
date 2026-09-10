@@ -34,16 +34,15 @@ test file. All of 038-2c done. **038-2d** split three ways at preflight (2d-i ba
 2d-ii submit dialog + Help entry → 2d-iii menu entry points; BL149 "038-2d preflight + split").
 **038-2d-i landed 2026-09-10** — production fail-fast when `Feedback:Enabled` is on without a valid
 `FounderChannel:WebhookUrl`; flag on in `appsettings.Development.json` only. **038-2d-ii landed
-2026-09-10** — `api.submitFeedback` + `FeedbackDialog` (`KeepModal`, verbatim ADR-500 retention
-line, 200/202 thanked identically, `ApiError` message map) + "Report a problem" `#/help` header
-entry, gated on `VITE_FEEDBACK_ENABLED`; `ophalo-app` 1162/1162. Active slice is
-**038-2d-iii — "Send feedback" rows in `AccountMenu` (+ `itemsRef` rework) and `MobileNavMenu`,
-reusing the shell `openFeedback` handler, gated on `VITE_FEEDBACK_ENABLED`**.
-The approved, gate-bounded sequence is
-**038-2a-i → 038-2a-ii → 038-2b → 038-2c-i → 038-2c-ii → 038-2d-i → 038-2d-ii → 038-2d-iii**.
-Contract signed off (BL149 "038-2 slice split" + "038-2d preflight + split"). Founder activation
-task (pilot deploy window): set `Feedback__Enabled=true` + `FounderChannel__WebhookUrl` +
-`VITE_FEEDBACK_ENABLED` together. Entry point:
+2026-09-10** — `api.submitFeedback` + `FeedbackDialog` (verbatim ADR-500 retention line, 200/202
+thanked identically, `ApiError` message map) + "Report a problem" `#/help` header entry.
+**038-2d-iii landed 2026-09-10** — all-roles "Send feedback" rows in `AccountMenu` (positional
+`itemsRef` math replaced with a DOM-order registrar) + `MobileNavMenu`, gated on
+`VITE_FEEDBACK_ENABLED`; `ophalo-app` 1169/1169. **All of GAP-038 038-2 is code-complete.**
+The only remaining GAP-038 work is the founder's paired activation in the pilot deploy window:
+`Feedback__Enabled=true` + `FounderChannel__WebhookUrl` (Railway) + `VITE_FEEDBACK_ENABLED=true`
+(PWA build), set together (038-2d-i fails the deploy on a half-configured pair). No active
+implementation slice — next is **GAP-040** (workboard Next). Entry point:
 [BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md).
 
 ## Next

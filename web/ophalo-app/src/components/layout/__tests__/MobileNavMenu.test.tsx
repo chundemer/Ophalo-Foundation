@@ -107,6 +107,20 @@ describe("MobileNavMenu", () => {
     expect(props.onNavigateHelp).toHaveBeenCalledTimes(1);
   });
 
+  it("hides the 'Send feedback' row unless onSendFeedback is provided", () => {
+    renderMenu();
+    expect(screen.queryByRole("button", { name: "Send feedback" })).not.toBeInTheDocument();
+  });
+
+  it("shows a 'Send feedback' row that fires onSendFeedback when provided", async () => {
+    const user = userEvent.setup();
+    const onSendFeedback = vi.fn();
+    renderMenu({ onSendFeedback });
+
+    await user.click(screen.getByRole("button", { name: "Send feedback" }));
+    expect(onSendFeedback).toHaveBeenCalledTimes(1);
+  });
+
   it("adds the ' · N new' suffix on the Help & Updates row only when unseen > 0", () => {
     const { rerender, props } = renderMenu({ helpUnseenCount: 0 });
     expect(screen.getByRole("button", { name: /Help & Updates/ }).textContent).not.toMatch(/new/);

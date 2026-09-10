@@ -79,4 +79,22 @@ describe("App — in-product feedback entry point", () => {
     expect(screen.getByLabelText("What got in your way?")).toBeInTheDocument();
     expect(mockSubmitFeedback).not.toHaveBeenCalled();
   });
+
+  it("opens the feedback dialog from the account menu 'Send feedback' row", async () => {
+    vi.stubEnv("VITE_FEEDBACK_ENABLED", "true");
+    renderApp();
+
+    await userEvent.click(await screen.findByRole("button", { name: /account menu/i }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Send feedback" }));
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("What got in your way?");
+  });
+
+  it("hides the account-menu 'Send feedback' row when the flag is off", async () => {
+    vi.stubEnv("VITE_FEEDBACK_ENABLED", "");
+    renderApp();
+
+    await userEvent.click(await screen.findByRole("button", { name: /account menu/i }));
+    expect(screen.queryByRole("menuitem", { name: "Send feedback" })).not.toBeInTheDocument();
+  });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Building2, ChevronDown, Clock, HelpCircle, LogOut, Users } from "lucide-react";
+import { Building2, ChevronDown, Clock, HelpCircle, LogOut, MessageSquare, Users } from "lucide-react";
 
 // ADR-499: the authenticated shell separates operating workspaces (Requests / Price Book pills)
 // from account- and business-level concerns. This menu owns the latter — workspace identity, the
@@ -48,6 +48,9 @@ interface AccountMenuProps {
   onNavigateHelp: () => void;
   /** Unseen feed entries. > 0 shows the ` · N new` row suffix and the trigger dot. */
   helpUnseenCount: number;
+  /** GAP-038 / BL149 (038-2d-iii): opens the in-product feedback dialog. Absent unless the shell's
+   *  `VITE_FEEDBACK_ENABLED` build flag is on — the "Send feedback" row is hidden without it. */
+  onSendFeedback?: () => void;
   onSignOut: () => void;
   isSigningOut: boolean;
 }
@@ -61,6 +64,7 @@ export function AccountMenu({
   onNavigateSection,
   onNavigateHelp,
   helpUnseenCount,
+  onSendFeedback,
   onSignOut,
   isSigningOut,
 }: AccountMenuProps) {
@@ -99,11 +103,15 @@ export function AccountMenu({
     if (open) itemsRef.current[0]?.focus();
   }, [open]);
 
-  const itemCount = sections.length + 2; // Help & Updates + sections + Sign out
+  // Menu items register themselves in DOM order (Help & Updates → optional Send feedback →
+  // Business Settings sections → Sign out), so keyboard navigation counts the rows actually
+  // rendered rather than tracking a hand-maintained index for each conditional row.
+  const itemCount = () => itemsRef.current.length;
 
   function focusItem(index: number) {
-    const clamped = (index + itemCount) % itemCount;
-    itemsRef.current[clamped]?.focus();
+    const count = itemCount();
+    if (count === 0) return;
+    itemsRef.current[((index % count) + count) % count]?.focus();
   }
 
   function onMenuKeyDown(e: React.KeyboardEvent) {
@@ -122,7 +130,7 @@ export function AccountMenu({
       focusItem(0);
     } else if (e.key === "End") {
       e.preventDefault();
-      focusItem(itemCount - 1);
+      focusItem(itemCount() - 1);
     } else if (e.key === "Tab") {
       setOpen(false);
     }
@@ -136,6 +144,9 @@ export function AccountMenu({
   }
 
   itemsRef.current = [];
+  const registerItem = (el: HTMLButtonElement | null) => {
+    if (el) itemsRef.current.push(el);
+  };
 
   return (
     <div ref={rootRef} className="relative">
@@ -190,9 +201,7 @@ export function AccountMenu({
           </div>
 
           <button
-            ref={(el) => {
-              itemsRef.current[0] = el;
-            }}
+            ref={registerItem}
             type="button"
             role="menuitem"
             onClick={() => {
@@ -209,6 +218,22 @@ export function AccountMenu({
               </span>
             )}
           </button>
+
+          {onSendFeedback && (
+            <button
+              ref={registerItem}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                close(false);
+                onSendFeedback();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] focus-visible:outline-none focus-visible:bg-[var(--ophalo-canvas)]"
+            >
+              <MessageSquare className="h-4 w-4 shrink-0 text-[var(--ophalo-muted)]" aria-hidden="true" />
+              <span>Send feedback</span>
+            </button>
+          )}
           <div className="my-1.5 h-px bg-[var(--ophalo-border)]" />
 
           {sections.length > 0 && (
@@ -216,14 +241,12 @@ export function AccountMenu({
               <p className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--ophalo-muted)]">
                 Business Settings
               </p>
-              {sections.map((section, i) => {
+              {sections.map((section) => {
                 const Icon = SECTION_ICON[section.id];
                 return (
                   <button
                     key={section.id}
-                    ref={(el) => {
-                      itemsRef.current[i + 1] = el;
-                    }}
+                    ref={registerItem}
                     type="button"
                     role="menuitem"
                     onClick={() => {
@@ -242,9 +265,7 @@ export function AccountMenu({
           )}
 
           <button
-            ref={(el) => {
-              itemsRef.current[sections.length + 1] = el;
-            }}
+            ref={registerItem}
             type="button"
             role="menuitem"
             onClick={onSignOut}

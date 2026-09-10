@@ -152,4 +152,39 @@ describe("AccountMenu", () => {
     await user.keyboard("{ArrowUp}");
     expect(items[0]).toHaveFocus();
   });
+
+  it("hides the 'Send feedback' row unless onSendFeedback is provided", async () => {
+    const user = userEvent.setup();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: /account menu/i }));
+    expect(screen.queryByRole("menuitem", { name: "Send feedback" })).not.toBeInTheDocument();
+  });
+
+  it("shows a 'Send feedback' row (all roles) that fires onSendFeedback and closes the menu", async () => {
+    const user = userEvent.setup();
+    const onSendFeedback = vi.fn();
+    renderMenu({ sections: [], userName: "Sam", roleLabel: "Operator", onSendFeedback });
+
+    await user.click(screen.getByRole("button", { name: /account menu/i }));
+    await user.click(screen.getByRole("menuitem", { name: "Send feedback" }));
+
+    expect(onSendFeedback).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("keeps arrow-key navigation contiguous across the added 'Send feedback' row", async () => {
+    const user = userEvent.setup();
+    renderMenu({ sections: [], userName: "Sam", roleLabel: "Operator", onSendFeedback: vi.fn() });
+    await user.click(screen.getByRole("button", { name: /account menu/i }));
+
+    const items = screen.getAllByRole("menuitem");
+    expect(items.map((el) => el.textContent)).toEqual(["Help & Updates", "Send feedback", "Sign out"]);
+    expect(items[0]).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(items[1]).toHaveFocus();
+    await user.keyboard("{End}");
+    expect(items[2]).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(items[0]).toHaveFocus();
+  });
 });

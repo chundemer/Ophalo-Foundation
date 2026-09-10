@@ -1,4 +1,4 @@
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, MessageSquare } from "lucide-react";
 import { KeepModal } from "../keep/KeepModal";
 import type { NavItem } from "../../App";
 import type { BusinessSettingsSection, BusinessSettingsSectionId } from "./AccountMenu";
@@ -16,6 +16,9 @@ interface MobileNavMenuProps {
   onNavigateHelp: () => void;
   /** Unseen feed entries; > 0 shows the ` · N new` suffix on the Help & Updates row. */
   helpUnseenCount: number;
+  /** GAP-038 / BL149 (038-2d-iii): opens the in-product feedback dialog (the shell closes this
+   *  menu first). Absent unless the shell's `VITE_FEEDBACK_ENABLED` build flag is on. */
+  onSendFeedback?: () => void;
   onSignOut: () => void;
   isSigningOut: boolean;
   onClose: () => void;
@@ -36,6 +39,7 @@ export function MobileNavMenu({
   onNavigateSection,
   onNavigateHelp,
   helpUnseenCount,
+  onSendFeedback,
   onSignOut,
   isSigningOut,
   onClose,
@@ -75,6 +79,17 @@ export function MobileNavMenu({
             <span className="text-[0.8125rem] text-[var(--ophalo-muted)]">· {helpUnseenCount} new</span>
           )}
         </button>
+
+        {onSendFeedback && (
+          <button
+            type="button"
+            onClick={onSendFeedback}
+            className="w-full flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-left font-medium text-[var(--ophalo-muted)] transition-colors hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+          >
+            <MessageSquare className="h-4 w-4" />
+            <span>Send feedback</span>
+          </button>
+        )}
 
         {sections.length > 0 && onNavigateSection && (
           <>

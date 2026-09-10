@@ -17,8 +17,11 @@ without a valid `FounderChannel:WebhookUrl` (in `ProductionConfigurationValidato
 `appsettings.Development.json` only — committed production default stays false, activated via the
 paired Railway variables. **038-2d-ii landed 2026-09-10**: `api.submitFeedback` + `FeedbackDialog`
 (`KeepModal`, verbatim ADR-500 retention line, 200/202 thanked identically, `ApiError` message map)
-+ "Report a problem" `#/help` header entry, gated on `VITE_FEEDBACK_ENABLED`; `ophalo-app` suite
-1162/1162. Next slice is **038-2d-iii** ("Send feedback" account-menu + `MobileNavMenu` rows).
++ "Report a problem" `#/help` header entry, gated on `VITE_FEEDBACK_ENABLED`. **038-2d-iii landed
+2026-09-10**: all-roles "Send feedback" rows in `AccountMenu` (positional `itemsRef` math replaced
+with a DOM-order registrar) + `MobileNavMenu`, same flag gate; `ophalo-app` suite 1169/1169.
+**All of GAP-038 038-2 is code-complete** — only the founder's paired activation
+(`Feedback__Enabled` + `FounderChannel__WebhookUrl` + `VITE_FEEDBACK_ENABLED`) remains.
 D1–D8 remain resolved (D5 = persist-first). 038-2 retains its own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
@@ -1236,6 +1239,39 @@ No drift from the split. Implemented — **6 production + 3 test files**:
 
 Verification: `pnpm typecheck` + `check:tokens` green; full `ophalo-app` suite **1162/1162**
 (126 files); `git diff --check` clean. Backend untouched (038-2d-i owns the flag/guard).
+
+#### 038-2d-iii completion record — "Send feedback" menu entry points (landed 2026-09-10)
+
+No drift from the split. Pure wiring of the 038-2d-ii pieces (`FeedbackDialog`, `api.submitFeedback`,
+the shell `openFeedback` handler) into the two account-menu surfaces — no new API, dialog, or types.
+Implemented — **3 production + 3 test files**:
+
+- **`components/layout/AccountMenu.tsx`** (mod): optional `onSendFeedback` prop → an all-roles
+  "Send feedback" `menuitem` (`MessageSquare` icon) directly below "Help & Updates", before the
+  divider; click closes the menu then opens the dialog. The drift-noted positional `itemsRef`
+  index math (`itemCount = sections.length + 2`, per-row hardcoded indices) is **replaced** with a
+  `registerItem` ref callback that pushes each rendered row in DOM order + an `itemCount()` reading
+  `itemsRef.current.length`, so `focusItem` / Arrow / Home / End stay contiguous across any
+  conditional row. Absent prop → no row (existing behaviour unchanged).
+- **`components/layout/MobileNavMenu.tsx`** (mod): same optional `onSendFeedback` → a "Send
+  feedback" row after the Help & Updates row. The shell composes `onClose` + `openFeedback` (this
+  menu has no navigate to piggyback the close on, unlike the other rows).
+- **`App.tsx`** (mod): `onSendFeedback={feedbackEnabled ? openFeedback : undefined}` on
+  `<AccountMenu>`; `feedbackEnabled ? () => { setMobileMenuOpen(false); openFeedback(); } :
+  undefined` on `<MobileNavMenu>`. Same `VITE_FEEDBACK_ENABLED` gate as the `#/help` header action;
+  reuses the 038-2d-ii context snapshot.
+- **Tests:** `AccountMenu.test.tsx` (+3 — row hidden without the prop; all-roles row fires
+  `onSendFeedback` + closes the menu; Arrow/End navigation contiguous across the added row),
+  `MobileNavMenu.test.tsx` (+2 — hidden without the prop; row fires `onSendFeedback`),
+  `App.feedback.test.tsx` (+2 — dialog opens from the account-menu row; row hidden when the flag
+  is off).
+
+Verification: `pnpm typecheck` + `check:tokens` green; full `ophalo-app` suite **1169/1169**
+(126 files); `git diff --check` clean. Backend untouched.
+
+**All of GAP-038 038-2 is code-complete.** The only remaining item is the founder's paired
+activation in the pilot deploy window: `Feedback__Enabled=true` + `FounderChannel__WebhookUrl`
+(Railway) + `VITE_FEEDBACK_ENABLED=true` (PWA build).
 
 ## Not in this build-log / this feature
 

@@ -521,6 +521,7 @@ function AppShell() {
                 onNavigateSection={navigateToSettingsSection}
                 onNavigateHelp={() => navigate({ page: "help" })}
                 helpUnseenCount={helpUnseenCount}
+                onSendFeedback={feedbackEnabled ? openFeedback : undefined}
                 onSignOut={signOut}
                 isSigningOut={isSigningOut}
               />
@@ -718,6 +719,14 @@ function AppShell() {
           onNavigateSection={navigateToSettingsSection}
           onNavigateHelp={() => navigate({ page: "help" })}
           helpUnseenCount={helpUnseenCount}
+          onSendFeedback={
+            feedbackEnabled
+              ? () => {
+                  setMobileMenuOpen(false);
+                  openFeedback();
+                }
+              : undefined
+          }
           onSignOut={signOut}
           isSigningOut={isSigningOut}
           onClose={() => setMobileMenuOpen(false)}
