@@ -27,10 +27,13 @@ record). **038-2b (gated `POST /feedback` + `FeedbackSubmissionService` + `IFoun
 content-source failure alert retrofit). **038-2c-i landed 2026-09-10** (BL149 038-2c-i completion
 record): `FeedbackDeliveryWorker` + `FeedbackMaintenanceBackgroundService` — 5/15/60/180-min retry
 backoff + abandon-at-6, rate-limited backlog/abandoned founder alert (no body), 7-/30-day retention
-sweep. Active slice is **038-2c-ii — consecutive-failure counter + rate-limited `IFounderNotifier`
-alert in `UpdatesFeedCache` (reuses `FounderAlertThrottle`; resolve the notifier via
-`IServiceScopeFactory` from that singleton)**. The approved, gate-bounded sequence is
-**038-2a-i → 038-2a-ii → 038-2b → 038-2c-i → 038-2c-ii → 038-2d (frontend + privacy copy + flag activation)**.
+sweep. **038-2c-ii landed 2026-09-10** (BL149 038-2c-ii completion record): `UpdatesFeedCache`
+consecutive-failure counter + body-free `content_source_failure` founder alert on the 3rd+ failure,
+per-instance 1/30-min throttle (separate bucket), awaited after `_fetchGate` release — 1 prod + 1
+test file. All of 038-2c done. Active slice is **038-2d — frontend + privacy copy +
+`Feedback:Enabled` flag activation + production fail-fast when enabled without a webhook**. The
+approved, gate-bounded sequence is
+**038-2a-i → 038-2a-ii → 038-2b → 038-2c-i → 038-2c-ii → 038-2d**.
 Contract signed off (BL149 "038-2 slice split"). Open founder task: provision
 `FounderChannel:WebhookUrl` (deployed secret only) — needed for real delivery testing, not a code
 blocker (delivery is fail-soft). Entry point:

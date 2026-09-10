@@ -1,8 +1,10 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpHalo.Api.Updates;
+using OpHalo.Foundation.Application.Notifications;
 using OpHalo.Foundation.Application.Updates;
 using OpHalo.SharedKernel.Abstractions;
 
@@ -185,18 +187,104 @@ public sealed class UpdatesFeedCacheTests
         Assert.Equal(1, source.FeedCalls);
     }
 
+    // --- 038-2c-ii: content-source failure alert ---
+
+    [Fact]
+    public async Task No_alert_before_the_consecutive_failure_threshold()
+    {
+        var (cache, _, notifier) = BuildFull(UpdatesFeedFetch.Failed, new FakeNotifier());
+
+        for (var i = 0; i < UpdatesFeedCache.ConsecutiveFailureAlertThreshold - 1; i++)
+            await cache.GetFeedJsonAsync(default);
+
+        Assert.Empty(notifier.Events);
+    }
+
+    [Fact]
+    public async Task The_third_consecutive_failure_sends_one_body_free_alert()
+    {
+        var (cache, _, notifier) = BuildFull(UpdatesFeedFetch.Failed, new FakeNotifier());
+
+        for (var i = 0; i < UpdatesFeedCache.ConsecutiveFailureAlertThreshold; i++)
+            await cache.GetFeedJsonAsync(default);
+
+        var evt = Assert.Single(notifier.Events);
+        Assert.Equal("content_source_failure", evt.Type);
+        Assert.Equal(3, evt.Count);
+        Assert.Null(evt.Context);
+        Assert.Contains("consecutive reads", evt.Summary);
+    }
+
+    [Fact]
+    public async Task Alert_is_rate_limited_then_fires_again_after_the_window()
+    {
+        var (cache, source, notifier) = BuildFull(UpdatesFeedFetch.Failed, new FakeNotifier());
+
+        for (var i = 0; i < 5; i++)
+            await cache.GetFeedJsonAsync(default);
+        Assert.Single(notifier.Events);
+
+        source.Clock.Advance(UpdatesFeedCache.AlertMinInterval + TimeSpan.FromMinutes(1));
+        await cache.GetFeedJsonAsync(default);
+
+        Assert.Equal(2, notifier.Events.Count);
+    }
+
+    [Fact]
+    public async Task A_good_read_resets_the_consecutive_failure_counter()
+    {
+        var (cache, source, notifier) = BuildFull(Feed(ValidFeed), new FakeNotifier());
+
+        source.Next = UpdatesFeedFetch.Failed;
+        await cache.GetFeedJsonAsync(default);
+        await cache.GetFeedJsonAsync(default);
+
+        source.Next = Feed(ValidFeed);
+        source.Clock.Advance(TimeSpan.FromMinutes(6));
+        await cache.GetFeedJsonAsync(default);
+
+        source.Next = UpdatesFeedFetch.Failed;
+        source.Clock.Advance(TimeSpan.FromMinutes(6));
+        await cache.GetFeedJsonAsync(default);
+        await cache.GetFeedJsonAsync(default);
+
+        Assert.Empty(notifier.Events);
+    }
+
     private static UpdatesFeedFetch Feed(string json) =>
         UpdatesFeedFetch.Available(Encoding.UTF8.GetBytes(json));
 
     private static (UpdatesFeedCache Cache, FakeSource Source) Build(UpdatesFeedFetch first)
     {
+        var (cache, source, _) = BuildFull(first, new FakeNotifier());
+        return (cache, source);
+    }
+
+    private static (UpdatesFeedCache Cache, FakeSource Source, FakeNotifier Notifier) BuildFull(
+        UpdatesFeedFetch first, FakeNotifier notifier)
+    {
         var source = new FakeSource(new FakeClock(T0)) { Next = first };
+        var services = new ServiceCollection();
+        services.AddSingleton<IFounderNotifier>(notifier);
         var cache = new UpdatesFeedCache(
             source,
             new MemoryCache(new MemoryCacheOptions()),
             source.Clock,
-            NullLogger<UpdatesFeedCache>.Instance);
-        return (cache, source);
+            NullLogger<UpdatesFeedCache>.Instance,
+            services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
+            new FounderAlertThrottle());
+        return (cache, source, notifier);
+    }
+
+    private sealed class FakeNotifier : IFounderNotifier
+    {
+        public List<FounderEvent> Events { get; } = [];
+
+        public Task<bool> NotifyAsync(FounderEvent founderEvent, CancellationToken cancellationToken)
+        {
+            Events.Add(founderEvent);
+            return Task.FromResult(true);
+        }
     }
 
     private sealed class FakeSource(FakeClock clock) : IUpdatesContentSource

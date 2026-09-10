@@ -9,7 +9,8 @@ banner) all landed 2026-09-08. **038-2a-i** (feedback domain model) landed 2026-
 retry `BackgroundService` on the 5/15/60/180-min backoff + abandon, backlog/abandoned founder
 alert, 7-/30-day retention sweep) landed 2026-09-10. 038-2 is split five ways (2a-i → 2a-ii → 2b →
 2c → 2d, see "038-2 slice split" below); 2c was further split at preflight into **2c-i** (done) and
-**2c-ii** (D4 content-source failure alert retrofit — next). D1–D8 remain resolved (D5 =
+**2c-ii** (D4 content-source failure alert retrofit) — **2c-ii landed 2026-09-10**. Next slice is
+**038-2d** (frontend + privacy copy + flag activation). D1–D8 remain resolved (D5 =
 persist-first). 038-2 retains its own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
@@ -1087,6 +1088,37 @@ through `IServiceScopeFactory` from that singleton; reuses `FounderAlertThrottle
 Verification: `FeedbackDeliveryWorkerTests` 12/12; full unit **1896/1896**;
 `FeedbackSubmissionPersistenceTests` 7/7; `FeedbackEndpointsTests` 10/10; architecture **14/14**;
 `OpHalo.Api` + both test projects build 0 warnings; `git diff --check` clean.
+
+#### 038-2c-ii completion record — content-source failure alert (landed 2026-09-10)
+
+D4's deferred founder-channel alert on repeated content-source failure, retrofitted onto the
+existing `IFounderNotifier` (BL149 D4 note: "the founder-channel alert on repeated content failure
+lands with 038-2"). Scope held to **1 production file** — no `Program.cs` change, because
+`UpdatesFeedCache` is DI-activated and both new constructor dependencies (`IServiceScopeFactory`,
+`FounderAlertThrottle`) are already in the container from 038-2b / 038-2c-i.
+
+- **`Api/Updates/UpdatesFeedCache.cs`** (mod): constructor takes `IServiceScopeFactory` +
+  `FounderAlertThrottle`. A `_consecutiveFailures` counter (mutated only under the existing
+  `_fetchGate`) increments on every non-success read — content-source unavailable, oversized,
+  malformed JSON, schema failure, or duplicate-id semantic failure — and resets to 0 on the next
+  validated read (and in `Reset()`). On the `ConsecutiveFailureAlertThreshold` (**3**) and every
+  failure beyond it, `FounderAlertThrottle.TryAcquire("updates.content_source_failure", 30 min,
+  now)` gates one `content_source_failure` `FounderEvent` (`Count` = the streak length, `Summary`
+  names the failure kind and which fallback was served, **no feed content**). The notify is
+  resolved from a fresh `IServiceScopeFactory` scope and **awaited after `_fetchGate` is
+  released** (decision (a), Christian 2026-09-10) — a slow founder-channel POST on an
+  already-degraded read path never stalls other readers holding on the gate. Per-instance and
+  best-effort, same posture as the last-known-good slot; the throttle bucket is deliberately
+  separate from the feedback-delivery bucket (`feedback.delivery`).
+- **Tests:** `tests/OpHalo.UnitTests/Api/UpdatesFeedCacheTests.cs` (+4 — no alert below the
+  threshold, one body-free alert on the 3rd consecutive failure, 30-min rate limit then a second
+  alert after the window, a good read resets the streak). `Build` helper now stands up a real
+  `ServiceProvider` carrying a `FakeNotifier` + a fresh `FounderAlertThrottle`; existing 14 cases
+  unchanged.
+
+Verification: `UpdatesFeedCacheTests` 18/18; full unit **1900/1900**; `Updates` integration
+32/32; architecture **14/14**; `OpHalo.Api` + `OpHalo.UnitTests` build 0 warnings;
+`git diff --check` clean.
 
 ## Not in this build-log / this feature
 

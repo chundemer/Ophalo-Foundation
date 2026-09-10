@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Json.Schema;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
+using OpHalo.Foundation.Application.Notifications;
 using OpHalo.Foundation.Application.Updates;
 using OpHalo.SharedKernel.Abstractions;
 
@@ -24,6 +26,15 @@ namespace OpHalo.Api.Updates;
 /// per BL149 correction #2), then a semantic pass rejects duplicate <c>entries[].id</c> or
 /// <c>guides[].id</c> (correction #4) which JSON Schema cannot express.
 /// </para>
+///
+/// <para>
+/// 038-2c-ii: consecutive read/validation failures are counted (reset by the next good read);
+/// on the <see cref="ConsecutiveFailureAlertThreshold"/>th and beyond, one
+/// <c>content_source_failure</c> founder-channel alert is sent — rate-limited per instance via
+/// <see cref="FounderAlertThrottle"/> to one per <see cref="AlertMinInterval"/>. The alert is
+/// awaited after <c>_fetchGate</c> is released (never blocks other readers) and carries no feed
+/// content. Best-effort and per-instance, matching the last-known-good slot.
+/// </para>
 /// </summary>
 public sealed class UpdatesFeedCache
 {
@@ -39,6 +50,18 @@ public sealed class UpdatesFeedCache
     /// </summary>
     public const long MaxFeedBytes = 4L * 1024 * 1024;
 
+    /// <summary>
+    /// Consecutive failed reads (fetch unavailable, parse, schema, or semantic failure) before the
+    /// first <c>content_source_failure</c> founder-channel alert fires. Reset by the next good read.
+    /// </summary>
+    public const int ConsecutiveFailureAlertThreshold = 3;
+
+    /// <summary>Per-instance minimum gap between <c>content_source_failure</c> alerts.</summary>
+    public static readonly TimeSpan AlertMinInterval = TimeSpan.FromMinutes(30);
+
+    /// <summary>Throttle bucket — deliberately separate from the feedback-delivery alert bucket.</summary>
+    public const string AlertKey = "updates.content_source_failure";
+
     private static readonly Lazy<JsonSchema> Schema = new(LoadSchema);
     private static readonly EvaluationOptions EvaluationOptions = new()
     {
@@ -50,20 +73,33 @@ public sealed class UpdatesFeedCache
     private readonly IMemoryCache _cache;
     private readonly IClock _clock;
     private readonly ILogger<UpdatesFeedCache> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly FounderAlertThrottle _alertThrottle;
     private readonly SemaphoreSlim _fetchGate = new(1, 1);
 
     private volatile string? _lastKnownGood;
+
+    /// <summary>
+    /// Consecutive failed reads. Mutated on the read path only while <see cref="_fetchGate"/> is
+    /// held; <see cref="Reset"/> also zeroes it (test isolation / a future single-threaded
+    /// cache-bust seam — gate it there too if that seam ever becomes concurrently callable).
+    /// </summary>
+    private int _consecutiveFailures;
 
     public UpdatesFeedCache(
         IUpdatesContentSource source,
         IMemoryCache cache,
         IClock clock,
-        ILogger<UpdatesFeedCache> logger)
+        ILogger<UpdatesFeedCache> logger,
+        IServiceScopeFactory scopeFactory,
+        FounderAlertThrottle alertThrottle)
     {
         _source = source;
         _cache = cache;
         _clock = clock;
         _logger = logger;
+        _scopeFactory = scopeFactory;
+        _alertThrottle = alertThrottle;
     }
 
     /// <summary>
@@ -76,6 +112,9 @@ public sealed class UpdatesFeedCache
         if (TryGetFresh(out var fresh))
             return fresh;
 
+        string json;
+        ContentFailureAlert? alert;
+
         await _fetchGate.WaitAsync(cancellationToken);
         try
         {
@@ -83,36 +122,80 @@ public sealed class UpdatesFeedCache
             if (TryGetFresh(out fresh))
                 return fresh;
 
-            var fetch = await _source.GetFeedDocumentAsync(MaxFeedBytes, cancellationToken);
-
-            if (fetch.Status == UpdatesContentStatus.Available
-                && TryBuildResponseJson(fetch.Content!, out var json))
-            {
-                _cache.Set(
-                    CacheKey,
-                    new CachedFeed(json, _clock.UtcNow),
-                    new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = FreshTtl + FreshTtl });
-                _lastKnownGood = json;
-                return json;
-            }
-
-            if (fetch.Status == UpdatesContentStatus.Available)
-                _logger.LogError(
-                    "Updates feed failed schema or semantic validation; serving {Fallback}.",
-                    _lastKnownGood is null ? "the empty feed" : "last-known-good");
-            else
-                _logger.LogWarning(
-                    "Updates content source returned {Status}; serving {Fallback}.",
-                    fetch.Status,
-                    _lastKnownGood is null ? "the empty feed" : "last-known-good");
-
-            return _lastKnownGood ?? UpdatesJson.EmptyFeed;
+            (json, alert) = await FetchValidateAndTrackAsync(cancellationToken);
         }
         finally
         {
             _fetchGate.Release();
         }
+
+        // Awaited outside the gate: a slow founder-channel post must never stall other readers.
+        if (alert is not null)
+            await SendContentSourceFailureAlertAsync(alert, cancellationToken);
+
+        return json;
     }
+
+    private async Task<(string Json, ContentFailureAlert? Alert)> FetchValidateAndTrackAsync(
+        CancellationToken cancellationToken)
+    {
+        var fetch = await _source.GetFeedDocumentAsync(MaxFeedBytes, cancellationToken);
+
+        if (fetch.Status == UpdatesContentStatus.Available
+            && TryBuildResponseJson(fetch.Content!, out var json))
+        {
+            _cache.Set(
+                CacheKey,
+                new CachedFeed(json, _clock.UtcNow),
+                new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = FreshTtl + FreshTtl });
+            _lastKnownGood = json;
+            _consecutiveFailures = 0;
+            return (json, null);
+        }
+
+        var servedEmpty = _lastKnownGood is null;
+        var reason = fetch.Status == UpdatesContentStatus.Available
+            ? "schema or semantic validation"
+            : fetch.Status.ToString();
+
+        if (fetch.Status == UpdatesContentStatus.Available)
+            _logger.LogError(
+                "Updates feed failed schema or semantic validation; serving {Fallback}.",
+                servedEmpty ? "the empty feed" : "last-known-good");
+        else
+            _logger.LogWarning(
+                "Updates content source returned {Status}; serving {Fallback}.",
+                fetch.Status,
+                servedEmpty ? "the empty feed" : "last-known-good");
+
+        _consecutiveFailures++;
+
+        ContentFailureAlert? alert = null;
+        if (_consecutiveFailures >= ConsecutiveFailureAlertThreshold
+            && _alertThrottle.TryAcquire(AlertKey, AlertMinInterval, _clock.UtcNow))
+        {
+            alert = new ContentFailureAlert(_consecutiveFailures, reason, servedEmpty);
+        }
+
+        return (_lastKnownGood ?? UpdatesJson.EmptyFeed, alert);
+    }
+
+    private async Task SendContentSourceFailureAlertAsync(
+        ContentFailureAlert alert, CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var notifier = scope.ServiceProvider.GetRequiredService<IFounderNotifier>();
+        await notifier.NotifyAsync(
+            new FounderEvent(
+                Type: "content_source_failure",
+                Summary: $"Help & Updates content source has failed {alert.ConsecutiveFailures} "
+                    + $"consecutive reads ({alert.Reason}); serving "
+                    + (alert.ServedEmpty ? "the empty feed." : "last-known-good."),
+                Count: alert.ConsecutiveFailures),
+            cancellationToken);
+    }
+
+    private sealed record ContentFailureAlert(int ConsecutiveFailures, string Reason, bool ServedEmpty);
 
     /// <summary>
     /// Drops both the fresh cache and the last-known-good slot so the next call re-reads the
@@ -123,6 +206,7 @@ public sealed class UpdatesFeedCache
     {
         _cache.Remove(CacheKey);
         _lastKnownGood = null;
+        _consecutiveFailures = 0;
     }
 
     private bool TryGetFresh(out string json)
