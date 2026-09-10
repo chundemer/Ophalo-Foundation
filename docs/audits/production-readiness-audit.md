@@ -22,7 +22,7 @@ ahead of the HVAC supervised pilot.
 | --- | --- | --- | --- | --- | --- |
 | 1 | Multi-tenancy, security & entitlement gating | Done 2026-09-10 | 3× Explore fan-out | 0 | 1 (F1.6) |
 | 2 | State concurrency & transactional integrity | Done 2026-09-10 | 3× Explore fan-out | 0 | 5 (F2.1–F2.5) |
-| 3 | Backend performance & database optimization | Not started | — | — | — |
+| 3 | Backend performance & database optimization | Done 2026-09-10 | 3× Explore fan-out | 0 (3 GA-blockers) | 6 (F3.1–F3.6) |
 | 4 | Client reflow, UX state & layout resilience | Not started | — | — | — |
 | 5 | Edge cases & offline / network resilience | Not started | — | — | — |
 | 6 | Public surface & rate limiting | Not started | — | — | — |
@@ -185,9 +185,66 @@ transactions, 2C idempotency + soft revocation / immutability).
 - [ ] Background tasks (SMS/email, webhooks) have retry backoff, dead-lettering / abandon, and
       explicit error handlers — a failed notification never crashes the API.
 
+**Method:** plumbing pass + 3 parallel `Explore` agents (3A N+1 / query efficiency, 3B indexing,
+3C pagination caps + worker resilience). **"GA-blocker"** below = holds at pilot scale (one HVAC
+business, low-hundreds of requests) but is a real design defect that must be fixed before broad
+scale-out.
+
+**What holds (no action needed)**
+
+- Lazy loading is OFF, every audited read is `AsNoTracking` with an explicit query — no hidden N+1.
+- The **history** list, `/available`, `/lookup`, `/related-work`, `/me/badge`, catalog list,
+  offering-assembly list are all properly keyset-paginated, DTO-projected, and clamped (page size
+  1..100 / 1..50, out-of-range → 400).
+- List related-data is batched (`participant summaries`, 3-tier preview events, note presence,
+  financial-review counts) — all `WHERE id IN (page ids)`, gated on `page.Count > 0`, never per-row.
+- Feedback delivery poll index `(delivery_state, next_attempt_at_utc)` is well-formed; the retention
+  sweep uses batched `FOR UPDATE SKIP LOCKED`.
+- `FeedbackMaintenanceBackgroundService` and `RemovedLineSnapshotCleanupService`: loop-body
+  try/catch, fresh per-iteration DI scope, `OperationCanceledException` handled on shutdown,
+  jittered interval, no self-overlap, multi-replica-safe batched deletes.
+- `GET /updates` feed is hard-capped (JSON schema: 100 entries / 50 guides / ≤12k-char bodies; 4 MiB
+  read cap).
+
 **Findings**
 
-_None recorded yet._
+| ID | Sev | Location | Issue | Scenario |
+| --- | --- | --- | --- | --- |
+| F3.1 | pilot-risk (GA-blocker) | `KeepRequestListPersistence.GetActiveViewRequestsAsync:69-177`; `GetKeepRequestListService.cs:367-434, 613` | **Active-view request list is unbounded** — `ToListAsync()` of full `KeepRequest` entities (every column) for the whole account, no SQL `LIMIT`; sort, DTO build, and cursor `Skip` all happen in memory. The cursor is a linear scan, so page 5 re-runs the entire load + sort. Affects `default`, `assigned_to_me`, `watching`, `needs_attention`, `feedback_review`, `needs_status_check`, `ready_to_close`. | Fine at hundreds of active requests, degrades linearly with account age. The correct pattern (DB-side keyset + `Take(limit+1)`) already exists in the same file's history path. |
+| F3.2 | pilot-risk (GA-blocker) | `EfActualWorkFinancialReviewPersistence.GetUnreviewedQueueAsync:12-29`; `ActualWorkFinancialReadApiService.cs:170` | **Actual-work review-queue is unbounded** — no `Take`, no `limit` parameter in the contract, no cursor, `.Include(x => x.Lines)`. Grows in exactly the dimension (unreviewed backlog) that expands when the office falls behind. Also has **no supporting index** — `(account_id, request_id)` has the wrong second column for `WHERE account_id AND status='Submitted' AND reviewed_at_utc IS NULL AND superseded_at_utc IS NULL ORDER BY submitted_at_utc`. | Needs a pagination contract added (not just a clamp) + a partial index. |
+| F3.3 | pilot-risk | `KeepRequestEventConfiguration` — index is `(request_id)` single-column | `keep_request_events` needs `(request_id, occurred_at_utc)`. It serves the `ORDER BY occurred_at_utc` on detail-open **and** the `GROUP BY request_id … MAX(occurred_at_utc)` + self-join in the preview-event query that runs **3× per list-page render**. | Event rows accumulate faster than request rows (dozens per request). The Keep index most likely to bite during pilot as history grows. `CREATE INDEX … (request_id, occurred_at_utc); DROP … (request_id)`. |
+| F3.4 | pilot-risk | `EfKeepRequestDetailPersistence.GetAllEventsAsync:65-71` | Loads the **entire** request event timeline as full entities (incl. `Content` message bodies), no `Take`, no projection — on the detail read **and** rebuilt on ~20 mutation paths (add-note, status-change, add-update, …). | Every write to a chatty long-lived request pays the full timeline read + transfer. Add a bounded window / projection; pairs with F3.3. |
+| F3.5 | pilot-risk (GA-blocker if API > 1 replica) | `EfFeedbackPersistence.GetDueForRetryAsync:32-40`; `FeedbackDeliveryWorker.cs:84-99, 93` | `FeedbackDeliveryWorker` claims due rows with a plain `SELECT … LIMIT 100` — **no `FOR UPDATE SKIP LOCKED`, no lease/claim marker**. Single-instance assumption. Also: no per-pass timeout on the sequential founder-channel calls, and `NotifyAsync` is not wrapped — a throwing notifier aborts the pass before the retention sweep. | On 1 replica (the documented pilot posture, [Vector 11]) it is correct. On ≥2 replicas: every replica loads the same rows, `AttemptCount` burns N× faster → premature `Abandoned` + duplicate founder alerts. A hung founder channel stalls all retries + retention indefinitely. |
+| F3.6 | pilot-risk | `KeepRequestListPersistence.GetViewCountsAsync:229-326`; `GetKeepRequestListService.cs:461` | Every list call fires **7 sequential `CountAsync`** round-trips for the view-count badges (several with correlated participant `EXISTS`), on top of ~8–12 other serial awaits in the same request. | Fixed count (not result-size-dependent) but 7 added serial DB waits per page load. Collapse to one grouped-aggregate query or `Task.WhenAll` on a second connection. |
+| F3.7 | hardening | `ActualWorkHistoryReadApiService.cs:179`; `ActualWorkFinancialReadApiService.cs:224, 311` | Actor-display-name resolution is N+1 — `await …GetActorDisplayNameAsync(id)` inside `foreach`; `IKeepRequestOperatePersistence` exposes only the singular seam. N = distinct staff on the visit/request (~1–5, unbounded by team size). Memoized per id. | Add `GetActorDisplayNamesAsync(IReadOnlyList<Guid>)` with `WHERE Id IN (…)`. |
+| F3.8 | hardening | participant/recorder/performer candidates; `GET /accounts/me/members`; catalog categories; nudge-rule lists; per-request actual-work history & pending-reviews | Unbounded (no `Take`) but naturally small — bounded by team size or per-request row counts. | Add defensive caps; low urgency. |
+| F3.9 | hardening | `keep_requests`, `keep_request_events`, `keep_actual_works` configs | Redundant single-column indexes: `ix_keep_requests_account_id` and `ix_keep_request_events_account_id` (both covered by the `(account_id, …)` unique AK prefix); the `(account_id, superseded_by_actual_work_id)` conv-FK index (covered by the partial unique). `ix_keep_requests_account_attention`'s 3rd column is unreachable (every consumer does `attention_level != None`, an inequality on col 2). | Pure write-amplification + planner noise. Drop before scale. |
+| F3.10 | hardening | history list; catalog browse | `ORDER BY terminated_at_utc DESC, id` (history keyset) and `ORDER BY display_name, id` (catalog browse) are uncovered → sort per page. Both are keyset-paginated so pages stay small; spills as volume climbs. | Cheap partial/compound indexes; add now. |
+| F3.11 | hardening | `ux_keep_actual_works_open_draft`; `ix_keep_request_participants_request_id` | Partial unique indexes omit `deleted_at_utc IS NULL`. Safe today (ActualWork discard is a hard delete; participants are reattached, not soft-deleted). Latent: a soft-deleted row would hold the unique slot while invisible. | Add the predicate. |
+| F3.12 | hardening | `feedback_submissions` | The pending-metrics query (`created_at_utc <= @t`) and the retention sweep (`delivered_at_utc`, `created_at_utc` by state) are unindexed. Background / low-frequency, `SKIP LOCKED` batched. | Two small partial indexes if wanted. |
+| F3.13 | hardening | `src/OpHalo.Worker` | Dead scaffold — unmodified `dotnet new worker` template (logs a line/second, does nothing), **never deployed** (Dockerfile builds `OpHalo.Api` only), but drags `Keep.Infrastructure` + Npgsql + EF + `AWSSDK.S3` into its build. All real background work runs in-process in every API replica. | Delete it, **or** adopt it as the real background host — which would also give `FeedbackDeliveryWorker` a natural single-instance home and resolve F3.5. |
+| F3.14 | hardening | `RemovedLineSnapshotCleanupService` | No per-run timeout. Batched delete is inherently bounded — low concern. | — |
+
+**Won't scale past pilot (flag for pilot exit, not a pilot fix)**
+
+- `filters.Q` runs 5× `LOWER(col) LIKE '%q%'` OR-ed, including `description` (varchar 4000) and
+  `feedback_comment` (2000); catalog search does the same on item/alias text. Unindexable without
+  `pg_trgm` GIN. A single account at a few thousand requests turns every filtered list render into
+  multiple full-text substring scans. Add `pg_trgm` GIN on `keep_requests (customer_name,
+  reference_code, description)` and catalog equivalents before GA.
+
+**Disposition:**
+- F3.1 + F3.2 + F3.4 → workboard item: **server-side pagination for the active request list, the
+  event timeline, and the review-queue** — port the existing keyset pattern. Pilot-risk / GA-blocker.
+- F3.3 + F3.10 + F3.9 → workboard item: **index tune** — add `(request_id, occurred_at_utc)`,
+  history + catalog-browse compounds; drop the 3 redundant indexes; one migration.
+- F3.2 review-queue index folds into the pagination item or the index item.
+- F3.5 → workboard item: `FeedbackDeliveryWorker` — `FOR UPDATE SKIP LOCKED` claim + per-pass
+  timeout + wrap `NotifyAsync`. (Or resolve structurally via F3.13.) Gate before any multi-replica
+  deploy — cross-ref [Vector 11].
+- F3.6 → fold into the pagination item (same file, same read path).
+- F3.7, F3.8, F3.11–F3.14 → AUDIT-V1-B-style hardening slice.
+- `pg_trgm` search → deferred-topics, pilot-exit.
 
 ---
 
