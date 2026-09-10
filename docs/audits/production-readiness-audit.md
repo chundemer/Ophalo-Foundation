@@ -21,7 +21,7 @@ ahead of the HVAC supervised pilot.
 | # | Vector | Status | Session | Blockers | Pilot-risks |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Multi-tenancy, security & entitlement gating | Done 2026-09-10 | 3× Explore fan-out | 0 | 1 (F1.6) |
-| 2 | State concurrency & transactional integrity | Not started | — | — | — |
+| 2 | State concurrency & transactional integrity | Done 2026-09-10 | 3× Explore fan-out | 0 | 5 (F2.1–F2.5) |
 | 3 | Backend performance & database optimization | Not started | — | — | — |
 | 4 | Client reflow, UX state & layout resilience | Not started | — | — | — |
 | 5 | Edge cases & offline / network resilience | Not started | — | — | — |
@@ -112,9 +112,64 @@ opportunistic cleanup, no ticket.
 - [ ] Disabling a package / subscription is a soft revocation — submitted visits, financial
       snapshots, and activity history remain intact and immutable.
 
+**Method:** plumbing pass + 3 parallel `Explore` agents (2A optimistic concurrency, 2B atomic
+transactions, 2C idempotency + soft revocation / immutability).
+
+**What holds (no action needed)**
+
+- **Optimistic concurrency — DB-enforced, textbook.** All 8 shared aggregates (KeepRequest,
+  ActualWork, ProposedScope, CatalogItem, CatalogCategory, OfferingAssembly, enrollment,
+  PriceBookAccountState) use an EF `IsConcurrencyToken` on an app-rotated `Guid ConcurrencyVersion`
+  → `UPDATE … WHERE concurrency_version = @original`; two racers cannot both win, loser gets
+  `DbUpdateConcurrencyException` → stable **409** in every adapter. Expected version carried as a
+  strict, fail-closed request header (absent → 400 required, malformed → 400 invalid). Child-collection
+  edits rotate the parent token. Cross-aggregate ops add `BeginTransactionAsync` +
+  `SELECT … FOR UPDATE` in a consistent lock order; price publishing serialized by an account-level
+  publish lock; work-signal rows use atomic `INSERT … ON CONFLICT`.
+- **Transactions — heavy paths are atomic.** Visit submit, review, financial resolution/disposition,
+  replacement/supersession, price-book publish (Serializable), invite accept (tx + savepoint for
+  the user-create race), public intake commit, `/auth/exchange` new-account graph (two-phase save
+  for the circular Account↔AccountUser FK) all wrap every step — including cross-service signal
+  reconciliation on the shared request-scoped `OpHaloDbContext` — in one transaction.
+- **Soft revocation & immutability — strong, consistent.** Enrollment disable is a pure state flip
+  (`Status → Disabled`, row kept, re-grant reuses it); no Keep/financial data is read or altered
+  when a feature is turned off (access recomputed live). Member remove/suspend is a soft
+  membership-status change — `UserId` / `Email` retained, authored `KeepRequestEvent`s, notes,
+  ActualWork recorder/performer links and participation rows all survive. **Every** account-scoped
+  entity carrying audit or financial history is `OnDelete(Restrict)` to `Account` — an account with
+  data cannot be deleted and no parent→child cascade wipes history. ActualWork is immutable after
+  Submit: every field/line mutator guards `Status != Draft`; post-submit changes go only through
+  `MarkReviewed` / `Supersede` (both single-shot) or append-only financial-resolution entities;
+  line snapshots are fixed at creation.
+- No `Idempotency-Key` infrastructure exists anywhere in the repo — context for F2.4 / F2.5 below.
+
 **Findings**
 
-_None recorded yet._
+| ID | Sev | Location | Issue | Scenario |
+| --- | --- | --- | --- | --- |
+| F2.1 | pilot-risk | `ExchangeAuthService.CreateContinuationAsync` (called :130 / :161); `ConsumeCodeAsync` :119 / :152 | On the `/auth/exchange` **continuation** branches (multi-workspace, name-required), the magic-link code is consumed by a standalone autocommit `ExecuteUpdateAsync` **before** a separate `PostAuthContinuation` insert — no shared transaction. | If the continuation insert fails: code is burned, no continuation row, and the continuation is the only path to a session on these branches. Retrying the same link → `AlreadyConsumed`; user must request a fresh email. Fix: one `BeginTransactionAsync` wrapping consume + insert (the new-account graph path already does this). |
+| F2.2 | pilot-risk | `ErrorHttpMapper.CreateProblem:437-460` | The **409 conflict response body is opaque** — `title:"Conflict."` + a code, nothing else. It does not return the current server `ConcurrencyVersion` or entity state. Success responses *do* return the new version. | On an aggregate shared between office and field (ActualWork, ProposedScope), a user who hits a 409 must issue a fresh GET and lose their in-progress edit to recover — no merge affordance. Return current version + state on the conflict path. |
+| F2.3 | pilot-risk | `CatalogItem.cs:237-241` (`ApplyPublishedPrice` deliberately does **not** rotate `ConcurrencyVersion`); `PriceBookEndpoints.cs:108` | A `publish-price` does not invalidate a concurrent in-flight catalog-item **header** edit's expected version. | An operator editing an item's header keeps a valid optimistic token straight through a price publish they never saw; their save succeeds on stale context. Either rotate the token on price publish, or document + surface the intentional split so header edits re-fetch. |
+| F2.4 | pilot-risk | `CreateKeepPublicIntakeService.cs:166-208` | `POST /keep/public-intake/token/{token}` and `/slug/{slug}` have **no double-submission protection** — the retry loop guards only token/reference-code collision; rate limiting throttles but does not dedupe. | Customer double-taps submit → two `KeepRequest` rows + two `RequestCreated` events + a duplicate queue item for one job. Add a dedup window on (account, canonical phone, description hash) or an idempotency token from the form. |
+| F2.5 | pilot-risk | `KeepEndpoints.cs:185-198`; `CreateBusinessRequestService` | `POST /keep/requests` (staff create) has **no server-side double-submission protection** — creates carry no version header; only existence checks (collision guards, not dedup). Client submit-lockout is the only guard. | Staff double-click → two requests for the same job. Lower volume than F2.4 (authenticated, likely has a client lockout) but same class. |
+| F2.6 | hardening | `ExchangeAuthService.HandleNewAccountAsync:226` | Session issue runs after the account graph is committed (outside its tx). | Documented persist-first design: on failure the account is durable and consistent, frontend gets 503 → `/signin`, plain re-signin works. Acceptable; noted for completeness. |
+| F2.7 | hardening | `FeedbackSubmissionService.SubmitAsync` :85/:97/:110; `EfFeedbackPersistence` | Persist `Pending` row → external founder POST → persist delivery metadata/scrub, no transaction. | If the second save fails or the process crashes between them: the row keeps the **raw unscrubbed body + contextJson** until a later successful attempt or the 30-day sweep, and the founder gets a duplicate message (retry worker re-POSTs same `Id`). DB-before-external ordering is correct; row is immediately retry-eligible. |
+| F2.8 | hardening | `KeepEndpoints.cs:282` (`share-intent`), `:294` (`sms-handoff`), `:330` (`call-handoff`) | These mutations take no `X-Keep-Request-Version` header. | Not a lost-update (fresh load + EF token on the appended event) but the action can proceed on a stale client view with no precondition. |
+| F2.9 | hardening | `InternalEntitlementsEndpoints.cs:57/68` | Expected version comes from the JSON **body** (`ConcurrencyVersion`), not a header. Omitted field → `Guid.Empty` → fails the match → **409** instead of a 400 "version required". | Client that forgets the field gets a misleading conflict, not a validation error. Align with the header pattern used everywhere else. |
+| F2.10 | hardening | `EfInvitePersistence.CommitSendInviteAsync:74-86` | Unlike `CommitAcceptInviteAsync`, this has no unique-violation catch. Two **concurrent** `POST /accounts/me/invite` both read `existing == null`, both `Add`; the partial unique index rejects the second → unhandled exception → **500**. | Sequential double-submit is fine (resend path). Concurrent → 500 instead of 200/409. Add the catch. |
+| F2.11 | hardening | `FeedbackEndpoints.cs:31`; `FeedbackSubmissionService` | `POST /feedback` is append-only; a double-tap inserts two rows. Rate-limited per `account_user`. | Low consequence; optional client idempotency key or short-window per-user dedup. |
+| F2.12 | hardening | `FeedbackSubmissionConfiguration.cs:55-68` | `FeedbackSubmission` cascade-deletes from **both** `Account` and `AccountUser`. | No hard-delete path reaches it today (member remove is a soft flip; `AccountUser → Account` is Restrict). Latent: if a hard-delete path is ever added, that user's feedback vanishes silently. Switch to `Restrict` or document the constraint. |
+| F2.13 | hardening | `PriceBookVersionLineConfiguration.cs:80-85` | `PriceBookVersion → PriceBookVersionLine` is `Cascade`. | Financial history is snapshot-based (figures copied onto `ActualWorkLine` at creation, no update path) and `ActualWorkLine → PriceBookVersionLine` is Restrict, so submitted-visit financials are safe. Only relevant if a published-version hard-delete path is ever added. |
+
+**Disposition:**
+- F2.4 + F2.5 → workboard item: server-side double-submit protection for the two request-creation
+  paths (dedup window or accepted idempotency token). Pilot-risk.
+- F2.1 → workboard item (small): wrap the `/auth/exchange` continuation consume + insert in one
+  transaction. Pilot-risk.
+- F2.2 + F2.3 → workboard item: concurrency-conflict recovery — return current version/state on 409,
+  resolve the `publish-price` token-rotation split. Pilot-risk.
+- F2.6–F2.13 → fold into the AUDIT-V1-B hardening slice (or a Vector-2 sibling): feedback
+  persist/notify atomicity, missing version headers, invite 500, cascade tightening.
 
 ---
 
