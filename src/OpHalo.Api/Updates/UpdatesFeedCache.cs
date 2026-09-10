@@ -2,6 +2,7 @@ using System.Text.Json;
 using Json.Schema;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using OpHalo.Foundation.Application.Notifications;
 using OpHalo.Foundation.Application.Updates;
 using OpHalo.SharedKernel.Abstractions;
@@ -33,7 +34,9 @@ namespace OpHalo.Api.Updates;
 /// <c>content_source_failure</c> founder-channel alert is sent — rate-limited per instance via
 /// <see cref="FounderAlertThrottle"/> to one per <see cref="AlertMinInterval"/>. The alert is
 /// awaited after <c>_fetchGate</c> is released (never blocks other readers) and carries no feed
-/// content. Best-effort and per-instance, matching the last-known-good slot.
+/// content. Development intentionally suppresses this operational notification because the local
+/// default content source is unavailable; failure logging and the empty-feed fallback still apply.
+/// Best-effort and per-instance, matching the last-known-good slot.
 /// </para>
 /// </summary>
 public sealed class UpdatesFeedCache
@@ -73,6 +76,7 @@ public sealed class UpdatesFeedCache
     private readonly IMemoryCache _cache;
     private readonly IClock _clock;
     private readonly ILogger<UpdatesFeedCache> _logger;
+    private readonly IHostEnvironment _environment;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly FounderAlertThrottle _alertThrottle;
     private readonly SemaphoreSlim _fetchGate = new(1, 1);
@@ -91,6 +95,7 @@ public sealed class UpdatesFeedCache
         IMemoryCache cache,
         IClock clock,
         ILogger<UpdatesFeedCache> logger,
+        IHostEnvironment environment,
         IServiceScopeFactory scopeFactory,
         FounderAlertThrottle alertThrottle)
     {
@@ -98,6 +103,7 @@ public sealed class UpdatesFeedCache
         _cache = cache;
         _clock = clock;
         _logger = logger;
+        _environment = environment;
         _scopeFactory = scopeFactory;
         _alertThrottle = alertThrottle;
     }
@@ -171,7 +177,8 @@ public sealed class UpdatesFeedCache
         _consecutiveFailures++;
 
         ContentFailureAlert? alert = null;
-        if (_consecutiveFailures >= ConsecutiveFailureAlertThreshold
+        if (!_environment.IsDevelopment()
+            && _consecutiveFailures >= ConsecutiveFailureAlertThreshold
             && _alertThrottle.TryAcquire(AlertKey, AlertMinInterval, _clock.UtcNow))
         {
             alert = new ContentFailureAlert(_consecutiveFailures, reason, servedEmpty);

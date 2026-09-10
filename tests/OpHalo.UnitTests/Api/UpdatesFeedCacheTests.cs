@@ -2,6 +2,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpHalo.Api.Updates;
 using OpHalo.Foundation.Application.Notifications;
@@ -251,6 +253,20 @@ public sealed class UpdatesFeedCacheTests
         Assert.Empty(notifier.Events);
     }
 
+    [Fact]
+    public async Task Development_suppresses_content_source_failure_alerts_but_keeps_the_empty_feed_fallback()
+    {
+        var (cache, _, notifier) = BuildFull(
+            UpdatesFeedFetch.Unavailable,
+            new FakeNotifier(),
+            Environments.Development);
+
+        for (var i = 0; i < UpdatesFeedCache.ConsecutiveFailureAlertThreshold + 1; i++)
+            Assert.Equal(UpdatesJson.EmptyFeed, await cache.GetFeedJsonAsync(default));
+
+        Assert.Empty(notifier.Events);
+    }
+
     private static UpdatesFeedFetch Feed(string json) =>
         UpdatesFeedFetch.Available(Encoding.UTF8.GetBytes(json));
 
@@ -261,7 +277,7 @@ public sealed class UpdatesFeedCacheTests
     }
 
     private static (UpdatesFeedCache Cache, FakeSource Source, FakeNotifier Notifier) BuildFull(
-        UpdatesFeedFetch first, FakeNotifier notifier)
+        UpdatesFeedFetch first, FakeNotifier notifier, string environmentName = "Production")
     {
         var source = new FakeSource(new FakeClock(T0)) { Next = first };
         var services = new ServiceCollection();
@@ -271,6 +287,7 @@ public sealed class UpdatesFeedCacheTests
             new MemoryCache(new MemoryCacheOptions()),
             source.Clock,
             NullLogger<UpdatesFeedCache>.Instance,
+            new FakeHostEnvironment(environmentName),
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             new FounderAlertThrottle());
         return (cache, source, notifier);
@@ -285,6 +302,14 @@ public sealed class UpdatesFeedCacheTests
             Events.Add(founderEvent);
             return Task.FromResult(true);
         }
+    }
+
+    private sealed class FakeHostEnvironment(string environmentName) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = environmentName;
+        public string ApplicationName { get; set; } = "OpHalo.UnitTests";
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     private sealed class FakeSource(FakeClock clock) : IUpdatesContentSource
