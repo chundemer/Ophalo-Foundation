@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { BusinessUpdateSection } from "../BusinessSection";
 import { mockRequestDetails } from "../../../mocks/fixtures";
 import type { KeepRequestDetailResult } from "../../../lib/apiClient";
+import { seedComposerDraft, __resetComposerDrafts } from "../../../hooks/useComposerDraft";
+import { __resetUnloadGuard } from "../../../lib/unloadGuard";
 
 // GAP-052b: a page-only update never notifies the customer by itself. The notify step should
 // only surface for a submission that actually created a customer-visible business-update event
@@ -43,6 +45,9 @@ function baseDetail(overrides: Partial<KeepRequestDetailResult> = {}): KeepReque
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
+  __resetComposerDrafts();
+  __resetUnloadGuard();
 });
 
 describe("BusinessUpdateSection — notify-step wiring (GAP-052b)", () => {
@@ -86,15 +91,12 @@ describe("BusinessUpdateSection — notify-step wiring (GAP-052b)", () => {
     });
     mockPrepareUpdateNotification.mockResolvedValue({ ...detail, pendingNotification: null });
 
+    seedComposerDraft("req-77", { message: "We're on our way." });
     render(
       <BusinessUpdateSection
         requestId="req-77"
         detail={detail}
         onDetailUpdated={() => {}}
-        draft="We're on our way."
-        onDraftChange={() => {}}
-        draftStatus=""
-        onDraftStatusChange={() => {}}
         composerMode
       />
     );
@@ -149,15 +151,12 @@ describe("BusinessUpdateSection — notify-step wiring (GAP-052b)", () => {
       ],
     });
 
+    seedComposerDraft("req-77", { message: "We're on our way." });
     render(
       <BusinessUpdateSection
         requestId="req-77"
         detail={detail}
         onDetailUpdated={() => {}}
-        draft="We're on our way."
-        onDraftChange={() => {}}
-        draftStatus=""
-        onDraftStatusChange={() => {}}
         composerMode
       />
     );
@@ -178,15 +177,12 @@ describe("BusinessUpdateSection — notify-step wiring (GAP-052b)", () => {
     });
     mockPatchRequestStatus.mockResolvedValue({ ...detail, status: "scheduled" });
 
+    seedComposerDraft("req-77", { status: "scheduled" });
     render(
       <BusinessUpdateSection
         requestId="req-77"
         detail={detail}
         onDetailUpdated={() => {}}
-        draft=""
-        onDraftChange={() => {}}
-        draftStatus="scheduled"
-        onDraftStatusChange={() => {}}
         composerMode
       />
     );
@@ -202,15 +198,12 @@ describe("BusinessUpdateSection — notify-step wiring (GAP-052b)", () => {
   // trigger), not the quiet `--keep-accent`.
   it("renders the customer-update split-button submit with the request-primary fill on both halves", () => {
     const detail = baseDetail();
+    seedComposerDraft("req-77", { message: "We're on our way." });
     render(
       <BusinessUpdateSection
         requestId="req-77"
         detail={detail}
         onDetailUpdated={() => {}}
-        draft="We're on our way."
-        onDraftChange={() => {}}
-        draftStatus=""
-        onDraftStatusChange={() => {}}
         composerMode
       />
     );

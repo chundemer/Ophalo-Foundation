@@ -41,10 +41,16 @@ thanked identically, `ApiError` message map) + "Report a problem" `#/help` heade
 `VITE_FEEDBACK_ENABLED`; `ophalo-app` 1169/1169. **All of GAP-038 038-2 is code-complete.**
 The only remaining GAP-038 work is the founder's paired activation in the pilot deploy window:
 `Feedback__Enabled=true` + `FounderChannel__WebhookUrl` (Railway) + `VITE_FEEDBACK_ENABLED=true`
-(PWA build), set together (038-2d-i fails the deploy on a half-configured pair). No active
-implementation slice — next coding gate is **GAP-073** (request-detail composer draft safety).
-Entry point:
-[BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md).
+(PWA build), set together (038-2d-i fails the deploy on a half-configured pair).
+
+**GAP-073 — request-detail composer draft safety (pilot gate).** [ADR-502](decisions/ADR-502-request-detail-composer-draft-safety.md);
+[BL150](build-log/150-gap-073-request-detail-composer-draft-safety.md) carries the spec + the
+073-1 completion record. **Slice 073-1 implemented + browser-verified 2026-09-10, awaiting Christian's diff review** —
+9-file frontend gate (`useComposerDraft` shared sessionStorage store, `unloadGuard`, both composers
+rewired, `readOnly`-on-409 + version-advance reset on both paths); `ophalo-app` 1184/1184; browser
+verification complete (mock workbench + real-API two-tab 409). Remaining after review: **slice 073-2**
+(deletion-only removal of the dead `customerUpdateDraft*` / `businessUpdateDraft*` prop chain —
+4 prod + 7 test files). Hot blocker: none.
 
 ## Next
 

@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { UnifiedComposer, type UnifiedComposerHandle } from "../UnifiedComposer";
 import { mockRequestDetails } from "../../../mocks/fixtures";
 import type { KeepRequestDetailResult } from "../../../lib/apiClient";
+import { __resetComposerDrafts } from "../../../hooks/useComposerDraft";
+import { __resetUnloadGuard } from "../../../lib/unloadGuard";
 
 // The Anchor's server-authored "respond_to_customer" primary action (Session 0A) activates the
 // always-mounted inline composer imperatively — desktop has no separate sheet for this. Activation
@@ -26,10 +28,6 @@ function renderComposer(ref: React.RefObject<UnifiedComposerHandle | null>) {
           requestId="req-1"
           detail={baseDetail()}
           onDetailUpdated={vi.fn()}
-          customerUpdateDraft=""
-          onCustomerUpdateDraftChange={vi.fn()}
-          customerUpdateDraftStatus=""
-          onCustomerUpdateDraftStatusChange={vi.fn()}
         />
       </div>
     </div>,
@@ -41,6 +39,9 @@ beforeEach(() => {
   if (!HTMLElement.prototype.scrollTo) {
     HTMLElement.prototype.scrollTo = vi.fn() as typeof HTMLElement.prototype.scrollTo;
   }
+  sessionStorage.clear();
+  __resetComposerDrafts();
+  __resetUnloadGuard();
 });
 
 afterEach(() => {
@@ -71,6 +72,27 @@ describe("UnifiedComposer — imperative activation handles", () => {
     expect(screen.getByRole("tab", { name: "Customer-page update" })).toHaveAttribute("aria-selected", "true");
     const textarea = screen.getByLabelText("Customer update message") as HTMLTextAreaElement;
     expect(document.activeElement).toBe(textarea);
+  });
+
+  it("persists the internal-note draft to the shared per-request store across a remount", async () => {
+    const ref = createRef<UnifiedComposerHandle>();
+    const { unmount } = renderComposer(ref);
+
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Internal note" }));
+    const textarea = screen.getByLabelText("Internal note — not visible to customer") as HTMLTextAreaElement;
+    await userEvent.setup().type(textarea, "check the disconnect switch first");
+
+    expect(sessionStorage.getItem("keep:composer-draft:req-1")).toContain("check the disconnect switch first");
+
+    unmount();
+    __resetComposerDrafts(); // simulate a fresh page load reading sessionStorage
+    const ref2 = createRef<UnifiedComposerHandle>();
+    renderComposer(ref2);
+
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Internal note" }));
+    expect(
+      (screen.getByLabelText("Internal note — not visible to customer") as HTMLTextAreaElement).value,
+    ).toBe("check the disconnect switch first");
   });
 
   it("respects prefers-reduced-motion by scrolling instantly rather than smoothly", () => {

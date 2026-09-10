@@ -10,15 +10,20 @@ import {
   RecommendedActionBadge,
 } from "./highlights";
 import { BusinessUpdateSection } from "./BusinessSection";
+import { useComposerDraft } from "../../hooks/useComposerDraft";
+import { useUnloadGuard } from "../../lib/unloadGuard";
 
 interface UnifiedComposerProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-  customerUpdateDraft: string;
-  onCustomerUpdateDraftChange: (v: string) => void;
-  customerUpdateDraftStatus: string;
-  onCustomerUpdateDraftStatusChange: (v: string) => void;
+  // GAP-073 / ADR-502: the customer-update draft now lives in the shared per-request store
+  // (`useComposerDraft`), not in props drilled from `RequestDetail`. These props are unused as of
+  // slice 073-1 and the drill is deleted in slice 073-2; kept optional so callers still compile.
+  customerUpdateDraft?: string;
+  onCustomerUpdateDraftChange?: (v: string) => void;
+  customerUpdateDraftStatus?: string;
+  onCustomerUpdateDraftStatusChange?: (v: string) => void;
   highlight?: HighlightLevel;
   // bare: no outer card chrome (border/bg/highlight) — used when a parent wraps this together
   // with TimingPanel in one shared Communication & Planning surface (locked correction,
@@ -43,10 +48,6 @@ export const UnifiedComposer = forwardRef<UnifiedComposerHandle, UnifiedComposer
   requestId,
   detail,
   onDetailUpdated,
-  customerUpdateDraft,
-  onCustomerUpdateDraftChange,
-  customerUpdateDraftStatus,
-  onCustomerUpdateDraftStatusChange,
   highlight,
   bare = false,
 }, ref) {
@@ -82,10 +83,23 @@ export const UnifiedComposer = forwardRef<UnifiedComposerHandle, UnifiedComposer
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerUpdateFocusSignal]);
 
-  const [note, setNote] = useState("");
+  // GAP-073 / ADR-502: the internal-note draft lives in the shared per-request store, so it
+  // survives a reload and never bleeds into another request's composer.
+  const { draft, setField: setDraftField, clearFields: clearDraftFields } = useComposerDraft(requestId);
+  const note = draft.note;
+  const setNote = (value: string) => setDraftField("note", value);
   const [noteSubmitting, setNoteSubmitting] = useState(false);
   const [noteConflictDisabled, setNoteConflictDisabled] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
+
+  // Recover from a stale-version 409 once the request advances to a fresh version, without a full
+  // page reload; the note text is untouched.
+  useEffect(() => {
+    setNoteConflictDisabled(false);
+    setNoteError((prev) => (prev === NOTE_CONFLICT_MESSAGE ? null : prev));
+  }, [detail.version]);
+
+  useUnloadGuard(`composer-note:${requestId}`, note.trim().length > 0);
 
   if (!canSendBusinessUpdate && !canAddInternalNote) return null;
 
@@ -100,7 +114,7 @@ export const UnifiedComposer = forwardRef<UnifiedComposerHandle, UnifiedComposer
         detail.version,
       );
       onDetailUpdated(updated);
-      setNote("");
+      clearDraftFields(["note"]);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setNoteConflictDisabled(true);
@@ -184,10 +198,6 @@ export const UnifiedComposer = forwardRef<UnifiedComposerHandle, UnifiedComposer
             requestId={requestId}
             detail={detail}
             onDetailUpdated={onDetailUpdated}
-            draft={customerUpdateDraft}
-            onDraftChange={onCustomerUpdateDraftChange}
-            draftStatus={customerUpdateDraftStatus}
-            onDraftStatusChange={onCustomerUpdateDraftStatusChange}
             composerMode
           />
         </div>
@@ -227,7 +237,8 @@ export const UnifiedComposer = forwardRef<UnifiedComposerHandle, UnifiedComposer
                 onChange={(e) => setNote(e.target.value)}
                 onKeyDown={handleNoteKeyDown}
                 maxLength={detail.validation.internalNoteMaxLength}
-                disabled={noteConflictDisabled}
+                // GAP-073 / ADR-502: readOnly (not disabled) on a 409 so the note stays selectable.
+                readOnly={noteConflictDisabled}
                 placeholder="Add a note for your team…"
                 rows={4}
                 className={`${INPUT_CLS} resize-none`}

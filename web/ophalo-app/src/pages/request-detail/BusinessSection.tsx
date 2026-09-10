@@ -12,6 +12,8 @@ import {
 import { INPUT_CLS, statusLabel, suggestedNotifyChannel, notifyChannelLabel, type NotifyChannel } from "./helpers";
 import { NotifyCustomerPanel } from "./NotifyCustomerPanel";
 import { KeepSplitButton } from "../../components/keep/KeepSplitButton";
+import { useComposerDraft } from "../../hooks/useComposerDraft";
+import { useUnloadGuard } from "../../lib/unloadGuard";
 
 // ---------------------------------------------------------------------------
 // Work Done card
@@ -345,10 +347,6 @@ interface BusinessUpdateSectionProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-  draft: string;
-  onDraftChange: (v: string) => void;
-  draftStatus: string;
-  onDraftStatusChange: (v: string) => void;
   highlight?: HighlightLevel;
   composerMode?: boolean;
 }
@@ -357,20 +355,19 @@ export function BusinessUpdateSection({
   requestId,
   detail,
   onDetailUpdated,
-  draft,
-  onDraftChange,
-  draftStatus,
-  onDraftStatusChange,
   highlight,
   composerMode = false,
 }: BusinessUpdateSectionProps) {
   const { canSendBusinessUpdate, canChangeStatus, allowedStatuses } = detail.availableActions;
   const maxLength = detail.validation.businessUpdateMaxLength;
 
-  const message = draft;
-  const setMessage = onDraftChange;
-  const selectedStatus = draftStatus;
-  const setSelectedStatus = onDraftStatusChange;
+  // GAP-073 / ADR-502: message + status draft live in the shared per-request store, so they
+  // survive a reload and never bleed into another request's composer.
+  const { draft, setField: setDraftField, clearFields: clearDraftFields } = useComposerDraft(requestId);
+  const message = draft.message;
+  const setMessage = (value: string) => setDraftField("message", value);
+  const selectedStatus = draft.status;
+  const setSelectedStatus = (value: string) => setDraftField("status", value);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -389,6 +386,18 @@ export function BusinessUpdateSection({
   useEffect(() => {
     setNotifyChannel(suggestedNotifyChannel(detail));
   }, [detail.customerEmail, detail.contactPreference]);
+
+  // GAP-073 / ADR-502: recover from a stale-version 409 once the request advances to a fresh
+  // version (e.g. a refetch-on-focus), without a full page reload. The draft text is untouched.
+  useEffect(() => {
+    setConflictDisabled(false);
+    setError((prev) => (prev === BUSINESS_UPDATE_CONFLICT_MESSAGE ? null : prev));
+  }, [detail.version]);
+
+  useUnloadGuard(
+    `composer-update:${requestId}`,
+    message.trim().length > 0 || selectedStatus !== "",
+  );
 
   if (!canSendBusinessUpdate) return null;
 
@@ -444,8 +453,7 @@ export function BusinessUpdateSection({
               detail.version,
             );
       onDetailUpdated(updated);
-      setMessage("");
-      setSelectedStatus("");
+      clearDraftFields(["message", "status"]);
       // GAP-052b: a page-only update never notifies the customer by itself — surface the
       // notify step only when this submission actually created a customer-visible message.
       const postedMessageEvent = hasMessage
@@ -534,7 +542,9 @@ export function BusinessUpdateSection({
             if (error && !conflictDisabled) setError(null);
           }}
           onKeyDown={handleKeyDown}
-          disabled={conflictDisabled}
+          // GAP-073 / ADR-502: readOnly (not disabled) on a 409 so the operator can still select
+          // and copy their text out while the banner tells them to refresh.
+          readOnly={conflictDisabled}
           placeholder="Write an update for the customer…"
           rows={4}
           className={`${INPUT_CLS} resize-none ${
@@ -563,8 +573,13 @@ export function BusinessUpdateSection({
           <select
             id="update-status-select"
             value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            disabled={conflictDisabled}
+            onChange={(e) => {
+              // GAP-073 / ADR-502: readOnly is invalid on <select>; hold the value on a 409 via
+              // aria-disabled + an ignored onChange so the draft status is preserved and visible.
+              if (conflictDisabled) return;
+              setSelectedStatus(e.target.value);
+            }}
+            aria-disabled={conflictDisabled}
             className={INPUT_CLS}
           >
             <option value="">No status change</option>
