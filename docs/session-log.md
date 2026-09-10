@@ -42,14 +42,17 @@ thanked identically, `ApiError` message map) + "Report a problem" `#/help` heade
 The only remaining GAP-038 work is the founder's paired activation in the pilot deploy window:
 `Feedback__Enabled=true` + `FounderChannel__WebhookUrl` (Railway) + `VITE_FEEDBACK_ENABLED=true`
 (PWA build), set together (038-2d-i fails the deploy on a half-configured pair). No active
-implementation slice — next is **GAP-040** (workboard Next). Entry point:
+implementation slice — next coding gate is **GAP-073** (request-detail composer draft safety).
+Entry point:
 [BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md).
 
 ## Next
 
-Order is locked in the workboard Next list: GAP-038 → AUDIT-V4-A → GAP-040 → GAP-063 → GAP-048 →
-GAP-049 → GAP-072 → GAP-047. AUDIT-V4-A (request-detail composer draft safety — two production-audit
-pilot blockers on customer-facing text) inserted 2026-09-10; see [production-readiness audit](audits/production-readiness-audit.md) Vector 4. Audit Vectors 1–5 complete (2026-09-10); Vector 5 added GAP-091 (Quick Capture draft persistence — pilot blocker, folds into S17f) and GAP-092 (business-timezone display), both unsequenced pending Christian's review. Vectors 6–11 not started. GAP-038 discovery ADR locked ([ADR-500](decisions/ADR-500-in-product-feedback-and-help-updates-loop.md));
+Code order is locked in the workboard Next list: GAP-073 → GAP-091 → GAP-040 → GAP-063 → GAP-048 →
+GAP-049 → GAP-092 → GAP-072 → GAP-047. GAP-073 protects customer-reply/internal-note drafts;
+GAP-091 prevents field-work loss in Quick Capture; both are pilot blockers. GAP-092 corrects
+business-timezone display and follows the pilot gates as a pilot-risk correction. Audit Vectors 1–5
+are complete (2026-09-10); Vectors 6–11 are not started. GAP-038 discovery ADR locked ([ADR-500](decisions/ADR-500-in-product-feedback-and-help-updates-loop.md));
 route/compatibility policy locked ([ADR-501](decisions/ADR-501-api-route-and-compatibility-policy.md):
 no `/api/v1` prefix, flat routes, domain-owned — GAP-038's `GET /updates` + `POST /feedback` are
 Foundation-owned; ADR-500 amended). Preflight done 2026-09-07: all named frontend surfaces
