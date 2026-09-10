@@ -248,6 +248,14 @@ builder.Services.AddSingleton<UpdatesFeedCache>();
 builder.Services.AddScoped<IFeedbackPersistence, EfFeedbackPersistence>();
 builder.Services.AddScoped<FeedbackSubmissionService>();
 
+// 038-2c operational completion: a per-minute worker drives the delivery retry schedule
+// (backoff 5/15/60/180 min after the synchronous attempt), the backlog/abandoned founder-channel
+// alert, and the 7-day-delivered / 30-day-abandoned retention sweep. The alert throttle is a
+// per-instance singleton (best-effort, like the updates last-known-good slot).
+builder.Services.AddSingleton<FounderAlertThrottle>();
+builder.Services.AddScoped<FeedbackDeliveryWorker>();
+builder.Services.AddHostedService<FeedbackMaintenanceBackgroundService>();
+
 // Generic founder-channel notifier (BL149 "Founder channel"): a typed HttpClient posting a
 // compact structured event to a single founder-provisioned incoming webhook. Fail-soft — an
 // unconfigured or failing webhook never faults a request. FounderChannel:WebhookUrl is set in

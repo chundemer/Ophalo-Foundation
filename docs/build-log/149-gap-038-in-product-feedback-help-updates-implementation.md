@@ -5,10 +5,12 @@ count + Help & Updates menu rows + trigger dots), and **038-1b-iii** (Requests-l
 banner) all landed 2026-09-08. **038-2a-i** (feedback domain model) landed 2026-09-09; **038-2a-ii** (feedback persistence +
 `AddFeedbackSubmission` migration) landed 2026-09-09; **038-2b** (gated `POST /feedback` +
 `FeedbackSubmissionService` + `IFounderNotifier` + per-`account_user` rate limit,
-`Feedback:Enabled` default false) landed 2026-09-09. 038-2 is
-split five ways (2a-i → 2a-ii → 2b → 2c → 2d, see "038-2 slice split" below); next slice is
-**038-2c** (retry `BackgroundService` + backlog/abandoned alert + retention sweep + D4 alert
-retrofit). D1–D8 remain resolved (D5 = persist-first). 038-2 retains its own exit criteria.
+`Feedback:Enabled` default false) landed 2026-09-09. **038-2c-i** (feedback delivery worker —
+retry `BackgroundService` on the 5/15/60/180-min backoff + abandon, backlog/abandoned founder
+alert, 7-/30-day retention sweep) landed 2026-09-10. 038-2 is split five ways (2a-i → 2a-ii → 2b →
+2c → 2d, see "038-2 slice split" below); 2c was further split at preflight into **2c-i** (done) and
+**2c-ii** (D4 content-source failure alert retrofit — next). D1–D8 remain resolved (D5 =
+persist-first). 038-2 retains its own exit criteria.
 **Date:** 2026-09-07
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (full
 end-to-end contract — Locked), [ADR-501](../decisions/ADR-501-api-route-and-compatibility-policy.md)
@@ -964,6 +966,127 @@ resolving `ICurrentUser` inside it. Implemented — **6 production + 3 test file
 Verification: `FeedbackSubmissionServiceTests` 9/9 + `FounderNotifierTests` 6/6 (full unit
 **1884/1884**); `FeedbackEndpointsTests` 10/10; architecture **14/14**; `OpHalo.Api` +
 `OpHalo.IntegrationTests` + `OpHalo.UnitTests` build 0 warnings; `git diff --check` clean.
+
+#### 038-2c preflight + file gate — operational completion (2026-09-10)
+
+**Mechanical preflight (no drift from the split plan).** All named symbols still present:
+`FeedbackSubmission` lifecycle mutators `MarkAttempted` / `MarkDelivered` / `ScheduleRetry` /
+`MarkAbandoned` (both terminal transitions already `RequireAttempted`); `IFeedbackPersistence`
+holds only `AddAsync` / `UpdateAsync` (the due-query + sweep were explicitly deferred here);
+`FeedbackSubmissionConfiguration` already has `ix_feedback_submissions_delivery_state_next_attempt_at_utc`
+for the retry scan; `IFounderNotifier.NotifyAsync` + `FounderEvent` (with `Count` / `OldestAge`)
+in place; `UpdatesFeedCache` (Api, **singleton**) is the D4 content-source failure point and today
+logs to Sentry only; `RemovedLineSnapshotCleanupService` is the in-repo `BackgroundService`
+pattern (Api-hosted, `IServiceScopeFactory` scope per tick, startup delay + per-replica jitter,
+`ExecuteSqlInterpolated` + `FOR UPDATE SKIP LOCKED` batched delete on `EfProposedScopePersistence`).
+
+**038-2c as written is over the CLAUDE.md batch gate.** Four concerns across two subsystems —
+retry/abandon delivery worker, backlog/abandoned alert, 7-day/30-day retention sweep (all on
+`feedback_submissions`), plus the D4 content-source failure alert on the unrelated `updates`
+subsystem. One-slice fan-out: `IFeedbackPersistence` + `EfFeedbackPersistence` (mod, +3 query
+methods), a testable `FeedbackDeliveryWorker` (Application, new), a `FeedbackMaintenanceBackgroundService`
+(Api, new), `Program.cs` (mod), `UpdatesFeedCache` (mod) + its DI wiring for a singleton→notifier
+call = 6–7 production files, 4 test files, ≥3 mutation families. Split required.
+
+**Recommended split — two independently compiling slices:**
+
+- **038-2c-i — feedback delivery worker (feedback subsystem only).** `IFeedbackPersistence` gains
+  `GetDueForRetryAsync(nowUtc, batchLimit, ct)`, `CountAndOldestPendingOlderThanAsync(cutoffUtc, ct)`,
+  and `DeleteExpiredAsync(deliveredBeforeUtc, abandonedBeforeUtc, ct)` (batched `SKIP LOCKED`,
+  mirroring `DeleteExpiredRemovedLineSnapshotsAsync`); new `FeedbackDeliveryWorker`
+  (Foundation.Application) owns one tick: claim due `Pending` rows → `MarkAttempted` → `NotifyAsync`
+  → `MarkDelivered` (scrub) on confirm, else `ScheduleRetry` on the `[1,5,15,60,180]`-minute schedule
+  keyed off `AttemptCount`, `MarkAbandoned` after the 6th failed attempt; then the backlog/abandoned
+  founder alert (in-process 30-min rate limit, per-instance like LKG; payload carries no body —
+  `environment`, `failure_type`, `count`, `oldest_age`, correlation ids); then the retention sweep.
+  New `FeedbackMaintenanceBackgroundService` (Api) is a thin 60-s timer resolving the worker in a
+  scope, `RemovedLineSnapshotCleanupService` pattern. `Program.cs` registers both. ~5 production +
+  ~4 test (worker unit: schedule/abandon/scrub/alert-threshold/rate-limit; persistence integration:
+  due-query, sweep, backlog count). Fits the gate (retry+abandon / sweep = 2 mutation families on
+  one entity + one worker).
+- **038-2c-ii — D4 content-source failure alert retrofit (updates subsystem only).**
+  `UpdatesFeedCache` tracks consecutive feed-fetch failures; on the Nth consecutive failure (propose
+  **3**) it fires one `content_source_failure` `IFounderNotifier` alert, in-process rate-limited to
+  one per 30 min, reset on the next good read. The singleton cache resolves `IFounderNotifier`
+  through an injected `IServiceScopeFactory` per alert (localized; no change to the 038-2b
+  `FounderNotifier` typed-client registration or its tests). ~2 production (`UpdatesFeedCache`,
+  `Program.cs`) + 1 test file (`UpdatesFeedCacheTests` additions).
+
+**One real decision for Christian (038-2c-i):** the 038-2b synchronous path leaves
+`NextAttemptAtUtc = CreatedAtUtc` after a failed immediate delivery (no `ScheduleRetry`), so the
+first retry runs on the next worker tick (≤60 s) rather than at exactly +1 min. Options: (a) accept
+the ≤60-s first retry, worker computes all backoff from `AttemptCount`, **no 2b file touched**
+(recommended); (b) have `FeedbackSubmissionService` call `ScheduleRetry(now + 1 min)` on
+non-delivery — correct-to-the-spec but reopens a 038-2b file. Recommend (a).
+
+**Gate for approval (038-2c-i, if the split is accepted):**
+1. `src/OpHalo.Foundation.Application/Feedback/IFeedbackPersistence.cs` — mod (3 query methods)
+2. `src/OpHalo.Foundation.Infrastructure/Feedback/EfFeedbackPersistence.cs` — mod
+3. `src/OpHalo.Foundation.Application/Feedback/FeedbackDeliveryWorker.cs` — new
+4. `src/OpHalo.Api/Feedback/FeedbackMaintenanceBackgroundService.cs` — new
+5. `src/OpHalo.Api/Program.cs` — mod (register worker scoped + hosted service)
+6. `tests/OpHalo.UnitTests/Feedback/FeedbackDeliveryWorkerTests.cs` — new
+7. `tests/OpHalo.IntegrationTests/Persistence/FeedbackSubmissionPersistenceTests.cs` — mod (due-query, sweep, backlog count)
+8. this build-log — 038-2c-i completion record
+
+Layers: Core (unchanged — mutators exist), Foundation.Application (worker + seam), Foundation.Infrastructure
+(EF seam impl), Api (hosted service + DI). No migration (index already shipped in 038-2a-ii). No
+frontend. Unresolved decisions: the (a)/(b) first-retry-timing call above; otherwise none.
+
+#### 038-2c-i completion record — feedback delivery worker (landed 2026-09-10)
+
+Split approved (Christian, 2026-09-10): 038-2c → **038-2c-i** (feedback delivery worker) +
+**038-2c-ii** (D4 content-source failure alert, still open). First-retry-timing decision: **(a)** —
+the worker owns all retry scheduling; the 038-2b synchronous path is not reopened, so the first
+retry lands on the next ≤60 s worker tick rather than at exactly +1 min.
+
+One deliberate addition to the approved 5-file gate: `FounderAlertThrottle` (a per-instance
+singleton rate limiter) is a 6th production file — cross-tick alert state cannot live on the
+scoped worker, and a singleton helper is cleaner and more testable than a scope-factory worker.
+Still inside the CLAUDE.md gate (6 production / 11 changed). It is also the seam 038-2c-ii reuses.
+
+Implemented — **6 production + 3 test files** (the third a one-line stub addition to an existing fake):
+
+- **`Foundation.Application/Feedback/IFeedbackPersistence.cs`** (mod): +`GetDueForRetryAsync`
+  (tracked `Pending` rows with `NextAttemptAtUtc <= now`, oldest first, batch-limited),
+  +`CountAndOldestPendingBeforeAsync` (backlog stats), +`DeleteExpiredAsync` (retention sweep).
+- **`Foundation.Infrastructure/Feedback/EfFeedbackPersistence.cs`** (mod): LINQ for the due-query
+  and backlog stats; `DeleteExpiredAsync` is a batched `DELETE … WHERE id IN (SELECT … LIMIT 500
+  FOR UPDATE SKIP LOCKED)` (≤20 batches), mirroring `EfProposedScopePersistence`. Delivered rows
+  age out on `delivered_at_utc`, abandoned rows on `created_at_utc`.
+- **`Foundation.Application/Notifications/FounderAlertThrottle.cs`** (new): `ConcurrentDictionary`
+  keyed `TryAcquire(key, minInterval, nowUtc)`; per-instance, best-effort — same posture as the
+  updates LKG slot.
+- **`Foundation.Application/Feedback/FeedbackDeliveryWorker.cs`** (new): `RunOnceAsync` =
+  process due retries → maybe alert → sweep. Retry: `MarkAttempted` → one `IFounderNotifier`
+  send → `MarkDelivered` (scrub) on confirm, else `ScheduleRetry(now + [5,15,60,180]m[attempt-2])`,
+  else `MarkAbandoned` at attempt 6 (body retained). A post-progress `UpdateAsync` failure is
+  logged and swallowed (at-least-once; receiver dedupes on id). Alert: one bucket
+  (`feedback.delivery`), 30-min per-instance rate limit, abandoned wins the tick and suppresses
+  the backlog check; backlog fires at ≥3 pending older than 15 min; payloads carry **no feedback
+  body** (`delivery_abandoned` / `delivery_backlog`, count + oldest-age + correlation ids only).
+  Tuning constants are `public` for the tests and operational docs.
+- **`Api/Feedback/FeedbackMaintenanceBackgroundService.cs`** (new): `BackgroundService`,
+  `RemovedLineSnapshotCleanupService` pattern — 1-min startup delay + 30 s jitter, 60 s interval,
+  resolves the worker in a fresh scope per tick, error-logs and continues.
+- **`Api/Program.cs`** (mod): `FounderAlertThrottle` singleton, `FeedbackDeliveryWorker` scoped,
+  `AddHostedService<FeedbackMaintenanceBackgroundService>()`.
+- **Tests:** `tests/OpHalo.UnitTests/Feedback/FeedbackDeliveryWorkerTests.cs` (new, 12 cases —
+  confirmed-delivery scrub, the 5/15/60/180-min backoff by prior attempt count, 6th-attempt
+  abandon-with-body-retained + no-body alert, abandoned-alert 30-min rate limit, backlog fires at
+  ≥3 / silent below, abandon suppresses backlog same tick, 7-/30-day sweep cutoffs, swallowed
+  post-delivery persistence failure); `tests/OpHalo.IntegrationTests/Persistence/FeedbackSubmissionPersistenceTests.cs`
+  (+3 — due-query filters/orders, backlog count + oldest, sweep deletes only aged
+  delivered/abandoned). `FeedbackSubmissionServiceTests.FakePersistence` gained the 3 new
+  interface stubs (unused on the synchronous path).
+
+**Deferred to 038-2c-ii:** the D4 content-source failure alert retrofit onto `IFounderNotifier`
+(consecutive-failure counter + rate-limited alert in `UpdatesFeedCache`, resolving the notifier
+through `IServiceScopeFactory` from that singleton; reuses `FounderAlertThrottle`).
+
+Verification: `FeedbackDeliveryWorkerTests` 12/12; full unit **1896/1896**;
+`FeedbackSubmissionPersistenceTests` 7/7; `FeedbackEndpointsTests` 10/10; architecture **14/14**;
+`OpHalo.Api` + both test projects build 0 warnings; `git diff --check` clean.
 
 ## Not in this build-log / this feature
 

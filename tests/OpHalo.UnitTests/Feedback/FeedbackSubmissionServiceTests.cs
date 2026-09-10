@@ -165,6 +165,20 @@ public class FeedbackSubmissionServiceTests
             Updated.Add(submission);
             return Task.CompletedTask;
         }
+
+        // The retry-worker seam methods are exercised by FeedbackDeliveryWorkerTests; the
+        // synchronous submission path never calls them.
+        public Task<IReadOnlyList<FeedbackSubmission>> GetDueForRetryAsync(
+            DateTime nowUtc, int batchLimit, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<FeedbackSubmission>>([]);
+
+        public Task<(int Count, DateTime? OldestCreatedAtUtc)> CountAndOldestPendingBeforeAsync(
+            DateTime createdBeforeUtc, CancellationToken cancellationToken) =>
+            Task.FromResult((0, (DateTime?)null));
+
+        public Task<int> DeleteExpiredAsync(
+            DateTime deliveredBeforeUtc, DateTime abandonedBeforeUtc, CancellationToken cancellationToken) =>
+            Task.FromResult(0);
     }
 
     private sealed class FakeNotifier : IFounderNotifier

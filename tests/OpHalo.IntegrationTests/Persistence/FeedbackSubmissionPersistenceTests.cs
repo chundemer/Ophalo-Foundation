@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
+using OpHalo.Foundation.Application.Feedback;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Entities.Feedback;
 using OpHalo.Foundation.Core.Entities.Feedback.Enums;
@@ -138,6 +139,105 @@ public sealed class FeedbackSubmissionPersistenceTests : IClassFixture<PostgresF
 
         await using var readCtx = CreateContext();
         Assert.False(await readCtx.FeedbackSubmissions.AsNoTracking().AnyAsync(x => x.Id == submission.Id));
+    }
+
+    [Fact]
+    public async Task GetDueForRetryAsync_returns_only_due_pending_rows_oldest_first()
+    {
+        var overdue = NewSubmissionAt(Now.AddMinutes(-30));
+        var justDue = NewSubmissionAt(Now.AddMinutes(-1));
+        var future = NewSubmissionAt(Now.AddMinutes(30));
+        var delivered = Delivered(Now.AddMinutes(-20));
+
+        await using (var ctx = CreateContext())
+        {
+            var persistence = new EfFeedbackPersistence(ctx);
+            foreach (var submission in new[] { future, overdue, justDue, delivered })
+                await persistence.AddAsync(submission, CancellationToken.None);
+        }
+
+        await using var readCtx = CreateContext();
+        var due = await new EfFeedbackPersistence(readCtx).GetDueForRetryAsync(Now, 10, CancellationToken.None);
+
+        Assert.Equal(new[] { overdue.Id, justDue.Id }, due.Select(x => x.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task CountAndOldestPendingBeforeAsync_counts_old_pending_rows_and_reports_the_oldest()
+    {
+        var old1 = NewSubmissionAt(Now.AddMinutes(-40));
+        var old2 = NewSubmissionAt(Now.AddMinutes(-20));
+        var recent = NewSubmissionAt(Now.AddMinutes(-2));
+        var deliveredOld = Delivered(Now.AddMinutes(-50));
+
+        await using (var ctx = CreateContext())
+        {
+            var persistence = new EfFeedbackPersistence(ctx);
+            foreach (var submission in new[] { old1, old2, recent, deliveredOld })
+                await persistence.AddAsync(submission, CancellationToken.None);
+        }
+
+        await using var readCtx = CreateContext();
+        var (count, oldest) = await new EfFeedbackPersistence(readCtx)
+            .CountAndOldestPendingBeforeAsync(Now.AddMinutes(-15), CancellationToken.None);
+
+        Assert.Equal(2, count);
+        Assert.Equal(Now.AddMinutes(-40), oldest);
+    }
+
+    [Fact]
+    public async Task DeleteExpiredAsync_removes_only_aged_delivered_and_abandoned_rows()
+    {
+        var freshDelivered = Delivered(Now.AddDays(-3));
+        var staleDelivered = Delivered(Now.AddDays(-8));
+        var freshAbandoned = Abandoned(Now.AddDays(-10));
+        var staleAbandoned = Abandoned(Now.AddDays(-31));
+        var agedPending = NewSubmissionAt(Now.AddDays(-40));
+
+        await using (var ctx = CreateContext())
+        {
+            var persistence = new EfFeedbackPersistence(ctx);
+            foreach (var submission in new[] { freshDelivered, staleDelivered, freshAbandoned, staleAbandoned, agedPending })
+                await persistence.AddAsync(submission, CancellationToken.None);
+        }
+
+        await using var sweepCtx = CreateContext();
+        var deleted = await new EfFeedbackPersistence(sweepCtx)
+            .DeleteExpiredAsync(Now.AddDays(-7), Now.AddDays(-30), CancellationToken.None);
+
+        Assert.Equal(2, deleted);
+
+        await using var readCtx = CreateContext();
+        var remaining = await readCtx.FeedbackSubmissions.AsNoTracking().Select(x => x.Id).ToListAsync();
+        Assert.Equal(
+            new[] { freshDelivered.Id, freshAbandoned.Id, agedPending.Id }.OrderBy(x => x).ToArray(),
+            remaining.OrderBy(x => x).ToArray());
+    }
+
+    private FeedbackSubmission NewSubmissionAt(DateTime createdAtUtc) =>
+        FeedbackSubmission.Create(
+            accountId: _accountId,
+            accountUserId: _accountUserId,
+            message: "retry me",
+            category: FeedbackCategory.Bug,
+            contextJson: null,
+            nowUtc: createdAtUtc);
+
+    private FeedbackSubmission Delivered(DateTime deliveredAtUtc)
+    {
+        var submission = NewSubmissionAt(deliveredAtUtc.AddMinutes(-5));
+        submission.MarkAttempted(deliveredAtUtc.AddMinutes(-1));
+        submission.MarkDelivered(deliveredAtUtc);
+        return submission;
+    }
+
+    private FeedbackSubmission Abandoned(DateTime createdAtUtc)
+    {
+        var submission = NewSubmissionAt(createdAtUtc);
+        for (var attempt = 0; attempt < FeedbackDeliveryWorker.MaxAttempts; attempt++)
+            submission.MarkAttempted(createdAtUtc);
+        submission.MarkAbandoned(createdAtUtc.AddHours(4));
+        return submission;
     }
 
     private static async Task<(Guid AccountId, Guid AccountUserId)> SeedAccountAsync(OpHaloDbContext ctx)
