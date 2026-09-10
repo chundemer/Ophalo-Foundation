@@ -84,7 +84,38 @@ SKU terminology or behavior.
 - **AUDIT-V4-C — identity-load error handling (pilot-risk).** `["me"]` has no error branch → a 500 on `/auth/me` hangs the shell on a spinner forever (F4.4); `AuthGuard` treats any transient error as a 401 → an outage looks like a mass logout (F4.5); `main.tsx` bootstrap is unguarded except the one config branch (F4.6). Retry on transient, distinguish 500 from 401, guard `bootstrap()`. Also fold in F4.13 (consolidate the three inconsistent `["me"]` observers into one `useMe()` hook). Source: [production-readiness audit](audits/production-readiness-audit.md) Vector 4.
 - **AUDIT-V4-D — capability-probe + entitlement-signal consistency (pilot-risk).** A non-403 error on the per-request capability probe silently removes the "Record completed work" entry point with no message (F4.7); the nav `["capabilityPackages"]` cache (`staleTime: 5min`, never invalidated) diverges from the live per-request probe, so a mid-session enrollment or role change lags on the nav for minutes with no in-app affordance (F4.8). Show a retry strip instead of silently hiding; invalidate `["capabilityPackages"]` alongside `["me"]`. Source: [production-readiness audit](audits/production-readiness-audit.md) Vector 4.
 - **AUDIT-V4-E — 409 recovery outside the two good composers (pilot-risk).** `conflictDisabled` / `noteConflictDisabled` / `priorityConflictDisabled` are set in ~10 places and reset in zero — a 409 permanently deadens the control while `refetchOnWindowFocus` silently rebases the data underneath it (F4.9); write-failure errors are not announced to assistive tech — no `role` or a conditionally-mounted `aria-live` that never fires (F4.10, F4 G2); no in-app "refresh this view" button on 409 (F4.16). Reset the flag on version change, route errors through `announcePolite()`, pass `refetch` to conflict handlers. Source: [production-readiness audit](audits/production-readiness-audit.md) Vector 4.
+- **AUDIT-V5-A — Quick Capture draft persistence (pilot blocker; field-work loss).** `mobile/ophalo-mobile/app/modal.tsx` holds the whole capture (phone, name, email, description, service address) in component state; offline disables Save with no local save / send-when-online queue and no dismiss guard, so a capture in a no-signal basement or a backgrounded app loses everything (F5.1). AsyncStorage-backed autosave + restore-on-reopen + `beforeRemove` discard confirm; build into the S17f real Quick Capture form, not the current modal. **Pilot gate** before field techs rely on capture. Source: [production-readiness audit](audits/production-readiness-audit.md) Vector 5.
+- **AUDIT-V5-B — business-timezone display (pilot-risk).** The IANA-validated `Account` timezone (ADR-073) is returned by the API but no render path reads it — every `toLocale*` / `Intl.DateTimeFormat` call formats in the viewer's device timezone (F5.4), and `helpers.ts` `isDateOnlyToday` / `isDateOnlyPast` compute follow-up "today / overdue" from device-local `now` against ADR-451's business-TZ promise (F5.5). Add `useBusinessTimeZone()` + a shared `formatInBusinessTz` / `businessToday` helper and route every formatter and date-only comparison through it. Also folds F5.7 (mobile `useNetworkState` treats unknown connectivity as online) into GAP-075. Source: [production-readiness audit](audits/production-readiness-audit.md) Vector 5.
 - **`pg_trgm` full-text search — pilot-exit, not a pilot fix.** `filters.Q` (5× `LIKE '%q%'` incl. `description` varchar 4000) and catalog substring search are unindexable without a `pg_trgm` GIN index; every filtered list render is a multi-column full-text scan. Fine at pilot volume, a hard cliff at a few thousand rows. Add GIN indexes on `keep_requests (customer_name, reference_code, description)` + catalog equivalents before GA. Source: [production-readiness audit](audits/production-readiness-audit.md) Vector 3.
+
+## Audit and operational gap registry
+
+The temporary `AUDIT-V*` labels below resolve to these permanent GAP identifiers. Each remains a
+separately gated implementation slice; the identifier groups related findings, not a license to
+batch unrelated code.
+
+| GAP | Scope | Findings / status |
+| --- | --- | --- |
+| GAP-073 | Request-detail composer draft safety | F4.1–F4.2, F5.2–F5.3; pilot blocker. Scope: `key={requestId}` + per-request `sessionStorage` draft + `readOnly` on conflict + a shared dirty registry driving a global `beforeunload` / pagehide guard. |
+| GAP-074 | Line-entity input bounds | F1.6–F1.7; pilot-risk. |
+| GAP-075 | Tenant, transaction, and lifecycle defense-in-depth | F1.1–F1.5, F1.8–F1.10, F2.6–F2.13, F5.7; hardening. |
+| GAP-076 | Request-creation idempotency | F2.4–F2.5; pilot-risk. |
+| GAP-077 | Auth-continuation atomicity | F2.1; pilot-risk. |
+| GAP-078 | Concurrency-conflict recovery contract | F2.2–F2.3; pilot-risk. |
+| GAP-079 | Bounded read-path pagination | F3.1–F3.2, F3.4, F3.6; pilot-risk / GA blocker. |
+| GAP-080 | Database index hygiene | F3.2–F3.3, F3.9–F3.11; hardening. |
+| GAP-081 | Feedback-worker multi-instance safety | F3.5, F3.13; before multi-replica API. |
+| GAP-082 | Backend query and retention hygiene | F3.7–F3.8, F3.12, F3.14; hardening. |
+| GAP-083 | Route-scoped error-boundary recovery | F4.3; pilot-risk. |
+| GAP-084 | Identity/bootstrap resilience | F4.4–F4.6, F4.13; pilot-risk. |
+| GAP-085 | Entitlement and accessible-409 recovery | F4.7–F4.10, F4.16; pilot-risk. |
+| GAP-086 | Frontend resilience cleanup | F4.11–F4.12, F4.14–F4.15, F4.17; hardening. |
+| GAP-087 | Validated Help & Updates publisher | Interactive founder preview/validate/upload flow; removes manual JSON/R2 editing. |
+| GAP-088 | Public incident fallback | Independently reachable outage/maintenance page; no client-side-PWA redirect dependency. |
+| GAP-089 | Incident communications runbook | Publish/resolve process, `highlight` discipline, templates, and external-channel fallback. |
+| GAP-090 | Scalable text search | `pg_trgm` GIN indexes for request/catalog substring search; pilot-exit. |
+| GAP-091 | Quick Capture draft persistence | F5.1; pilot blocker (field-work loss). Build into the S17f Quick Capture form. |
+| GAP-092 | Business-timezone display | F5.4–F5.5; pilot-risk. Device-TZ formatting + device-local follow-up day boundaries vs ADR-073 / ADR-451. |
 
 ## Done / evidence index
 

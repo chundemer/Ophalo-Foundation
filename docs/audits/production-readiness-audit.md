@@ -24,13 +24,17 @@ ahead of the HVAC supervised pilot.
 | 2 | State concurrency & transactional integrity | Done 2026-09-10 | 3× Explore fan-out | 0 | 5 (F2.1–F2.5) |
 | 3 | Backend performance & database optimization | Done 2026-09-10 | 3× Explore fan-out | 0 (3 GA-blockers) | 6 (F3.1–F3.6) |
 | 4 | Client reflow, UX state & layout resilience | Done 2026-09-10 | 3× Explore fan-out | 2 (F4.1–F4.2) | 8 (F4.3–F4.10) |
-| 5 | Edge cases & offline / network resilience | Not started | — | — | — |
+| 5 | Edge cases & offline / network resilience | Done 2026-09-10 | plumbing pass | 1 (F5.1) | 3 (F5.2–F5.4) |
 | 6 | Public surface & rate limiting | Not started | — | — | — |
 | 7 | File size & solution architecture (+ dependency scan) | Not started | — | — | — |
 | 8 | Auth & session security | Not started | — | — | — |
 | 9 | HTTP & transport hardening | Not started | — | — | — |
 | 10 | Deploy & release safety | Not started | — | — | — |
 | 11 | Multi-instance / horizontal-scaling readiness | Not started | — | — | — |
+
+## Workboard mapping
+
+Confirmed audit work has permanent identifiers: GAP-073 (F4.1–F4.2), GAP-074 (F1.6–F1.7), GAP-075 (Vector 1/2 hardening), GAP-076 (F2.4–F2.5), GAP-077 (F2.1), GAP-078 (F2.2–F2.3), GAP-079 (F3.1–F3.2/F3.4/F3.6), GAP-080 (F3 indexing), GAP-081 (F3.5/F3.13), GAP-082 (F3 hardening), GAP-083 (F4.3), GAP-084 (F4.4–F4.6/F4.13), GAP-085 (F4.7–F4.10/F4.16), GAP-086 (F4 hardening), and GAP-090 (pilot-exit search). Vector 5 adds GAP-091 (F5.1), GAP-092 (F5.4–F5.5); F5.2–F5.3 fold into GAP-073 and F5.6–F5.7 into GAP-075. Feedback/updates operational follow-ons are GAP-087 through GAP-089.
 
 ---
 
@@ -335,9 +339,57 @@ scale-out.
 - [ ] Timestamps stored UTC at the DB layer, converted to the business timezone
       (`America/Chicago`) at the view layer.
 
+**Method:** plumbing pass over the mobile field app (`mobile/ophalo-mobile`), the web workbench
+(`web/ophalo-app`), and the backend clock/timestamp seam. Targeted `rg` for `beforeunload`,
+local-draft persistence (`AsyncStorage` / `sessionStorage` / query persister), network-state
+gating, and every date-formatting call site; read `modal.tsx` (Quick Capture), `RequestDetail.tsx`
+dirty guards, `request-detail/helpers.ts`, and `SystemClock.cs`. Heavy overlap with Vector 4
+(F4.1 / F4.2 draft loss) — those are not re-litigated here, only extended.
+
+**What holds (no action needed)**
+
+- **Backend timestamp discipline is clean.** `SystemClock.UtcNow => DateTime.UtcNow`; entities
+  uniformly name persisted instants `...AtUtc`; only `SystemClock` and the (unwired) worker touch
+  wall-clock; API contracts expose `...Utc`-suffixed ISO-8601 strings. UTC-at-the-DB-layer is
+  satisfied — the gap is entirely on the view side.
+- Mobile Quick Capture **gates** on connectivity rather than letting a submit silently fail:
+  `canCreate` requires `isOnline`, Save is disabled, and a visible "No connection — save disabled
+  until online" banner shows. `createMutation` distinguishes 4xx ("check the fields") from
+  connection errors ("check your connection").
+- `formatEventTime`'s relative window ("just now" / "2h ago") is timezone-safe — pure epoch math.
+- The web in-app dirty-guard pattern (`showDiscardConfirm` alertdialog + `contentInert` +
+  `onDirtyChange` registrar) is a solid, accessible, reusable pattern. The gap is **coverage**
+  (the reply composer, `beforeunload`), not design.
+- `PrimaryActionControl` exact-replay retry from a payload snapshot (Vector 4) already covers the
+  single highest-value mutation against a transient drop.
+
 **Findings**
 
-_None recorded yet._
+| ID | Sev | Location | Issue | Scenario |
+| --- | --- | --- | --- | --- |
+| F5.1 | **blocker** (field-work loss) | `mobile/ophalo-mobile/app/modal.tsx:44-124, 154-158` | Quick Capture holds phone / name / email / description / full service address in component state only. Offline → Save is **disabled** with no local save and no send-when-online queue; there is no `beforeRemove` / dirty guard on the modal. | A tech captures a job in a basement / mechanical room / rural site with no signal. They cannot save; if they background the app, swipe the modal away, or tab out to check something, **every field is gone**. This is the core field-resilience checklist item and the app has no answer to it. |
+| F5.2 | pilot-risk (blocker-severity if hit) | whole of `web/ophalo-app` — `rg beforeunload` = **zero hits**; `visibilitychange` unused for drafts | No `beforeunload` / pagehide guard anywhere. In-app route changes are guarded (`onDirtyChange` → `setDirty` → `showDiscardConfirm`) but only for a subset of forms (contact log, location, financial-resolution, no-charge, replace-visit) and only against SPA navigation. | Operator writes a long customer reply or an internal note, then hits Cmd-R / closes the tab / the OS reloads the tab / a crash → the draft is gone with no prompt. Extends F4.2 beyond the 409 case to every unload path. |
+| F5.3 | **blocker** | `RequestDetail.tsx` reply/note composer — not registered with the `setDirty` guard, not persisted | The customer-reply draft and internal-note text are outside every guard described above and are not written to `sessionStorage`. Same defect as F4.1 seen from the offline/unload angle. | Covered by GAP-073 (AUDIT-V4-A) — listed here so the timezone/offline slice does not miss it. |
+| F5.4 | pilot-risk | `web/ophalo-app/src/pages/request-detail/helpers.ts:33-58`; `TimelineEvent.tsx`, `ActualWorkHistoryCard.tsx`, `ActualWorkComposer.tsx` (submitted visits), `RequestCommunicationsWorkspace.tsx`, `Help.tsx` — every `toLocale*` / `Intl.DateTimeFormat` call | The business timezone is a required, IANA-validated field on `Account` (ADR-073), is editable in `CompanySection`, and is returned by the API — but **no render path reads it**. Every absolute timestamp is formatted with **no `timeZone` option**, i.e. in the viewer's device timezone. Consumed only by the settings editor and test fixtures. | Two staff in different zones see different clock times for the same event; a tech whose phone auto-updated its timezone while travelling sees every displayed time shift. There is no single authoritative "when did the customer say this" across the team. |
+| F5.5 | pilot-risk (day-boundary) | `helpers.ts:60-84` — `formatDateOnly`, `isDateOnlyToday`, `isDateOnlyPast` | "Today" / "overdue" for follow-up promise dates is computed from device-local `now`, not the business timezone. ADR-451 explicitly defines the follow-up promise in the **business** timezone. | A tech one zone east of Central sees a follow-up flip to "overdue" up to a day early (west: a day late). Drives the attention indicator and queue-sort cues, so the whole team's sense of "what's late" drifts with each device. |
+| F5.6 | hardening | `web/ophalo-app/index.html:7` (manifest only, no SW); no React Query persister / `gcTime` config | The workbench ships an installable PWA manifest but has no service worker, no offline cache, and no query persistence. A mid-session connection drop blanks the data on the next navigation. | Acceptable under the "desktop/tablet workbench, not a field app" posture — but that non-goal is nowhere written down, so it will be mistaken for a bug during the pilot. Document it (cross-ref Vector 10/11). |
+| F5.7 | hardening | `mobile/ophalo-mobile/src/hooks/useNetworkState.ts:8-14` | Only `state.isConnected === false` is treated as offline; `null` / unknown is treated as online. | On a captive portal / "connected, no internet", Quick Capture Save stays enabled, the create fails, and the user gets the generic "check your connection" error instead of the offline banner + disabled state. Minor. |
+
+**Disposition:**
+- **F5.1 is a field-work-loss blocker** → **GAP-091**: AsyncStorage-backed Quick Capture draft
+  (autosave on change, restore on reopen, explicit "discard draft" + `beforeRemove` confirm when
+  dirty). Fold into the S17f real Quick Capture form build rather than bolting onto the current
+  placeholder-adjacent modal. Pilot gate before field techs rely on capture.
+- **F5.2 + F5.3** → fold into **GAP-073** (AUDIT-V4-A, already a pilot gate). Extend its scope
+  note: not just `key={requestId}` + `sessionStorage` on the one composer, but a shared dirty
+  registry driving a global `beforeunload` / pagehide guard.
+- **F5.4 + F5.5** → **GAP-092**: business-timezone display. A `useBusinessTimeZone()` off the
+  setup payload + a shared `formatInBusinessTz` / `businessToday` helper; route every formatter and
+  every date-only "today / overdue" comparison through it. Pilot-risk (not a blocker if every
+  pilot device is correctly set to Central), but ADR-451 already assumes business-TZ semantics.
+- **F5.6** → deploy/scaling doc note (Vector 10 / 11): record "workbench is online-only, no
+  offline cache" as a deliberate non-goal.
+- **F5.7** → fold into **GAP-075** (frontend/defense-in-depth hardening set).
 
 ---
 
