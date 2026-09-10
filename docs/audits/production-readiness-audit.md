@@ -20,7 +20,7 @@ ahead of the HVAC supervised pilot.
 
 | # | Vector | Status | Session | Blockers | Pilot-risks |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Multi-tenancy, security & entitlement gating | Not started | — | — | — |
+| 1 | Multi-tenancy, security & entitlement gating | Done 2026-09-10 | 3× Explore fan-out | 0 | 1 (F1.6) |
 | 2 | State concurrency & transactional integrity | Not started | — | — | — |
 | 3 | Backend performance & database optimization | Not started | — | — | — |
 | 4 | Client reflow, UX state & layout resilience | Not started | — | — | — |
@@ -47,9 +47,56 @@ ahead of the HVAC supervised pilot.
       not via CSS.
 - [ ] All incoming payloads pass strict schema validation before business logic / persistence.
 
+**Method:** plumbing pass in the driving session + 3 parallel `Explore` agents (1A tenant
+scoping / IDOR, 1B RBAC, 1C entitlement + validation + price-blind). Reviewed: `SessionAuthenticationHandler`,
+`CurrentUser`, all `src/OpHalo.Api/**/*Endpoints*.cs` (~90 mutating routes), Keep + Foundation
+persistence layers, the `UserAccessPolicy` / `RolePermissions` / `KeepRequestActionPolicy` stack,
+`AccountFeatureAccessResolver`, and the actual-work / price-book serialization layer.
+
+**What holds (no action needed)**
+
+- Session auth: opaque token hashed at rest, Bearer-or-cookie, absolute expiry + revocation +
+  sliding inactivity + Active-membership gate (Invited / Suspended / Removed fail closed).
+- Tenant scoping: no EF global filter, but the manual `.Where(x => x.AccountId == accountId)`
+  convention (accountId always from `ICurrentUser`, never a route param) is applied consistently
+  across every inspected persistence method. Nested `{actualWorkId}/{lineId}` routes resolve the
+  child in memory off an already-account-scoped aggregate root. Handoff / auth / mobile tokens are
+  32-byte CSPRNG, SHA-256-hashed at rest, expiry + single-use.
+- RBAC: centralized, not ad hoc — every mutating endpoint delegates to a service that enforces role
+  via `UserAccessPolicy.HasPermission` + `RolePermissions`, layered with `KeepRequestActionPolicy`
+  and explicit Owner/Admin checks on financial paths. Viewer and Operator are fail-closed on
+  everything that matters.
+- Entitlement gating (ADR-462): a server-side capability-package check (`IAccountFeatureAccessResolver`,
+  fail-closed on unknown plan/key) runs before business logic on **100%** of in-scope route groups —
+  Price Book, actual-work, offering-assembly, field-catalog, nudge-rules, quick-scope. A direct API
+  call from a non-enrolled account gets `403`.
+- Price-blind: field-facing actual-work reads carry no cost/margin fields on the DTO type at all
+  (structural omission, not client hiding); the one financial-bearing read
+  (`ActualWorkFinancialReadApiService.cs:392`) is hard-gated to Owner/Admin + `AccountingManage` +
+  entitlement.
+- Enum inputs across sampled endpoints fail closed (`Enum.TryParse` + `IsDefined` / explicit
+  allowlist). Most free-text has a domain-level length cap (`KeepRequestErrors`, `CatalogItemErrors`,
+  `ActualWorkErrors`, …).
+
 **Findings**
 
-_None recorded yet._
+| ID | Sev | Location | Issue | Scenario |
+| --- | --- | --- | --- | --- |
+| F1.6 | pilot-risk | `Keep.Core/Entities/ProposedScopeLine.cs:103-145`; `Keep.Core/Entities/ActualWorkLine.cs:80,137,146-153` | `ProposedScopeLine.Note` / `OffCatalogDescription` and `ActualWorkLine.Note` have **no length cap** and no `*TooLong` error; quantity checked only `> 0`. | A field user (or scripted client) POSTs multi-MB free-text via `POST /keep/pricebook/proposed-scopes/{id}/field-select` or `.../actual-work/{id}/lines` straight to persistence → unbounded row growth, response bloat, downstream render DoS. Fix: add caps + errors mirroring `KeepRequestErrors`. |
+| F1.1 | hardening | `Keep.Infrastructure/.../EfKeepRequestDetailPersistence.cs:65-71, 73-97` | `GetAllEventsAsync` / `GetParticipantsAsync` filter only by `RequestId`, not `AccountId` (sibling write path *does* scope). | Not exploitable today — every one of ~20 callers first resolves the request through an account-scoped query and passes `request.Id`. Defense-in-depth: add `accountId` to both predicates so a future ungated caller can't leak account B's event timeline / staff roster. |
+| F1.3 | hardening | `EfKeepCallHandoffPersistence.cs:16-28`; `EfKeepSmsHandoffPersistence.cs:16-28`; `EfKeepIntakeSmsHandoffPersistence.cs:91-104` | Handoff lookups resolve by token hash only; no `AccountId` check on the authenticated staff caller. | Tokens are 32-byte CSPRNG, hashed, expiry + soft-delete checked, per-type tables — unguessable in practice. A staff member in account A holding account B's raw handoff link could read B's customer phone. Add an `AccountId` equality check. |
+| F1.2 | hardening | `KeepTokenService.GeneratePageToken` / `EfKeepRequestDetailPersistence.cs:126-143` | `KeepRequest.PageToken` (256-bit CSPRNG) is persisted and looked up in **plaintext**, unlike the hashed public-intake token. | DB-dump / log-leak exposure only. Store a hash. |
+| F1.7 | hardening | `ActualWorkLine.cs:97-98,148-149`; `ProposedScopeLine.cs:122-123` | `ActualQuantity` / proposed-scope `quantity` validated only `> 0` — no upper bound or precision cap; raw `decimal` from the command. | `ActualQuantity = 1e28` flows into margin/total projections → overflow / absurd figures in Owner/Admin financial review. |
+| F1.8 | hardening | `Api/Accounts/InternalEntitlementsEndpoints.cs:20-27` | `/internal/*` enroll/disable/reenable routes carry only `.RequireAuthorization()` at the route; the Internal-purpose + permission check is in the service. | Ordinary tenant user is denied by the service, but the route is still reachable. Attach a route-level policy so it isn't. |
+| F1.9 | hardening | `InternalCapabilityPackageEnrollmentApiService.EnrollAsync` | Raw `featureKey` route string passed into the enrollment service without a visible allowlist check at that layer. | Operator typo / arbitrary key creates a junk enrollment row. Confirm the downstream service validates against `CapabilityPackageFeatureKeys`. |
+| F1.10 | hardening | `Api/Keep/KeepEndpoints.cs:1487` (`ActualWorkCreateBody.RequestId`); `Api/Accounts/AccountEndpoints.cs:42-43` (invite email) | Missing `RequestId` binds to `Guid.Empty` with no endpoint guard; invite `Email` checked non-blank but not length-capped at the endpoint. | Low impact (FK lookup fails / domain rejects). Add explicit `Guid.Empty` guards and verify `SendInviteService` caps email length. |
+| F1.4 | hardening | `AddInternalNoteService` | Gates on `keep.requests.operate` instead of the dedicated `keep.internal_notes.add` key. | Behaviourally identical today; drifts if the permission maps change. |
+| F1.5 | hardening | `POST /keep/requests/{id}/share-intent` → `ClearShareIntentService` | Service name / route verb mismatch (POST → "Clear…"). Gating is correct. | Readability / maintenance only. |
+
+**Disposition:** F1.6 → workboard item (bounded-slice: add length caps + `*TooLong` errors + rejection
+tests to the two line entities; likely folds in F1.7 quantity bounds). F1.1–F1.3, F1.8–F1.10 →
+batch into one "tenant-scoping & internal-route defense-in-depth" hardening slice. F1.4 / F1.5 →
+opportunistic cleanup, no ticket.
 
 ---
 

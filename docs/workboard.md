@@ -70,6 +70,8 @@ SKU terminology or behavior.
 - **4g close advisory, Price Book direct-cost visibility, workbench brand alignment:** carry-forward items; not pilot blockers.
 - **Acceptance passes:** Request UI Upgrade 1.1 ([BL139](build-log/139-request-ui-upgrade-1.1-implementation.md)) and Settings & Getting Started V2 §5 ([BL144](build-log/144-settings-and-getting-started-v2-upgrade.md)).
 - **Minimum Office Closeout:** resumes after controlled-pilot and rehearsal gates ([BL135](build-log/135-minimum-office-closeout-mechanical-preflight.md)).
+- **AUDIT-V1-A — line-entity input bounds (pilot-risk).** Add length caps + `*TooLong` errors and an upper/precision bound on quantity to `ProposedScopeLine` (`Note`, `OffCatalogDescription`, `quantity`) and `ActualWorkLine` (`Note`, `quantity`), with rejection tests both directions. Currently unbounded free-text from a field user reaches persistence. Bounded single-slice. Source: [production-readiness audit](audits/production-readiness-audit.md) Vector 1, F1.6 + F1.7.
+- **AUDIT-V1-B — tenant-scoping & internal-route defense-in-depth (hardening).** One slice: add `AccountId` to the `GetAllEventsAsync` / `GetParticipantsAsync` predicates (F1.1) and to the call/SMS/intake-SMS handoff lookups (F1.3); hash `KeepRequest.PageToken` at rest (F1.2); attach a route-level policy to `/internal/*` entitlement endpoints and an allowlist check on `featureKey` (F1.8, F1.9); add `Guid.Empty` / invite-email guards (F1.10). None exploitable today. Source: [production-readiness audit](audits/production-readiness-audit.md) Vector 1.
 
 ## Done / evidence index
 
