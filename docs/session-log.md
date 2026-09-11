@@ -4,16 +4,16 @@
 Locked decisions → [decision-index](decisions/decision-index.md). Working guardrails → CLAUDE.md.
 If a line here would need editing when the workboard changes, it belongs in the workboard, not here.
 
-**Updated 2026-09-11.** GAP-094 is code-complete (094-1 `197457b8`, 094-2), awaiting Christian's
-diff review ([BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md)). GAP-095 is complete —
-both slices reviewed and committed (095-2 `d1d2d0dc`, 095-1 `67648891`)
-([BL155](build-log/155-gap-095-auth-response-enumeration-hardening.md)).
-GAP-040 discovery ran 2026-09-11 (see workboard item 8) — no false claims found, but Price Book /
-Proposed-vs-Actual-Work is missing from marketing copy and the "trust and continuity layer" tagline
-isn't on the marketing pages. Christian deferred the copy fix until app work stabilizes; don't
-re-run discovery, just pick it back up from the workboard findings when ready.
-Next session: continue down the locked pilot-gate order after GAP-040 (GAP-063, GAP-048, GAP-049),
-or start unstarted audit Vector 6, 7, 9, 10, or 11.
+**Updated 2026-09-11.** GAP-094 and GAP-095 are reviewed, merged, and deployed to `main`.
+Feedback / Help & Updates is code-complete; 038-R0 (enforced schema validation) and 038-R1
+(`platform/updates.json` published to R2, verified via a clean production `#/help` read with no new
+`content_source_failure` alerts) are done. The remaining handoff is **038-R3**: verify authenticated
+Help, banner dismissal, and one harmless feedback submission reaching the founder channel, and get
+explicit founder acceptance of the single-webhook outage posture.
+Follow [the founder operations guide](runbook/feedback-help-updates-operations.md).
+After that verification, start the **Proposed Work & Commercial Quotes** decision session from the
+[workboard decision queue](workboard.md#decision-queue). GAP-040 marketing copy remains deliberately
+deferred until the underlying application feature set stabilizes.
 
 ## Baseline
 
@@ -48,9 +48,13 @@ thanked identically, `ApiError` message map) + "Report a problem" `#/help` heade
 **038-2d-iii landed 2026-09-10** — all-roles "Send feedback" rows in `AccountMenu` (positional
 `itemsRef` math replaced with a DOM-order registrar) + `MobileNavMenu`, gated on
 `VITE_FEEDBACK_ENABLED`; `ophalo-app` 1169/1169. **All of GAP-038 038-2 is code-complete.**
-The only remaining GAP-038 work is the founder's paired activation in the pilot deploy window:
-`Feedback__Enabled=true` + `FounderChannel__WebhookUrl` (Railway) + `VITE_FEEDBACK_ENABLED=true`
-(PWA build), set together (038-2d-i fails the deploy on a half-configured pair).
+The remaining release splits are: **038-R0** run the enforced `pnpm validate:updates` schema check;
+**038-R1** upload `docs/content/updates.json` to R2 at `platform/updates.json`; **038-R2** is
+already complete (the production PWA has `VITE_FEEDBACK_ENABLED=true`); **038-R3** verify authenticated Help,
+banner dismissal, and one harmless feedback submission reaching the founder channel. Production API
+feedback is already configured. R3 also requires explicit founder acceptance of the single-webhook
+outage posture; do not scale beyond one API replica without the deferred worker/cache hardening.
+The standalone publisher/preview convenience is future GAP-087, not a release prerequisite.
 
 **GAP-073 — request-detail composer draft safety (pilot gate).** [ADR-502](decisions/ADR-502-request-detail-composer-draft-safety.md);
 [BL150](build-log/150-gap-073-request-detail-composer-draft-safety.md) carries the spec + the
@@ -78,19 +82,9 @@ was reviewed, committed as `b7c815e4`, and pushed to `main` on 2026-09-11. It ma
 file, no drift from preflight. `AuthApiTests` 37/37 (2 new regressions), unit 1909/1909,
 architecture 14/14. Hot blocker: none.
 
-**GAP-094 — auth-code / invite issuance rate limiting (pilot gate).**
-[BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md) carries the locked decisions, file
-gate, and completion record. **094-1 (public magic-link issuance) implemented and verified
-2026-09-11, committed as `197457b8`, awaiting Christian's diff review** — `IAuthIssuanceThrottle`
-(Application) acquires one-or-more partitions all-or-nothing in one PostgreSQL transaction, reused
-unchanged by 094-2's two-key acquisition; `EfAuthIssuanceThrottle` (Infrastructure) is entity-free —
-`INSERT … ON CONFLICT … DO UPDATE … WHERE … RETURNING` per partition, no DbSet/model registration;
-`/auth/start` + `/auth/signin` share a 3-per-15-minute recipient allowance, denial is a body-free
-429 (`Auth.IssuanceRateLimited`). Migration `20260911120000_AddAuthIssuanceThrottles` hand-written
-(no `.Designer.cs`, no model snapshot change). 50/50 auth integration tests pass against real
-Postgres, including a cross-IP proof (`RateLimitIntegrationTests.cs`) showing the 4th denied attempt
-creates no new auth-code row and doesn't invalidate the 3rd request's still-exchangeable code.
-**094-2 (authenticated invite issuance) begins only after this review/commit.** Hot blocker: none.
+**GAP-094 — auth-code / invite issuance rate limiting (pilot gate).** Both public magic-link and
+authenticated-invite slices are reviewed, merged, and deployed. [BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md)
+holds the decisions, proof, and migration detail. Hot blocker: none.
 
 **`ophalo-web` Next maintenance.** Separate, implementation-ready maintenance record:
 [BL151](build-log/151-ophalo-web-next-16-3-maintenance-preflight.md). Upgrade only Next `16.2.9` →
@@ -98,44 +92,17 @@ creates no new auth-code row and doesn't invalidate the 3rd request's still-exch
 then pass local build/typecheck and founder-owned Vercel preview acceptance. React 19.3 and .NET
 SDK/Docker reproducibility are intentionally separate follow-ups; do not batch this with GAP-073.
 
-**Deferred operational to-do — Help & Updates feed bootstrap.** After GAP-073, upload the canonical
-`docs/content/updates.json` to the existing production R2 bucket as `platform/updates.json`.
-Production logs prove R2 is reachable but the object is missing; upload + one valid feed read resets
-the alert streak. No deploy or code change.
+**Feedback production release.** 038-R0 (enforced schema validation) and 038-R1 (R2 feed publish,
+verified 2026-09-11) are done. 038-R2 was already complete: the PWA feature flag is enabled.
+Remaining: **038-R3** (authenticated end-to-end verification and founder outage-posture acceptance).
+The runbook carries access, rollback, guide, and feedback-triage steps. Do not create another
+feedback batch unless operational verification exposes a concrete defect.
 
 ## Next
 
-Code order is locked in the workboard Next list: GAP-073 → GAP-091 → GAP-093 → GAP-094 → GAP-095 →
-GAP-040 → GAP-063 → GAP-048 → GAP-049 → GAP-092 → GAP-072 → GAP-047. GAP-073 protects
-customer-reply/internal-note drafts; GAP-091 prevents field-work loss in Quick Capture; GAP-093
-restores a global account-lifecycle fail-closed backstop; GAP-094 prevents auth mail-bombing and
-sign-in-invalidation DoS; GAP-095 closes externally observable auth enumeration. The latter three
-are now supervised-pilot gates, placed after the code-complete work-loss gates and before marketing
-or routine workflow gates. GAP-092 remains a pilot-risk correction. Audit Vectors 1–5 are complete
-(2026-09-10); Vector 8 discovery is complete (2026-09-11, findings in
-[production-readiness audit](audits/production-readiness-audit.md) Vector 8) — GAP-096 remains a
-pre-GA hardening batch with no pilot urgency. Vectors 6, 7, 9, 10, 11 are not started (Vector 6's
-F6.1 landed as `dc50f134` outside the full-vector pass). GAP-038 discovery ADR locked ([ADR-500](decisions/ADR-500-in-product-feedback-and-help-updates-loop.md));
-route/compatibility policy locked ([ADR-501](decisions/ADR-501-api-route-and-compatibility-policy.md):
-no `/api/v1` prefix, flat routes, domain-owned — GAP-038's `GET /updates` + `POST /feedback` are
-Foundation-owned; ADR-500 amended). Preflight done 2026-09-07: all named frontend surfaces
-(`MobileNavMenu`, `RequestListContent`, `App.tsx` hash router, `--ophalo-accent`/`--ophalo-attention`
-tokens) and backend patterns (minimal-API endpoints, typed HttpClient, `OpHaloDbContext`) confirmed;
-no founder-channel webhook and no CSP config exist yet. Failed-delivery scope settled: bounded retry
-+ backlog alert, no operator UI (inside the ADR-293 boundary). Implementation
-build-log started ([BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md)):
-D1–D8 open decisions drafted with recommendations (R2 content source, backend-proxied guide images
-to drop the CSP dependency, `snarkdown`+`dompurify`, 5s/5min proxy, minimal `feedback` table + retry
-BackgroundService, proposed visual values, two shell entry points, 038-1/038-2 slice split).
-D1–D8 resolved after a review pass (delete-on-success → null-body-on-success + 7-day metadata sweep;
-explicit retry backoff 1/5/15/60/180 min; generic webhook notifier; guide-image proxy constrained
-to a fixed R2 prefix + MIME/size caps; CSP baseline deferred to its own DEF ticket). D5 is
-persist-first, at-least-once, scrub-on-success (`503`/`202` cases specified). The original three
-slices are 038-1a content backend (no founder-channel infra) → 038-1b content frontend → 038-2
-feedback path; 038-2 is now gate-split as recorded in Active. **038-1a and all 038-1b slices landed
-2026-09-08** (see the BL149 completion records). R2 has no restorable S3-style object versioning;
-repo history is the rollback path. GAP-054 slice 054-1 landed as `4f1caffb`; it is no longer a
-GAP-038 blocker. GAP-072 still needs a discovery ADR.
+Complete 038-R3 above. Then start Proposed Work & Commercial Quotes discovery;
+the first deliverable is a decision record, not implementation. The workboard remains authoritative
+for all other pilot gates, deferrals, and audit work.
 
 ## Hot blocker
 

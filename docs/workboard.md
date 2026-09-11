@@ -50,13 +50,18 @@ regenerated lockfile/`next-env.d.ts`. React 19.3 and .NET SDK/container pinning 
 separate follow-ups. This is not a pilot gate and must not be batched with GAP-073; Vercel preview
 acceptance remains the deployment gate.
 
-**Founder operational to-do — Help & Updates R2 bootstrap (after GAP-073).** Production R2 is
-reachable but lacks the required `platform/updates.json` object, which causes the empty-feed
-fallback and `content_source_failure` alerts. Upload the canonical
-[`docs/content/updates.json`](content/updates.json) to the existing `ophalo-business-documents`
-bucket at that exact key, then open authenticated Help & Updates (or wait ≤5 minutes) to verify a
-valid read resets the failure streak. No deploy, API code, or Vercel action is required. Not a
-pilot gate; deliberately deferred until GAP-073 is complete.
+**Founder operational to-do — Feedback / Help & Updates production release.** All code is complete
+and production API feedback is configured. **038-R0** (`pnpm --dir web/ophalo-app validate:updates`,
+also enforced by PWA test/build) and **038-R1** (canonical
+[`docs/content/updates.json`](content/updates.json) published to
+`ophalo-business-documents/platform/updates.json`) are done, verified 2026-09-11: production `#/help`
+shows the calm empty state with no new `content_source_failure` alerts since the publish. **038-R2**
+was already complete (the production PWA has `VITE_FEEDBACK_ENABLED=true`). Remaining: **038-R3**
+verify authenticated Help, banner dismissal, and one harmless feedback submission reaches the founder
+channel, with explicit founder acceptance of the single-webhook outage posture; do not
+scale beyond one API replica without delivery-worker/cache hardening. No API code change is required;
+a founder publisher/preview tool is future GAP-087. Not a pilot gate; follow the
+[operations guide](runbook/feedback-help-updates-operations.md).
 
 ## Decision queue
 
