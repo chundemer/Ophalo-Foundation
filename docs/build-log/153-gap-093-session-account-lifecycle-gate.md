@@ -1,6 +1,6 @@
 # BL153 — GAP-093: Session-layer account-lifecycle gate
 
-**Status:** Implemented and verified 2026-09-11 — awaiting Christian's diff review.
+**Status:** Reviewed, committed as `b7c815e4`, and pushed to `main` 2026-09-11.
 
 **Scope reference:** [workboard](../workboard.md) Next item 5; [production-readiness audit](../audits/production-readiness-audit.md) Vector 8, F8.3.
 **Supervised-pilot gate** — before issuing pilot access.
