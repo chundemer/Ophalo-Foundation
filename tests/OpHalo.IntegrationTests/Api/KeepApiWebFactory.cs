@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpHalo.Foundation.Application.Abstractions.Messaging;
 using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Core.Entities.Accounts;
@@ -72,6 +73,13 @@ public sealed class KeepApiWebFactory : WebApplicationFactory<Program>, IAsyncLi
                 services.Remove(descriptor);
 
             services.AddSingleton<IEmailSender>(EmailSender);
+
+            // GAP-095 095-1: replace the real async-dispatch queue with a synchronous
+            // in-request send so existing tests keep observing sent emails immediately.
+            var queueDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IMagicLinkDispatchQueue));
+            if (queueDescriptor is not null)
+                services.Remove(queueDescriptor);
+            services.AddSingleton<IMagicLinkDispatchQueue, SynchronousMagicLinkDispatchQueue>();
         });
     }
 
@@ -160,6 +168,43 @@ public sealed class CapturingEmailSender : IEmailSender
 }
 
 /// <summary>
+/// Test-only <see cref="IMagicLinkDispatchQueue"/> that sends inline and synchronously
+/// (GAP-095 095-1). Keeps every existing auth test deterministic — no channel, no background
+/// thread, no drain polling. The real bounded-<c>Channel&lt;T&gt;</c>/background-worker path
+/// gets its own dedicated coverage against a controllable blocking IEmailSender; see BL155.
+/// </summary>
+public sealed class SynchronousMagicLinkDispatchQueue(
+    IEmailSender emailSender,
+    ILogger<SynchronousMagicLinkDispatchQueue> logger) : IMagicLinkDispatchQueue
+{
+    public void Enqueue(MagicLinkDispatchItem item)
+    {
+        try
+        {
+            var sendResult = emailSender.SendAsync(
+                item.RecipientEmail,
+                item.Subject,
+                item.HtmlBody,
+                item.TextBody,
+                CancellationToken.None).GetAwaiter().GetResult();
+
+            if (sendResult.IsFailure)
+            {
+                logger.LogWarning(
+                    "{LogContext} email delivery failed for code {CodeId}: {ErrorCode}.",
+                    item.LogContext,
+                    item.CodeId,
+                    sendResult.Error.Code);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "{LogContext} email delivery failed for code {CodeId}.", item.LogContext, item.CodeId);
+        }
+    }
+}
+
+/// <summary>
 /// WebApplicationFactory with Classification=Pilot and MaxPilotAccounts=1.
 /// Used by AuthStartPilotCapTests to exercise the pilot capacity gate.
 /// </summary>
@@ -191,6 +236,11 @@ public sealed class PilotCapWebFactory : WebApplicationFactory<Program>, IAsyncL
             if (descriptor is not null)
                 services.Remove(descriptor);
             services.AddSingleton<IEmailSender>(EmailSender);
+
+            var queueDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IMagicLinkDispatchQueue));
+            if (queueDescriptor is not null)
+                services.Remove(queueDescriptor);
+            services.AddSingleton<IMagicLinkDispatchQueue, SynchronousMagicLinkDispatchQueue>();
         });
     }
 
@@ -251,6 +301,11 @@ public sealed class ReleaseGateClosedWebFactory : WebApplicationFactory<Program>
             if (descriptor is not null)
                 services.Remove(descriptor);
             services.AddSingleton<IEmailSender>(EmailSender);
+
+            var queueDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IMagicLinkDispatchQueue));
+            if (queueDescriptor is not null)
+                services.Remove(queueDescriptor);
+            services.AddSingleton<IMagicLinkDispatchQueue, SynchronousMagicLinkDispatchQueue>();
         });
     }
 

@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpHalo.Foundation.Application.Abstractions.Messaging;
 using OpHalo.Foundation.Core.Entities.Accounts;
@@ -25,8 +24,10 @@ namespace OpHalo.Foundation.Application.Auth;
 /// before issuing a NewAccount code. Pilot-full returns a non-neutral 409 — the caller
 /// may prompt the user to join a waitlist.
 ///
-/// Email delivery (D8): direct IEmailSender, best-effort. Delivery failure must not
-/// change the public response.
+/// Email delivery (D8): enqueued via IMagicLinkDispatchQueue, sent out of band by
+/// MagicLinkDispatchBackgroundService (GAP-095 095-1) — never awaited on the request path, so
+/// provider latency cannot distinguish issuance outcomes. Best-effort: a dropped or failed
+/// send never changes the public response.
 ///
 /// Logging (D9): log only safe IDs. Do not log email, business name, name, raw codes,
 /// or magic-link URLs.
@@ -34,11 +35,10 @@ namespace OpHalo.Foundation.Application.Auth;
 public sealed class StartAuthService(
     IAuthCodePersistence persistence,
     IAuthIssuanceThrottle issuanceThrottle,
-    IEmailSender emailSender,
+    IMagicLinkDispatchQueue dispatchQueue,
     IClock clock,
     IOptions<MagicLinkSettings> magicLinkSettings,
-    IOptions<SignupDefaultsSettings> signupDefaults,
-    ILogger<StartAuthService> logger)
+    IOptions<SignupDefaultsSettings> signupDefaults)
 {
     // Shared with SignInAuthService (GAP-094/BL154): one recipient allowance across both
     // issuance endpoints, so a caller can't bypass the cap by alternating /start and /signin.
@@ -117,27 +117,13 @@ public sealed class StartAuthService(
 
         var magicLink = $"{magicLinkSettings.Value.PublicBaseUrl}/auth/exchange?code={rawCode}";
 
-        try
-        {
-            var sendResult = await emailSender.SendAsync(
-                normalizedEmail,
-                MagicLinkEmailTemplate.Subject,
-                MagicLinkEmailTemplate.BuildHtmlBody(magicLink),
-                MagicLinkEmailTemplate.BuildTextBody(magicLink),
-                cancellationToken);
-
-            if (sendResult.IsFailure)
-            {
-                logger.LogWarning(
-                    "Magic link email delivery failed for code {CodeId}: {ErrorCode}.",
-                    code.Id,
-                    sendResult.Error.Code);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Magic link email delivery failed for code {CodeId}.", code.Id);
-        }
+        dispatchQueue.Enqueue(new MagicLinkDispatchItem(
+            code.Id,
+            normalizedEmail,
+            MagicLinkEmailTemplate.Subject,
+            MagicLinkEmailTemplate.BuildHtmlBody(magicLink),
+            MagicLinkEmailTemplate.BuildTextBody(magicLink),
+            LogContext: "Magic link"));
 
         return Result.Success();
     }
@@ -160,27 +146,13 @@ public sealed class StartAuthService(
 
         var magicLink = $"{magicLinkSettings.Value.PublicBaseUrl}/auth/exchange?code={rawCode}";
 
-        try
-        {
-            var sendResult = await emailSender.SendAsync(
-                normalizedEmail,
-                MagicLinkEmailTemplate.Subject,
-                MagicLinkEmailTemplate.BuildHtmlBody(magicLink),
-                MagicLinkEmailTemplate.BuildTextBody(magicLink),
-                cancellationToken);
-
-            if (sendResult.IsFailure)
-            {
-                logger.LogWarning(
-                    "Magic link email delivery failed for code {CodeId}: {ErrorCode}.",
-                    code.Id,
-                    sendResult.Error.Code);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Magic link email delivery failed for code {CodeId}.", code.Id);
-        }
+        dispatchQueue.Enqueue(new MagicLinkDispatchItem(
+            code.Id,
+            normalizedEmail,
+            MagicLinkEmailTemplate.Subject,
+            MagicLinkEmailTemplate.BuildHtmlBody(magicLink),
+            MagicLinkEmailTemplate.BuildTextBody(magicLink),
+            LogContext: "Magic link"));
 
         return Result.Success();
     }
@@ -218,27 +190,13 @@ public sealed class StartAuthService(
 
         var magicLink = $"{magicLinkSettings.Value.PublicBaseUrl}/auth/exchange?code={rawCode}";
 
-        try
-        {
-            var sendResult = await emailSender.SendAsync(
-                normalizedEmail,
-                MagicLinkEmailTemplate.NewAccountSubject,
-                MagicLinkEmailTemplate.BuildNewAccountHtmlBody(magicLink),
-                MagicLinkEmailTemplate.BuildNewAccountTextBody(magicLink),
-                cancellationToken);
-
-            if (sendResult.IsFailure)
-            {
-                logger.LogWarning(
-                    "New-account magic link email delivery failed for code {CodeId}: {ErrorCode}.",
-                    code.Id,
-                    sendResult.Error.Code);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "New-account magic link email delivery failed for code {CodeId}.", code.Id);
-        }
+        dispatchQueue.Enqueue(new MagicLinkDispatchItem(
+            code.Id,
+            normalizedEmail,
+            MagicLinkEmailTemplate.NewAccountSubject,
+            MagicLinkEmailTemplate.BuildNewAccountHtmlBody(magicLink),
+            MagicLinkEmailTemplate.BuildNewAccountTextBody(magicLink),
+            LogContext: "New-account magic link"));
 
         return Result.Success();
     }

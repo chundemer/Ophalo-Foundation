@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpHalo.Foundation.Application.Abstractions.Messaging;
 using OpHalo.Foundation.Core.Entities.Accounts;
@@ -18,16 +17,16 @@ namespace OpHalo.Foundation.Application.Auth;
 /// other ineligible state all return Result.Success with no code issued and no email
 /// sent — enumeration protection. These are expected outcomes, not errors.
 ///
-/// Email delivery (D4): direct IEmailSender, best-effort. Provider failure must not
-/// change the public response — the code is already persisted and the member can retry.
+/// Email delivery (D4): enqueued via IMagicLinkDispatchQueue, sent out of band by
+/// MagicLinkDispatchBackgroundService (GAP-095 095-1). Best-effort — a dropped or failed send
+/// must not change the public response; the code is already persisted and the member can retry.
 /// </summary>
 public sealed class SignInAuthService(
     IAuthCodePersistence persistence,
     IAuthIssuanceThrottle issuanceThrottle,
-    IEmailSender emailSender,
+    IMagicLinkDispatchQueue dispatchQueue,
     IClock clock,
-    IOptions<MagicLinkSettings> settings,
-    ILogger<SignInAuthService> logger)
+    IOptions<MagicLinkSettings> settings)
 {
     // Shared with StartAuthService (GAP-094/BL154): one recipient allowance across both
     // issuance endpoints, so a caller can't bypass the cap by alternating /start and /signin.
@@ -88,30 +87,17 @@ public sealed class SignInAuthService(
             : string.Empty;
         var magicLink = $"{settings.Value.PublicBaseUrl}/auth/exchange?code={rawCode}{mobileSuffix}";
 
-        // Best-effort — delivery failure must not change the public response (D4).
-        // Non-cancellation provider exceptions are caught so enumeration protection
-        // is preserved even when the email transport throws.
-        try
-        {
-            var sendResult = await emailSender.SendAsync(
-                normalizedEmail,
-                MagicLinkEmailTemplate.Subject,
-                MagicLinkEmailTemplate.BuildHtmlBody(magicLink),
-                MagicLinkEmailTemplate.BuildTextBody(magicLink),
-                cancellationToken);
-
-            if (sendResult.IsFailure)
-            {
-                logger.LogWarning(
-                    "Magic link email delivery failed for code {CodeId}: {ErrorCode}.",
-                    code.Id,
-                    sendResult.Error.Code);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Magic link email delivery failed for code {CodeId}.", code.Id);
-        }
+        // Best-effort — delivery failure must not change the public response (D4). Enqueued
+        // rather than awaited (GAP-095 095-1) so provider latency cannot distinguish issuance
+        // outcomes; enumeration protection no longer depends on catching transport exceptions
+        // here at all, since the send happens off the request path.
+        dispatchQueue.Enqueue(new MagicLinkDispatchItem(
+            code.Id,
+            normalizedEmail,
+            MagicLinkEmailTemplate.Subject,
+            MagicLinkEmailTemplate.BuildHtmlBody(magicLink),
+            MagicLinkEmailTemplate.BuildTextBody(magicLink),
+            LogContext: "Magic link"));
 
         return Result.Success();
     }

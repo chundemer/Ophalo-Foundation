@@ -52,6 +52,13 @@ public sealed class FailingEmailWebFactory : Microsoft.AspNetCore.Mvc.Testing.We
             if (descriptor is not null)
                 services.Remove(descriptor);
             services.AddSingleton<IEmailSender, FailingEmailSender>();
+
+            // GAP-095 095-1: synchronous send/log so the failure log lands before the HTTP
+            // response returns — see SynchronousMagicLinkDispatchQueue in KeepApiWebFactory.cs.
+            var queueDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IMagicLinkDispatchQueue));
+            if (queueDescriptor is not null)
+                services.Remove(queueDescriptor);
+            services.AddSingleton<IMagicLinkDispatchQueue, SynchronousMagicLinkDispatchQueue>();
         });
     }
 

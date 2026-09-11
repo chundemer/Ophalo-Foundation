@@ -204,6 +204,12 @@ else
     });
 }
 
+// --- Magic-link async dispatch (GAP-095 095-1) ---
+builder.Services.Configure<MagicLinkDispatchSettings>(builder.Configuration.GetSection("MagicLinkDispatch"));
+builder.Services.AddSingleton<MagicLinkDispatchQueue>();
+builder.Services.AddSingleton<IMagicLinkDispatchQueue>(sp => sp.GetRequiredService<MagicLinkDispatchQueue>());
+builder.Services.AddHostedService<MagicLinkDispatchBackgroundService>();
+
 // --- Business document storage (ADR-471) ---
 var r2Settings = builder.Configuration.GetSection("R2").Get<R2Settings>()
     ?? new R2Settings();

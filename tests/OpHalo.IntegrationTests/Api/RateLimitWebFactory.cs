@@ -42,6 +42,12 @@ public sealed class RateLimitWebFactory : WebApplicationFactory<Program>, IAsync
             if (descriptor is not null)
                 services.Remove(descriptor);
             services.AddSingleton<IEmailSender>(EmailSender);
+
+            // GAP-095 095-1: synchronous queue keeps throttle-count assertions deterministic.
+            var queueDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IMagicLinkDispatchQueue));
+            if (queueDescriptor is not null)
+                services.Remove(queueDescriptor);
+            services.AddSingleton<IMagicLinkDispatchQueue, SynchronousMagicLinkDispatchQueue>();
         });
     }
 
@@ -99,6 +105,12 @@ public sealed class RateLimitNoTrustWebFactory : WebApplicationFactory<Program>,
             if (descriptor is not null)
                 services.Remove(descriptor);
             services.AddSingleton<IEmailSender>(EmailSender);
+
+            // GAP-095 095-1: synchronous queue keeps throttle-count assertions deterministic.
+            var queueDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IMagicLinkDispatchQueue));
+            if (queueDescriptor is not null)
+                services.Remove(queueDescriptor);
+            services.AddSingleton<IMagicLinkDispatchQueue, SynchronousMagicLinkDispatchQueue>();
         });
     }
 
