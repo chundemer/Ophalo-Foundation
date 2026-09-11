@@ -1,7 +1,8 @@
 // Framework-free Quick Capture draft persistence: schema, per-user key, and a debounced
-// autosave coordinator with generation-based cancellation. Kept free of React/React Native
-// imports so the coordination logic (the part with real race conditions) is directly
-// unit-testable, mirroring phoneUtils.ts's split from useQuickCapture.ts.
+// autosave coordinator whose storage operations are serialized through a per-key promise
+// queue (see QuickCaptureDraftCoordinator below — not a generation counter). Kept free of
+// React/React Native imports so the coordination logic (the part with real race conditions) is
+// directly unit-testable, mirroring phoneUtils.ts's split from useQuickCapture.ts.
 //
 // GAP-091 (F5.1) — explicit, short-lived, per-user, authenticated-device local draft for the
 // pilot field-capture workflow. Cleared on logout and on the 401 forced-sign-out path

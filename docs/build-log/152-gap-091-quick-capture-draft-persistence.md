@@ -1,10 +1,15 @@
 # BL152 — GAP-091: Quick Capture draft persistence
 
 **Status:** Implemented, awaiting Christian's diff review — GAP-091 code-complete.
-`mobile/ophalo-mobile` tsc clean, `vitest run` 33/33. Revised once after review caught three
+`mobile/ophalo-mobile` tsc clean, `vitest run` 38/38. Revised once after review caught three
 correctness issues in the first pass (Close re-triggering its own guard, a generation-counter
 race that could erase a newly started capture, and autosave briefly discarding a just-restored
-draft) — see Implementation below for the corrected design.
+draft) — see Implementation below for the corrected design. Verified again after a second review
+pass confirmed the first two fixes and their tests, and flagged that the third fix (the
+restore/autosave gate) had no regression test — closed by extracting `useRestoreApplyGate` into
+its own directly-testable hook plus a render-level integration test proving the storage
+call-order guarantee (`useRestoreApplyGate.test.ts`, `useQuickCaptureDraft.restore.test.ts`;
+`react-test-renderer` added as a dev dependency for this).
 
 **Scope reference:** [workboard](../workboard.md) Next item 4 (AUDIT-V5-A); audit
 [production-readiness audit](../audits/production-readiness-audit.md) Vector 5 F5.1.
@@ -27,7 +32,7 @@ or who backgrounds/swipes away the modal, lost the whole capture.
 | D3 | **Plain AsyncStorage** — explicit, short-lived, per-user, authenticated-device exception for this pilot workflow (not a general statement about the app's storage posture, and not a SecureStore replacement candidate given free-text description length). |
 | D4 | **No TTL.** `savedAt` is stored for display/schema evolution; enforcing an expiry would recreate the exact data-loss failure this gap exists to close, with no retention-policy basis for a number. |
 | D5 | **Non-destructive close vs. destructive discard are two separate flows.** Dismissal (Cancel tap, swipe, back) while the form has content shows "Save draft and close?" → *Keep editing* / *Close* — Close flushes the pending write and leaves the draft persisted for restore. A separate, always-available "Discard draft" action (shown whenever the form has content, restored or freshly typed) clears storage after its own destructive confirm. Restored drafts show a timestamped banner. |
-| D6 | **Lifecycle-race protection**, not just a debounce: hydration blocks editing (loading state until the initial AsyncStorage read resolves); a generation counter cancels a queued/in-flight write on discard or successful-submit cleanup so it cannot resurrect the draft; cleanup is awaited before navigating away on success; the draft is preserved on validation/API/network failure; a best-effort `AppState` background flush is attempted (explicitly not a guarantee against an OS process kill — no client code can promise that). |
+| D6 | **Lifecycle-race protection**, not just a debounce: hydration blocks editing (loading state until the initial AsyncStorage read resolves); every write/removal is serialized through a single per-key promise queue (ordering, not a generation counter, is the guarantee) so discard or successful-submit cleanup can never be resurrected by a write already in flight, nor can a new capture started right after a discard be erased by that discard's own removal settling late; cleanup is awaited before navigating away on success; the draft is preserved on validation/API/network failure; a `useRestoreApplyGate` hook holds autosave off until a restored draft has been applied to form state (or hydration confirmed there was none), so autosave can never observe one render of blank state and wipe a just-restored draft; a best-effort `AppState` background flush is attempted (explicitly not a guarantee against an OS process kill — no client code can promise that). |
 | D7 | **Package manager**: `package-lock.json` / npm is canonical for `mobile/ophalo-mobile` (more recently touched than `pnpm-lock.yaml`; no CI/`packageManager` pin exists). `pnpm-lock.yaml` is deliberately left untouched and stale — **not to be used for mobile installs** until reconciled or removed. That reconciliation is out of scope here. |
 
 ## Implementation
@@ -47,11 +52,19 @@ or who backgrounds/swipes away the modal, lost the whole capture.
   existing `phoneUtils.ts` / `useQuickCapture.ts` split.
 - `src/hooks/useQuickCaptureDraft.ts` (new) — thin React binding: hydrate-on-mount/account-change,
   `AppState` background-flush subscription, `saveDraft` / `flushDraft` / `discardDraft`.
-- `app/modal.tsx` — hydration gate (loading state before `hydrated`); a `restoreApplied` flag set
-  by the restore effect (whether or not there was anything to restore) that gates the autosave
-  effect, so the very first post-hydration render — where React state is still blank because the
-  restore effect hasn't run yet — can't have autosave discard a just-restored draft ahead of it
-  being re-applied 300ms later; restored-draft banner + "Discard draft" action;
+- `src/hooks/useRestoreApplyGate.ts` (new) — extracted out of `modal.tsx` so the restore/autosave
+  race fix is directly testable without mounting the full screen: applies a restored draft
+  exactly once, synchronously within the same effect/render that flips its returned flag to
+  `true` (whether or not there was anything to restore). React batches the consumer's field-state
+  updates together with that flip into one commit, so a caller gating its own autosave effect on
+  the returned flag can never observe a render where the gate is open but the restore hasn't
+  landed yet — closing the exact race the second review pass caught (no regression test on the
+  first pass's fix).
+- `app/modal.tsx` — hydration gate (loading state before `hydrated`); autosave gated on
+  `useRestoreApplyGate`'s returned flag instead of a hand-rolled `restoreApplied` state/effect
+  pair, so the very first post-hydration render — where React state would otherwise still be
+  blank because the restore hasn't been applied yet — can't have autosave discard a just-restored
+  draft; restored-draft banner + "Discard draft" action;
   `useNavigation().addListener('beforeRemove', …)` guard covering every dismissal path (Cancel
   tap included — Cancel stays a plain `router.back()`; the single `beforeRemove` listener is the
   one place the confirm lives, avoiding a double-dialog from two independent checks). The Close
@@ -79,7 +92,15 @@ or who backgrounds/swipes away the modal, lost the whole capture.
   `setItem` landing after `discard()`'s `removeItem`; a late autosave write landing after
   successful-submit cleanup; and — added after review — a new capture started immediately after
   a discard while the old write is still in flight, proving the new capture's write survives the
-  old write/removal settling late.
+  old write/removal settling late. `src/hooks/__tests__/useRestoreApplyGate.test.ts` (new, 4
+  cases) proves the gate applies a restored draft in the same commit that opens (`react-test-renderer`,
+  no JSX — `.ts` test files use `React.createElement`). `src/hooks/__tests__/useQuickCaptureDraft.restore.test.ts`
+  (new, 1 case) wires the real `useQuickCaptureDraft` + `useRestoreApplyGate` together — the same
+  pairing `modal.tsx` uses — behind a mocked `AsyncStorage`, and asserts the exact storage call
+  order on reopening a persisted draft: a single `getItem` read followed by one `setItem` of the
+  *restored* fields, with no `removeItem` and no blank `setItem` ever occurring first. Added
+  `react-test-renderer@19.2.3` (pinned to the installed `react` version) as a dev-only dependency
+  for these two files.
 
 ## Known gap, not addressed here
 

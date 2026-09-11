@@ -27,6 +27,7 @@ import {
 } from '@/src/hooks/useQuickCapture';
 import { QuickCaptureDraftFields, isDraftBlank } from '@/src/hooks/quickCaptureDraft';
 import { useQuickCaptureDraft } from '@/src/hooks/useQuickCaptureDraft';
+import { useRestoreApplyGate } from '@/src/hooks/useRestoreApplyGate';
 
 const SOURCE_OPTIONS: { label: string; value: string }[] = [
   { label: 'Phone call', value: 'phone' },
@@ -109,33 +110,23 @@ function CaptureModalContent() {
   const suppressGuardRef = useRef(false);
 
   // Gates autosave: without this, the first post-hydration render still shows blank React
-  // state (this effect below hasn't applied the restore yet), so autosave would see a blank
-  // form and discard() the just-restored draft, only re-saving it 300ms later — an app
-  // termination inside that window would lose the restore. Autosave stays off until this
-  // effect has run at least once (whether or not there was anything to restore).
-  const [restoreApplied, setRestoreApplied] = useState(false);
-
-  // Apply a restored draft exactly once, right after hydration completes.
-  useEffect(() => {
-    if (!hydrated) return;
-    if (restoredDraft) {
-      setPhone(restoredDraft.phone);
-      setCustomerName(restoredDraft.customerName);
-      setCustomerEmail(restoredDraft.customerEmail);
-      setDescription(restoredDraft.description);
-      setSource(restoredDraft.source);
-      setShowAddress(restoredDraft.showAddress);
-      setAddrLine1(restoredDraft.addrLine1);
-      setAddrLine2(restoredDraft.addrLine2);
-      setAddrCity(restoredDraft.addrCity);
-      setAddrState(restoredDraft.addrState);
-      setAddrZip(restoredDraft.addrZip);
-    }
-    setRestoreApplied(true);
-    // Intentionally hydrated-only: restoredDraft is set once by the hook and must not be
-    // re-applied on every subsequent field edit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
+  // state (the restore hasn't been applied yet), so autosave would see a blank form and
+  // discard() the just-restored draft, only re-saving it 300ms later — an app termination
+  // inside that window would lose the restore. Autosave stays off until the gate flips true
+  // (whether or not there was anything to restore) — see useRestoreApplyGate.ts.
+  const restoreApplied = useRestoreApplyGate(hydrated, restoredDraft, (draft) => {
+    setPhone(draft.phone);
+    setCustomerName(draft.customerName);
+    setCustomerEmail(draft.customerEmail);
+    setDescription(draft.description);
+    setSource(draft.source);
+    setShowAddress(draft.showAddress);
+    setAddrLine1(draft.addrLine1);
+    setAddrLine2(draft.addrLine2);
+    setAddrCity(draft.addrCity);
+    setAddrState(draft.addrState);
+    setAddrZip(draft.addrZip);
+  });
 
   // Debounced autosave on every field change, once hydration and the restore step have settled.
   useEffect(() => {
