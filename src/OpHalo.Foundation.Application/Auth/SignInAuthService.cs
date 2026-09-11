@@ -23,11 +23,17 @@ namespace OpHalo.Foundation.Application.Auth;
 /// </summary>
 public sealed class SignInAuthService(
     IAuthCodePersistence persistence,
+    IAuthIssuanceThrottle issuanceThrottle,
     IEmailSender emailSender,
     IClock clock,
     IOptions<MagicLinkSettings> settings,
     ILogger<SignInAuthService> logger)
 {
+    // Shared with StartAuthService (GAP-094/BL154): one recipient allowance across both
+    // issuance endpoints, so a caller can't bypass the cap by alternating /start and /signin.
+    private const int RecipientPermitLimit = 3;
+    private static readonly TimeSpan RecipientWindow = TimeSpan.FromMinutes(15);
+
     public async Task<Result> HandleAsync(string email, string? clientHint, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(settings.Value.PublicBaseUrl))
@@ -35,6 +41,16 @@ public sealed class SignInAuthService(
 
         var nowUtc = clock.UtcNow;
         var normalizedEmail = EmailNormalizer.Normalize(email);
+
+        // Acquired before classification/code issuance/email dispatch (BL154) — a denied
+        // recipient never reaches persistence or IEmailSender, and below-cap neutral outcomes
+        // (unknown/ineligible email) are unaffected, preserving the D8 enumeration contract.
+        var allowed = await issuanceThrottle.TryAcquireAsync(
+            [new AuthIssuanceThrottleRequest(
+                AuthIssuanceThrottleScopes.Recipient, normalizedEmail, RecipientPermitLimit, RecipientWindow)],
+            cancellationToken);
+        if (!allowed)
+            return Result.Failure(Error.Create("Auth.IssuanceRateLimited", "Too many attempts. Try again later."));
 
         var classification = await persistence.FindEligibleSignInMemberByEmailAsync(normalizedEmail, cancellationToken);
 

@@ -19,6 +19,13 @@ public static class ErrorHttpMapper
     /// </param>
     public static IResult ToHttpResult(Error error, IReadOnlyDictionary<string, object?>? extraExtensions = null)
     {
+        // Auth issuance throttle (GAP-094/BL154): body-free 429, deliberately outside the
+        // ProblemDetails pipeline below — a JSON body (even a generic one) is metadata an
+        // exhaustion response should not need to carry, and this keeps the response identical
+        // regardless of which recipient/account allowance denied the request.
+        if (error.Code == "Auth.IssuanceRateLimited")
+            return Results.StatusCode(StatusCodes.Status429TooManyRequests);
+
         var (statusCode, title, detailOverride) = GetProblemMeta(error);
         return CreateProblem(statusCode, title, error, detailOverride, extraExtensions);
     }

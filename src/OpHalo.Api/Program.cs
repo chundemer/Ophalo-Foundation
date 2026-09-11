@@ -171,6 +171,7 @@ builder.Services.AddScoped<CompleteAuthContinuationService>();
 builder.Services.AddScoped<AuthSessionIssuer>();
 builder.Services.AddScoped<RedeemMobileHandoffService>();
 builder.Services.AddScoped<IAuthCodePersistence, EfAuthCodePersistence>();
+builder.Services.AddScoped<IAuthIssuanceThrottle, EfAuthIssuanceThrottle>();
 builder.Services.AddScoped<IMobileHandoffCodePersistence, EfMobileHandoffCodePersistence>();
 builder.Services.AddScoped<IPostAuthContinuationPersistence, EfPostAuthContinuationPersistence>();
 builder.Services.AddScoped<SendInviteService>();

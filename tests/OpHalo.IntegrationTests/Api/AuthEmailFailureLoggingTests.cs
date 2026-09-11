@@ -77,14 +77,16 @@ public sealed class FailingEmailWebFactory : Microsoft.AspNetCore.Mvc.Testing.We
 public sealed class AuthEmailFailureLoggingTests(FailingEmailWebFactory factory)
     : IClassFixture<FailingEmailWebFactory>
 {
-    private const string Email = "gap039-delivery-failure@example.com";
+    // GAP-094/BL154: this fixture's database is never reset between [Fact]s (by design — see
+    // FailingEmailWebFactory), so each test must use its own recipient. A shared email across
+    // 5 tests would trip the new 3-per-15-minute recipient issuance throttle on the 4th/5th call.
 
     [Fact]
     public async Task Start_WithFailingEmailProvider_StillReturnsNeutralSuccess()
     {
         var response = await factory.CreateClient().PostAsJsonAsync("/auth/start", new
         {
-            email = Email,
+            email = "gap039-neutral-success@example.com",
             businessName = "GAP-039 Test Co",
             name = "Test Owner",
             timeZone = "America/Chicago"
@@ -96,11 +98,12 @@ public sealed class AuthEmailFailureLoggingTests(FailingEmailWebFactory factory)
     [Fact]
     public async Task Start_WithFailingEmailProvider_LogsFailureWithCodeIdNotEmail()
     {
+        const string email = "gap039-code-id-not-email@example.com";
         factory.LogCapture.Clear();
 
         await factory.CreateClient().PostAsJsonAsync("/auth/start", new
         {
-            email = Email,
+            email,
             businessName = "GAP-039 Test Co",
             name = "Test Owner",
             timeZone = "America/Chicago"
@@ -109,7 +112,7 @@ public sealed class AuthEmailFailureLoggingTests(FailingEmailWebFactory factory)
         var messages = factory.LogCapture.Messages;
         Assert.Contains(messages, m => m.Contains("magic link email delivery failed", StringComparison.OrdinalIgnoreCase)
             && m.Contains("Email.DeliveryFailed"));
-        Assert.DoesNotContain(messages, m => m.Contains(Email));
+        Assert.DoesNotContain(messages, m => m.Contains(email));
     }
 
     [Fact]
@@ -119,7 +122,7 @@ public sealed class AuthEmailFailureLoggingTests(FailingEmailWebFactory factory)
 
         await factory.CreateClient().PostAsJsonAsync("/auth/start", new
         {
-            email = Email,
+            email = "gap039-specific-code-id@example.com",
             businessName = "GAP-039 Test Co",
             name = "Test Owner",
             timeZone = "America/Chicago"
@@ -139,7 +142,7 @@ public sealed class AuthEmailFailureLoggingTests(FailingEmailWebFactory factory)
 
         var response = await factory.CreateClient().PostAsJsonAsync("/auth/start", new
         {
-            email = Email,
+            email = "gap039-correlation-id@example.com",
             businessName = "GAP-039 Test Co",
             name = "Test Owner",
             timeZone = "America/Chicago"
@@ -158,7 +161,7 @@ public sealed class AuthEmailFailureLoggingTests(FailingEmailWebFactory factory)
 
         await factory.CreateClient().PostAsJsonAsync("/auth/start", new
         {
-            email = Email,
+            email = "gap039-release-id@example.com",
             businessName = "GAP-039 Test Co",
             name = "Test Owner",
             timeZone = "America/Chicago"

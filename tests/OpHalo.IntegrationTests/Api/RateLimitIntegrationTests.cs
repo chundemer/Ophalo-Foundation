@@ -1,9 +1,11 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
+using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Core.Entities;
@@ -261,5 +263,119 @@ public sealed class CustomerPageRateLimitProofTests : IClassFixture<RateLimitWeb
         var req = new HttpRequestMessage(HttpMethod.Get, $"/keep/r/{pageToken}");
         req.Headers.TryAddWithoutValidation("CF-Connecting-IP", cfIp);
         return _client.SendAsync(req);
+    }
+}
+
+/// <summary>
+/// Proves the GAP-094/BL154 recipient issuance throttle on /auth/start + /auth/signin is a
+/// distinct, PostgreSQL-authoritative partition — independent of the pre-existing per-IP "auth"
+/// policy (this factory has both active). Each of the four requests below comes from its own
+/// trusted CF-Connecting-IP, each nowhere near the per-IP policy's own 10/min budget, so a
+/// denial on the 4th can only be explained by the recipient-scoped throttle.
+/// </summary>
+public sealed class AuthIssuanceThrottleProofTests : IClassFixture<RateLimitWebFactory>, IAsyncLifetime
+{
+    private readonly RateLimitWebFactory _factory;
+    private readonly HttpClient _client;
+
+    private Guid _ownerAccountUserId;
+    private const string OwnerEmail = "owner@issuance-throttle-tests.com";
+
+    public AuthIssuanceThrottleProofTests(RateLimitWebFactory factory)
+    {
+        _factory = factory;
+        _client = factory.CreateClient();
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _factory.ResetDatabaseAsync();
+        _factory.EmailSender.Clear();
+
+        var now = DateTime.UtcNow;
+        var provisionResult = new AccountProvisioningService().CreateVerified(
+            email: OwnerEmail,
+            name: "Issuance Throttle Owner",
+            businessName: "Issuance Throttle Co",
+            purpose: AccountPurpose.Business,
+            timeZone: "Australia/Sydney",
+            plan: AccountPlan.Trial,
+            classification: AccountClassification.Production,
+            nowUtc: now,
+            trialEndsAtUtc: now.AddDays(30));
+        Assert.True(provisionResult.IsSuccess);
+        var graph = provisionResult.Value;
+        _ownerAccountUserId = graph.Owner.Id;
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+
+        db.Users.Add(graph.User);
+        db.Accounts.Add(graph.Account);
+        db.AccountUsers.Add(graph.Owner);
+        db.AccountEntitlements.Add(graph.Entitlements);
+
+        var ownerFk = db.Entry(graph.Account).Property(a => a.PrimaryOwnerAccountUserId);
+        ownerFk.CurrentValue = null;
+        await db.SaveChangesAsync();
+        ownerFk.CurrentValue = graph.Owner.Id;
+        await db.SaveChangesAsync();
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
+    [Fact]
+    public async Task StartAndSignIn_FourthIssuanceForSameRecipientFromDistinctTrustedIps_Returns429WithNoNewCodeOrInvalidation()
+    {
+        // Mixed /auth/signin + /auth/start against one recipient — one shared allowance, not
+        // per-endpoint. OwnerEmail is an existing active member, so /auth/start classifies it
+        // the same as /auth/signin (ExistingMember) and both issue mail.
+        var first = await SendAsync("/auth/signin", new { email = OwnerEmail }, "203.0.113.51");
+        var second = await SendAsync("/auth/start", new
+        {
+            email = OwnerEmail,
+            businessName = "Ignored — existing member",
+            timeZone = "Australia/Sydney"
+        }, "203.0.113.52");
+        var third = await SendAsync("/auth/signin", new { email = OwnerEmail }, "203.0.113.53");
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, third.StatusCode);
+        Assert.Equal(3, _factory.EmailSender.SentEmails.Count);
+
+        var thirdCode = _factory.EmailSender.SentEmails[^1].ExtractCode();
+        Assert.NotNull(thirdCode);
+
+        var codesBefore = await CountAuthCodesAsync();
+
+        var fourth = await SendAsync("/auth/signin", new { email = OwnerEmail }, "203.0.113.54");
+
+        Assert.Equal((HttpStatusCode)429, fourth.StatusCode);
+        Assert.Empty(await fourth.Content.ReadAsStringAsync());
+
+        // The denial issues no code at all — not "issues one but withholds the email".
+        var codesAfter = await CountAuthCodesAsync();
+        Assert.Equal(codesBefore, codesAfter);
+
+        // The third request's still-unconsumed code/link must remain usable — a denied 4th
+        // attempt must not have invalidated it.
+        var exchange = await _client.PostAsJsonAsync("/auth/exchange", new { code = thirdCode });
+        Assert.Equal(HttpStatusCode.OK, exchange.StatusCode);
+    }
+
+    private Task<HttpResponseMessage> SendAsync(string path, object body, string cfIp)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, path);
+        req.Headers.TryAddWithoutValidation("CF-Connecting-IP", cfIp);
+        req.Content = JsonContent.Create(body);
+        return _client.SendAsync(req);
+    }
+
+    private async Task<int> CountAuthCodesAsync()
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        return await db.Set<AccountAuthCode>().CountAsync(c => c.TargetAccountUserId == _ownerAccountUserId);
     }
 }
