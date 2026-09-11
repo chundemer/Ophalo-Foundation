@@ -23,11 +23,13 @@ namespace OpHalo.Foundation.Infrastructure.Security;
 ///   - Sliding inactivity window.
 ///   - AccountUser must exist, belong to the session's AccountId, and be Active
 ///     (Invited, Suspended, and Removed all fail closed — build-log/016).
+///   - The backing Account must be Active (Suspended and Closed fail closed, independent of
+///     the member's own status — build-log/153).
 ///
 /// NoResult is returned for all ordinary unauthenticated states (no token, missing session,
-/// expired, revoked, inactive, inactive member). Fail is reserved for structurally broken
-/// authentication attempts. HandleChallengeAsync issues a clean 401 so RequireAuthorization()
-/// works without custom middleware.
+/// expired, revoked, inactive, inactive member, inactive account). Fail is reserved for
+/// structurally broken authentication attempts. HandleChallengeAsync issues a clean 401 so
+/// RequireAuthorization() works without custom middleware.
 ///
 /// Renewal throttle: LastActivityAtUtc is written only when more than
 /// SessionRenewalThresholdMinutes have elapsed since the last recorded activity.
@@ -87,6 +89,12 @@ public sealed class SessionAuthenticationHandler(
         // Membership gate: only Active members may authenticate.
         // Invited, Suspended, Removed, and missing AccountUser all fail closed (build-log/016).
         if (session.AccountUserMembershipStatus != MembershipStatus.Active)
+            return AuthenticateResult.NoResult();
+
+        // Account-lifecycle gate: only an Active account may authenticate, independent of the
+        // member's own status. Suspended, Closed, and a missing/unresolvable account all fail
+        // closed (build-log/153). This is a per-request check only — no revocation side effect.
+        if (session.AccountLifecycleState != AccountLifecycleState.Active)
             return AuthenticateResult.NoResult();
 
         // Renewal throttle — skip write if not enough time has elapsed since last activity.

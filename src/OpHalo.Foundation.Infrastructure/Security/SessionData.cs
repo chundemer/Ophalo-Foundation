@@ -7,10 +7,11 @@ namespace OpHalo.Foundation.Infrastructure.Security;
 /// Contains only the fields the handler needs to enforce session policy and membership checks.
 /// Not a domain entity — it is a narrow projection for the auth layer.
 ///
-/// AccountUserMembershipStatus is null when the backing AccountUser row cannot be found,
-/// when the AccountUser's AccountId does not match the session's AccountId (integrity check),
-/// or when the store returns null for any other reason.
-/// The handler authenticates only when AccountUserMembershipStatus == Active (build-log/016).
+/// AccountUserMembershipStatus and AccountLifecycleState are null when the backing AccountUser
+/// row cannot be found, when the AccountUser's AccountId does not match the session's AccountId
+/// (integrity check), or when the store returns null for any other reason.
+/// The handler authenticates only when AccountUserMembershipStatus == Active (build-log/016)
+/// and AccountLifecycleState == Active (build-log/153).
 /// </summary>
 public sealed record SessionData(
     Guid SessionId,
@@ -19,4 +20,5 @@ public sealed record SessionData(
     DateTime ExpiresAtUtc,
     DateTime LastActivityAtUtc,
     DateTime? RevokedAtUtc,
-    MembershipStatus? AccountUserMembershipStatus);
+    MembershipStatus? AccountUserMembershipStatus,
+    AccountLifecycleState? AccountLifecycleState);

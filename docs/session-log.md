@@ -4,7 +4,9 @@
 Locked decisions → [decision-index](decisions/decision-index.md). Working guardrails → CLAUDE.md.
 If a line here would need editing when the workboard changes, it belongs in the workboard, not here.
 
-**Updated 2026-09-11.**
+**Updated 2026-09-11.** GAP-093 is code-complete, awaiting Christian's diff review
+([BL153](build-log/153-gap-093-session-account-lifecycle-gate.md)). Next session: after that review
+lands, implement GAP-094, then GAP-095. Alternatively, start unstarted audit Vector 6, 7, 9, 10, or 11.
 
 ## Baseline
 
@@ -62,13 +64,37 @@ review** — per-user AsyncStorage autosave/restore/discard + `beforeRemove` dis
 `@react-native-async-storage/async-storage` dependency. `tsc` clean, `vitest` 33/33.
 **GAP-091 is code-complete.** Hot blocker: none.
 
+**GAP-093 — session-layer account-lifecycle gate (pilot gate).** [BL153](build-log/153-gap-093-session-account-lifecycle-gate.md)
+carries the preflight + completion record. **Implemented 2026-09-11, awaiting Christian's diff
+review** — `SessionData`/`SessionStore`/`SessionAuthenticationHandler` fail closed on
+`Account.LifecycleState != Active` immediately after the existing membership gate; 4 prod + 1 test
+file, no drift from preflight. `AuthApiTests` 37/37 (2 new regressions), unit 1909/1909,
+architecture 14/14. **GAP-093 is code-complete.** Hot blocker: none.
+
+**`ophalo-web` Next maintenance.** Separate, implementation-ready maintenance record:
+[BL151](build-log/151-ophalo-web-next-16-3-maintenance-preflight.md). Upgrade only Next `16.2.9` →
+`16.3.4`, add the `node: 22.x` engine pin, regenerate the web lockfile and generated `next-env.d.ts`,
+then pass local build/typecheck and founder-owned Vercel preview acceptance. React 19.3 and .NET
+SDK/Docker reproducibility are intentionally separate follow-ups; do not batch this with GAP-073.
+
+**Deferred operational to-do — Help & Updates feed bootstrap.** After GAP-073, upload the canonical
+`docs/content/updates.json` to the existing production R2 bucket as `platform/updates.json`.
+Production logs prove R2 is reachable but the object is missing; upload + one valid feed read resets
+the alert streak. No deploy or code change.
+
 ## Next
 
-Code order is locked in the workboard Next list: GAP-073 → GAP-091 → GAP-040 → GAP-063 → GAP-048 →
-GAP-049 → GAP-092 → GAP-072 → GAP-047. GAP-073 protects customer-reply/internal-note drafts;
-GAP-091 prevents field-work loss in Quick Capture; both are pilot blockers. GAP-092 corrects
-business-timezone display and follows the pilot gates as a pilot-risk correction. Audit Vectors 1–5
-are complete (2026-09-10); Vectors 6–11 are not started. GAP-038 discovery ADR locked ([ADR-500](decisions/ADR-500-in-product-feedback-and-help-updates-loop.md));
+Code order is locked in the workboard Next list: GAP-073 → GAP-091 → GAP-093 → GAP-094 → GAP-095 →
+GAP-040 → GAP-063 → GAP-048 → GAP-049 → GAP-092 → GAP-072 → GAP-047. GAP-073 protects
+customer-reply/internal-note drafts; GAP-091 prevents field-work loss in Quick Capture; GAP-093
+restores a global account-lifecycle fail-closed backstop; GAP-094 prevents auth mail-bombing and
+sign-in-invalidation DoS; GAP-095 closes externally observable auth enumeration. The latter three
+are now supervised-pilot gates, placed after the code-complete work-loss gates and before marketing
+or routine workflow gates. GAP-092 remains a pilot-risk correction. Audit Vectors 1–5 are complete
+(2026-09-10); Vector 8 discovery is complete (2026-09-11, findings in
+[production-readiness audit](audits/production-readiness-audit.md) Vector 8) — GAP-096 remains a
+pre-GA hardening batch with no pilot urgency. Vectors 6, 7, 9, 10, 11 are not started (Vector 6's
+F6.1 landed as `dc50f134` outside the full-vector pass). GAP-038 discovery ADR locked ([ADR-500](decisions/ADR-500-in-product-feedback-and-help-updates-loop.md));
 route/compatibility policy locked ([ADR-501](decisions/ADR-501-api-route-and-compatibility-policy.md):
 no `/api/v1` prefix, flat routes, domain-owned — GAP-038's `GET /updates` + `POST /feedback` are
 Foundation-owned; ADR-500 amended). Preflight done 2026-09-07: all named frontend surfaces

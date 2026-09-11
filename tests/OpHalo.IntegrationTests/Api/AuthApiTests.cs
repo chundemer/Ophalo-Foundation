@@ -302,6 +302,47 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Me_SuspendedAccount_Returns401()
+    {
+        // GAP-093: the member's own status stays Active — only the account is suspended.
+        // Proves the session-auth backstop, not merely the existing membership gate.
+        var (accountUserId, accountId) = await SeedMinimalAccountAsync("suspended-account@auth-api-tests.com");
+        var rawToken = await _factory.SeedSessionAsync(accountUserId, accountId);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var account = await db.Accounts.FindAsync(accountId);
+        var result = account!.Suspend();
+        Assert.True(result.IsSuccess);
+        await db.SaveChangesAsync();
+
+        using var request = WithCookie(HttpMethod.Get, "/auth/me", rawToken);
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Me_ClosedAccount_Returns401()
+    {
+        // GAP-093: the member's own status stays Active — only the account is closed.
+        var (accountUserId, accountId) = await SeedMinimalAccountAsync("closed-account@auth-api-tests.com");
+        var rawToken = await _factory.SeedSessionAsync(accountUserId, accountId);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var account = await db.Accounts.FindAsync(accountId);
+        var result = account!.Close();
+        Assert.True(result.IsSuccess);
+        await db.SaveChangesAsync();
+
+        using var request = WithCookie(HttpMethod.Get, "/auth/me", rawToken);
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     // -------------------------------------------------------------------------
     // POST /auth/logout
     // -------------------------------------------------------------------------

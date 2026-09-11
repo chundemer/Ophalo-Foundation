@@ -13,9 +13,9 @@ namespace OpHalo.Foundation.Infrastructure.Security;
 /// inactivity window evaluation, and renewal throttle decisions.
 ///
 /// FindByTokenHash verifies that the backing AccountUser exists, is in the same account
-/// as the session, and returns its MembershipStatus for Active-only enforcement in the
-/// handler (build-log/016). It returns null on any integrity mismatch so the handler
-/// gets a clean null → NoResult path.
+/// as the session, and returns its MembershipStatus and the backing Account's LifecycleState
+/// for Active-only enforcement in the handler (build-log/016, build-log/153). It returns null
+/// on any integrity mismatch so the handler gets a clean null → NoResult path.
 /// </summary>
 public sealed class SessionStore(OpHaloDbContext dbContext) : ISessionStore
 {
@@ -31,7 +31,7 @@ public sealed class SessionStore(OpHaloDbContext dbContext) : ISessionStore
         var accountUser = await dbContext.AccountUsers
             .AsNoTracking()
             .Where(au => au.Id == session.AccountUserId)
-            .Select(au => new { au.AccountId, au.MembershipStatus })
+            .Select(au => new { au.AccountId, au.MembershipStatus, au.Account.LifecycleState })
             .FirstOrDefaultAsync(cancellationToken);
 
         // Fail closed: return null for missing AccountUser or AccountId mismatch.
@@ -47,7 +47,8 @@ public sealed class SessionStore(OpHaloDbContext dbContext) : ISessionStore
             session.ExpiresAtUtc,
             session.LastActivityAtUtc,
             session.RevokedAtUtc,
-            accountUser.MembershipStatus);
+            accountUser.MembershipStatus,
+            accountUser.LifecycleState);
     }
 
     public async Task TryUpdateLastActivity(Guid sessionId, DateTime nowUtc, CancellationToken cancellationToken)

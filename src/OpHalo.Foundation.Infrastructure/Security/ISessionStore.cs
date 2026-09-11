@@ -17,8 +17,8 @@ public interface ISessionStore
 {
     /// <summary>
     /// Looks up a session by its SHA-256 token hash, including the backing AccountUser's
-    /// membership status. Returns null if no session exists for the hash.
-    /// Returns the session regardless of revocation or expiry state.
+    /// membership status and the backing Account's lifecycle state. Returns null if no session
+    /// exists for the hash. Returns the session regardless of revocation or expiry state.
     /// </summary>
     Task<SessionData?> FindByTokenHash(string tokenHash, CancellationToken cancellationToken);
 

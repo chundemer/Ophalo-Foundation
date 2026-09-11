@@ -27,14 +27,14 @@ ahead of the HVAC supervised pilot.
 | 5 | Edge cases & offline / network resilience | Done 2026-09-10 | plumbing pass | 1 (F5.1) | 3 (F5.2–F5.4) |
 | 6 | Public surface & rate limiting | Not started | — | — | — |
 | 7 | File size & solution architecture (+ dependency scan) | Not started | — | — | — |
-| 8 | Auth & session security | Not started | — | — | — |
+| 8 | Auth & session security | Done 2026-09-11 | 3× Explore fan-out | 0 | 6 (F8.3–F8.5, F8.9–F8.11) |
 | 9 | HTTP & transport hardening | Not started | — | — | — |
 | 10 | Deploy & release safety | Not started | — | — | — |
 | 11 | Multi-instance / horizontal-scaling readiness | Not started | — | — | — |
 
 ## Workboard mapping
 
-Confirmed audit work has permanent identifiers: GAP-073 (F4.1–F4.2), GAP-074 (F1.6–F1.7), GAP-075 (Vector 1/2 hardening), GAP-076 (F2.4–F2.5), GAP-077 (F2.1), GAP-078 (F2.2–F2.3), GAP-079 (F3.1–F3.2/F3.4/F3.6), GAP-080 (F3 indexing), GAP-081 (F3.5/F3.13), GAP-082 (F3 hardening), GAP-083 (F4.3), GAP-084 (F4.4–F4.6/F4.13), GAP-085 (F4.7–F4.10/F4.16), GAP-086 (F4 hardening), and GAP-090 (pilot-exit search). Vector 5 adds GAP-091 (F5.1), GAP-092 (F5.4–F5.5); F5.2–F5.3 fold into GAP-073 and F5.6–F5.7 into GAP-075. Feedback/updates operational follow-ons are GAP-087 through GAP-089.
+Confirmed audit work has permanent identifiers: GAP-073 (F4.1–F4.2), GAP-074 (F1.6–F1.7), GAP-075 (Vector 1/2 hardening), GAP-076 (F2.4–F2.5), GAP-077 (F2.1), GAP-078 (F2.2–F2.3), GAP-079 (F3.1–F3.2/F3.4/F3.6), GAP-080 (F3 indexing), GAP-081 (F3.5/F3.13), GAP-082 (F3 hardening), GAP-083 (F4.3), GAP-084 (F4.4–F4.6/F4.13), GAP-085 (F4.7–F4.10/F4.16), GAP-086 (F4 hardening), and GAP-090 (pilot-exit search). Vector 5 adds GAP-091 (F5.1), GAP-092 (F5.4–F5.5); F5.2–F5.3 fold into GAP-073 and F5.6–F5.7 into GAP-075. Feedback/updates operational follow-ons are GAP-087 through GAP-089. Vector 8 adds GAP-093 (F8.3), GAP-094 (F8.4–F8.5/F8.11), GAP-095 (F8.9–F8.10), and GAP-096 (Vector 8 hardening); GAP-093/094/095 are now sequenced as supervised-pilot gates (see disposition).
 
 ---
 
@@ -494,19 +494,99 @@ _None recorded yet._
 
 **Checklist**
 
-- [ ] Session tokens are opaque, high-entropy, server-side; storage uses a hash, not the raw token.
-- [ ] Sessions have a bounded lifetime + idle expiry; renewal path is safe.
-- [ ] Sessions are revoked (or re-evaluated) on role change, member removal, and account
-      deactivation — a removed member cannot keep acting on a live session.
-- [ ] Magic-link and invite tokens are single-use, short-expiry, and rate-limited per
-      email / IP; consumed links cannot be replayed.
-- [ ] `/auth/exchange` and sign-in request endpoints have abuse protection (see Vector 6) and do not
-      leak whether an email exists.
-- [ ] Account-creation-on-exchange runs in one transaction (cross-refs Vector 2).
+- [x] Session tokens are opaque, high-entropy, server-side; storage uses a hash, not the raw token.
+- [x] Sessions have a bounded lifetime + idle expiry; renewal path is safe. (bounds hold; renewal
+      never rotates the token value — F8.2)
+- [x] Sessions are revoked (or re-evaluated) on role change, member removal, and account
+      deactivation — a removed member cannot keep acting on a live session. (member-level holds;
+      account-level lifecycle gap — F8.3)
+- [x] Magic-link and invite tokens are single-use, short-expiry, and rate-limited per
+      email / IP; consumed links cannot be replayed. (single-use/atomicity holds; per-email rate
+      limiting does not exist — F8.4/F8.5)
+- [x] `/auth/exchange` and sign-in request endpoints have abuse protection (see Vector 6) and do not
+      leak whether an email exists. (IP rate limit exists but is coarse; timing + metadata leaks —
+      F8.9/F8.10/F8.11)
+- [x] Account-creation-on-exchange runs in one transaction (cross-refs Vector 2). (holds)
+
+**Method:** plumbing pass in the driving session + 3 parallel `Explore` agents (8A session
+lifecycle — role-change/removal/deactivation revocation, expiry bounds, renewal path; 8B magic-link
++ invite token entropy/storage/single-use/rate-limiting; 8C `/auth/exchange` abuse protection,
+email enumeration, account-creation atomicity). Reviewed: `SessionAuthenticationHandler`,
+`ICurrentUser`, `MemberManagementService`, `SessionStore`, `AuthConstants`, `AccountAccessPolicy`,
+`MagicLinkCodeGenerator`, `InviteTokenGenerator`, `StartAuthService`, `SignInAuthService`,
+`ExchangeAuthService`, `SendInviteService`, `AcceptInviteService`, `RedeemMobileHandoffService`,
+`CompleteAuthContinuationService`, `EfAuthCodePersistence`, `EfInvitePersistence`,
+`EfPostAuthContinuationPersistence`, `EfMobileHandoffCodePersistence`, `ClientIpResolver`, and the
+`"auth"` rate-limit policy + `AuthEndpoints.cs` / `AccountEndpoints.cs` route wiring.
+
+**What holds (no action needed)**
+
+- Session tokens: 32-byte CSPRNG, SHA-256-hashed at rest (already confirmed Vector 1; reconfirmed).
+- Role is never carried in session claims and is re-read from persistence on every request
+  (`SessionAuthenticationHandler.cs:110-115`, `ICurrentUser` has no `Role` property) — a role
+  change takes effect on the very next request with no stale-privilege window. Documented intent:
+  `MemberManagementService.cs:23`.
+- Member suspend/remove explicitly revoke live sessions (`MemberManagementService.cs:187-188,
+  281-288`); revocation is best-effort/logged-not-thrown, backstopped by the per-request
+  membership-status gate.
+- Session expiry composes correctly: `SessionAbsoluteExpiryDays = 60` and
+  `SessionInactivityWindowDays = 30` (`AuthConstants.cs:10,16`) are independent `NoResult` gates in
+  `SessionAuthenticationHandler.cs:79-85` — sliding renewal can never outlive the absolute cap.
+- Magic-link/invite/continuation/mobile-handoff tokens: 256-bit CSPRNG, SHA-256-hashed at rest,
+  never logged (`MagicLinkCodeGenerator.cs:17-24`, `InviteTokenGenerator.cs:16-23`).
+- Single-use consumption is atomic (conditioned `ExecuteUpdateAsync … WHERE ConsumedAtUtc == null`)
+  across all four token classes — no TOCTOU replay window:
+  `EfAuthCodePersistence.ConsumeCodeAsync:85-97`, `EfInvitePersistence.CommitAcceptInviteAsync:146-160`,
+  `EfPostAuthContinuationPersistence.ConsumeAsync:45-54`, `EfMobileHandoffCodePersistence.ConsumeAsync:21-30`.
+  Mobile handoff also unifies not-found/expired/consumed into one generic error
+  (`MobileHandoffCodeErrors.cs:7-8`) — the pattern the rest of the stack should match (F8.7).
+- `/auth/start` and `/auth/signin` return a neutral `Result.Success()` body for unknown/ineligible
+  emails (`StartAuthService.cs:60-61`, `SignInAuthService.cs:41-43`); the rate limiter is live in
+  production on every non-Testing environment (`Program.cs:426`), and `ClientIpResolver` only trusts
+  forwarded-IP headers from a configured trusted-proxy CIDR, closing the obvious spoof.
+- Account creation on new-account exchange is one transaction: code consumption +
+  User/Account/AccountUser/entitlements insert inside a single `BeginTransactionAsync`/`CommitAsync`
+  block with correct two-phase handling of the circular Account↔AccountUser FK and a mapped
+  unique-violation → `AccountErrors.EmailAlreadyInUse`
+  (`EfAuthCodePersistence.CommitNewAccountExchangeAsync:181-229`). Session issuance runs outside
+  that transaction by design; a failure there leaves a valid, sign-in-able account, not an orphan.
+- `CompleteAuthContinuationService` re-validates membership and atomically consumes its token —
+  no atomicity gap.
 
 **Findings**
 
-_None recorded yet._
+| ID | Sev | Location | Issue | Scenario |
+| --- | --- | --- | --- | --- |
+| F8.3 | pilot-risk | `SessionAuthenticationHandler.cs:89`; `AccountAccessPolicy.cs:12-16`; `Program.cs:153` | Member-level Active-status is gated inside `SessionAuthenticationHandler` (fail-closed); account-level lifecycle (`Suspended`/`Closed`) is only checked by `IAccountAccessPolicy`, called opt-in from ~50+ individual Application services — it is not wired into the auth handler or any global middleware. | A suspended/closed account's members keep authenticated access on any endpoint that forgets (or hasn't yet been made) to call `AccountAccessPolicy.Evaluate` — no fail-closed backstop symmetric with the membership gate. |
+| F8.4 | pilot-risk | `Program.cs:324-336`; `AuthEndpoints.cs:17-22`; `AccountEndpoints.cs:19` | The `"auth"` rate-limit policy is a single fixed-window IP partition (10 req/min) shared across `/auth/start`, `/auth/signin`, `/auth/exchange`, `/auth/continue`, `/auth/mobile-handoff/redeem`, and `/accounts/invite/accept` — no per-email throttle anywhere. | A small pool of attacker IPs mail-bombs a victim's inbox with unlimited magic-link emails via `/auth/start`/`/auth/signin`; separately, a NAT'd legitimate network can exhaust the shared budget on one route and get 429'd on another. |
+| F8.5 | pilot-risk | `AccountEndpoints.cs:18,24`; `SendInviteService.cs:100-110` | `POST /accounts/me/invite` and `/accounts/me/members/{id}/resend-invite` carry no `.RequireRateLimiting(...)` at all; resend of an already-`Invited` row explicitly skips the seat-limit check with no time cooldown. | Any Owner/Admin session (or a compromised one) loops `ResendInvite` against an arbitrary email with zero throttling — mail-bombs an inbox from the company's own sending domain/reputation. |
+| F8.9 | pilot-risk | `SignInAuthService.cs:42-43,68,80-85`; `StartAuthService.cs:60-61,104-124,147-167,205-225` | The neutral (unknown-email) branch returns after one indexed query (~ms); every other branch inline-awaits a write transaction plus an outbound email send before returning the same 200. | Response latency differs by ~100–500 ms between "email registered" and "email unknown," a practical timing oracle that defeats the same-status/same-body enumeration defense. |
+| F8.10 | pilot-risk | `AuthEndpoints.cs:83-91`; `ExchangeAuthService.cs:72,74-81` | On `/auth/exchange` failure, a genuinely-unknown code omits `entryContext`; a stale/used code (`Expired`/`AlreadyConsumed`/`CannotConsumeInvalidated`) includes `entryContext: "new_account" \| "existing_member" \| "multiple_members"` in the ProblemDetails body. | Anyone who ever possessed a since-used/expired link for an address (forwarded mail, shared inbox, browser history) can confirm the code was ever valid and learn the target's account-type classification without completing auth. |
+| F8.11 | pilot-risk | `Program.cs:324-336`; `EfAuthCodePersistence.CommitSignInCodeAsync:61-73` | `/auth/signin` has no per-email limiter or failed-attempt lockout, and every call invalidates all prior unconsumed codes for that `TargetAccountUserId`. | Knowing only a victim's email, an attacker repeatedly POSTs `/auth/signin` (under the 10/min IP cap, or from rotating IPs) to continuously invalidate the victim's outstanding magic link before it can be used — an indefinite sign-in-denial DoS needing no account access. |
+| F8.1 | hardening | `AuthConstants.cs:10,16` | `SessionAbsoluteExpiryDays = 60` / `SessionInactivityWindowDays = 30` — generous for a bearer token with no MFA re-check. | Correctly bounded, not a defect; a stolen/leaked token has up to 60 days of blast radius. Worth tightening post-pilot. |
+| F8.2 | hardening | `SessionStore.TryUpdateLastActivity` (`SessionStore.cs:53-62`) | Sliding renewal only updates `LastActivityAtUtc`/`LastSeenAtUtc`; the token value/hash is never rotated for the life of the session. | No fixation bug, but no mechanism ever shortens a leaked token's remaining validity short of explicit revocation. |
+| F8.6 | hardening | `StartAuthService.cs:96,140,195`; `SignInAuthService.cs:55,61` | Magic-link codes are valid for 24 hours — long for an email-delivered bearer credential. | Increases exposure to inbox compromise/forwarding/shared-inbox/shoulder-surfing versus a typical 10–15 min TTL. Not exploitable on its own (high entropy, single-use, hashed). |
+| F8.7 | hardening | `ExchangeAuthService.cs:74-81`; `EfInvitePersistence.CommitAcceptInviteAsync:112-113` | Magic-link exchange and invite accept return distinct `Expired`/`AlreadyConsumed`/`CannotConsumeInvalidated` errors instead of one generic invalid-code response, unlike the mobile-handoff pattern that already unifies these. | Low-severity (attacker already needs the raw code/token); inconsistent with the better pattern proven elsewhere in this codebase. |
+| F8.8 | hardening | `EfAuthCodePersistence.cs:65-72` vs. `:159-167` | `CommitSignInCodeAsync`'s invalidation branch filters only on `TargetAccountUserId`; the sibling `CommitStartCodeAsync` branch also matches `EntryContext`. Safe today only because `TargetAccountUserId` is non-null solely for `ExistingMember` codes. | Latent-consistency risk: a future code type carrying a non-null `TargetAccountUserId` under a different `EntryContext` would be silently cross-invalidated. |
+| F8.12 | hardening (accepted risk, ADR-365) | `StartAuthService.cs:24-26,181-187` | Pilot-capacity 409 (`Account.PilotFull`) only fires for genuinely-unregistered emails; any known email returns 200 regardless of status. Once the pilot cap fills, this lets an attacker binary-search email registration. | Documented deliberate UX trade-off (waitlist prompt) — flagging to reconfirm it still holds once pilot caps are expected to fill in production. |
+| F8.13 | hardening | `StartAuthService.cs:121-124,164-167,222-225`; `SignInAuthService.cs:95-98` | All non-cancellation exceptions from `IEmailSender.SendAsync` are caught, logged as a warning, and still return 200 (correct for enumeration protection) — but there is no alerting signal. | A total Resend outage silently returns 200 to every start/sign-in caller with zero links delivered; only a per-request log line marks it. |
+
+**Disposition:** F8.3 → **GAP-093** (session-layer account-lifecycle gate, pilot-risk, standalone —
+hoist the `AccountAccessPolicy` suspend/close check into `SessionAuthenticationHandler` or an
+equivalent global filter so it fails closed the same way the membership gate does). F8.4, F8.5,
+F8.11 → **GAP-094** (auth-code and invite issuance rate limiting: per-email/per-account partition
+alongside the existing per-IP `"auth"` policy on `/auth/start`, `/auth/signin`,
+`/accounts/me/invite`, and `/accounts/me/members/{id}/resend-invite`; note F8.11's invalidation-DoS
+and F8.4's mail-bomb scenario share this one root cause). F8.9, F8.10 → **GAP-095** (auth-response
+enumeration hardening: move outbound email dispatch off the request path or pad neutral-branch
+latency to remove the timing oracle; drop `entryContext` from `/auth/exchange` failure responses for
+stale/used codes). F8.1, F8.2, F8.6, F8.7, F8.8, F8.12, F8.13 → **GAP-096** (Vector 8 hardening
+batch — pre-GA session/token lifetime tightening, error-message unification, defensive
+`EntryContext` guard, reconfirm the ADR-365 pilot-full trade-off, email-delivery-failure alerting;
+no user-visible urgency, batch opportunistically). **Sequencing decision, 2026-09-11:** GAP-093,
+GAP-094, and GAP-095 are supervised-pilot gates, ordered after GAP-073/091 and before GAP-040:
+account-level fail-closed revocation first, then issuance abuse prevention, then enumeration
+hardening. GAP-096 remains outside the pilot-gate queue.
 
 ---
 
