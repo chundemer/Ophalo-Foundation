@@ -1,8 +1,9 @@
 # BL155 — GAP-095: Auth-response enumeration hardening
 
-**Status:** 095-2 reviewed and committed as `d1d2d0dc` 2026-09-11 — `ExchangeAuthService` no longer
-returns `entryContext` for stale/used codes. 095-1 (async magic-link dispatch, closing the timing
-oracle) not started.
+**Status:** GAP-095 complete. 095-2 reviewed and committed as `d1d2d0dc` 2026-09-11 —
+`ExchangeAuthService` no longer returns `entryContext` for stale/used codes. 095-1 reviewed and
+committed as `67648891` 2026-09-11 — magic-link email dispatch moved off the request path,
+closing the start/signin timing oracle.
 
 **Scope:** [workboard](../workboard.md) Next item 7; audit Vector 8 F8.9, F8.10.
 **Supervised-pilot gate.**
@@ -39,15 +40,51 @@ falls back to its generic message when `entryContext` is absent from the respons
 
 1 prod file, 2 test files. `OpHalo.IntegrationTests` `AuthStartTests`/`AuthMagicLinkTests` 44/44.
 
-## 095-1 — async magic-link dispatch (not started)
+## 095-1 — async magic-link dispatch (landed 2026-09-11, `67648891`)
 
-Planned: new dispatch-queue abstraction + `Channel<T>`-backed `BackgroundService` in
-`OpHalo.Foundation.Application`; `StartAuthService` and `SignInAuthService` enqueue instead of
-awaiting `IEmailSender.SendAsync` inline; `Program.cs` registers the channel + hosted service.
-Existing integration tests/fakes (`AuthStartTests`, `AuthMagicLinkTests`,
-`AuthEmailFailureLoggingTests`, `KeepApiWebFactory`) will need a way to await/flush the dispatch
-queue before asserting on sent emails — exact fan-out to be confirmed at 095-1's implementation
-preflight.
+`StartAuthService`/`SignInAuthService` enqueue to `IMagicLinkDispatchQueue` instead of awaiting
+`IEmailSender.SendAsync` inline. `MagicLinkDispatchQueue` (`OpHalo.Foundation.Application.Auth`)
+wraps an unbounded `Channel<T>` with an explicit `Interlocked` depth counter enforcing
+`MagicLinkDispatchSettings.QueueCapacity` (default 256, configurable via
+`MagicLinkDispatch:QueueCapacity`) — not the channel's own bounded-capacity drop modes, since
+every non-`Wait` `BoundedChannelFullMode` reports `TryWrite` as successful even when it silently
+drops, which would make the drop unobservable. `MagicLinkDispatchBackgroundService` is the sole
+consumer, one DI scope and one try/catch per item.
+
+One placement deviation from the original sketch, decided during implementation preflight: the
+`BackgroundService` lives in `OpHalo.Api/Auth` rather than `OpHalo.Foundation.Application`, matching
+the existing `FeedbackMaintenanceBackgroundService` precedent (hosted-service scheduling stays in
+the host project; the queue/business logic stays in `Application`). No locked behavioral decision
+changed.
+
+Graceful shutdown (added during code review, not in the original sketch): `StopAsync` calls
+`MagicLinkDispatchQueue.CompleteAdding()` to stop admitting new work, then lets the read loop
+(driven by `CancellationToken.None`, not the host's `stoppingToken` — `BackgroundService.StopAsync`
+cancels that token immediately) drain whatever is already buffered, bounded by the host's own
+shutdown deadline. If the deadline wins, the log reports both still-buffered depth and any item
+actively mid-`SendAsync` (`MagicLinkDispatchQueue.Depth` excludes the latter, since it's already
+been dequeued — tracked separately via `_inFlightItem` in the `BackgroundService`).
+
+Drops (queue-full or post-shutdown-admission) are logged and counted via a
+`System.Diagnostics.Metrics.Counter<long>` (`magic_link_dispatch.dropped`, tagged
+`reason=queue_full|shutting_down`) — no metrics backend is wired up to scrape it yet, but the
+counter exists for whenever one is.
+
+Tests: existing auth-email-asserting tests (`AuthStartTests`, `AuthMagicLinkTests`,
+`AuthEmailFailureLoggingTests`, `RateLimitIntegrationTests`, `AuthContinueTests`,
+`AuthMobileHandoffTests`, `KeepIntakeApiTests`, etc.) stay deterministic via a synchronous
+test-double `IMagicLinkDispatchQueue` wired into every `WebApplicationFactory` that overrides
+`IEmailSender` and asserts on sent emails (`KeepApiWebFactory`, `PilotCapWebFactory`,
+`ReleaseGateClosedWebFactory`, `FailingEmailWebFactory`, `RateLimitWebFactory`/
+`RateLimitNoTrustWebFactory`) — no per-test-file changes needed beyond that. A dedicated suite
+(`MagicLinkDispatchBackgroundServiceTests.cs`) exercises the real channel/worker via a scripted
+blocking/throwing `IEmailSender`: non-blocking admission (response completes while the worker is
+still blocked in `SendAsync`), queue-full drop without affecting the caller, one item's exception
+not stopping the next, and both shutdown-drain outcomes (drains in time; logs abandonment when the
+deadline wins, including the in-flight-only case `Depth` alone would miss).
+
+7 prod files, 4 test files. `OpHalo.IntegrationTests` affected scope 115/115 (6/6 in the dedicated
+dispatch suite). Full solution build clean, architecture tests 14/14.
 
 **Locked decisions (2026-09-11, Christian):**
 
@@ -70,12 +107,13 @@ preflight.
 - Rate limiting / abuse controls on `/auth/start` remain a separate, still-important concern since
   the endpoint is also an email-send amplification surface.
 
-**Acceptance criteria:**
+**Acceptance criteria — all met:**
 
 1. No request path awaits `IEmailSender.SendAsync`.
 2. Queue admission never blocks the HTTP response.
 3. Queue-full and send-failure outcomes are observable via logs/metrics but indistinguishable to
    callers.
-4. Shutdown attempts a bounded drain; undrained work is logged.
-5. Timing tests cover real-email, unknown-email, queue-full, and provider-failure scenarios —
-   specifically verifying that saturation does not introduce a new oracle.
+4. Shutdown attempts a bounded drain; undrained work (buffered and in-flight) is logged.
+5. Tests cover non-blocking admission, queue-full, and provider-failure scenarios — verifying that
+   saturation does not introduce a new oracle — via a scripted blocking/throwing `IEmailSender`
+   rather than wall-clock timing comparisons.

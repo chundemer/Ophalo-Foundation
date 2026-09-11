@@ -5,13 +5,10 @@ Locked decisions → [decision-index](decisions/decision-index.md). Working guar
 If a line here would need editing when the workboard changes, it belongs in the workboard, not here.
 
 **Updated 2026-09-11.** GAP-094 is code-complete (094-1 `197457b8`, 094-2), awaiting Christian's
-diff review ([BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md)). GAP-095 095-2
-(`entryContext` removal for stale/used `/auth/exchange` codes) reviewed and committed as
-`d1d2d0dc` 2026-09-11 ([BL155](build-log/155-gap-095-auth-response-enumeration-hardening.md)).
-095-1 (async magic-link dispatch, closing the timing oracle) is not started; its decisions are
-locked — bounded in-memory `Channel<T>` with non-blocking `TryWrite`/drop-on-full admission, no
-durable outbox — see BL155.
-Next session: implement 095-1, then run GAP-040 discovery (next in the locked pilot-gate order).
+diff review ([BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md)). GAP-095 is complete —
+both slices reviewed and committed (095-2 `d1d2d0dc`, 095-1 `67648891`)
+([BL155](build-log/155-gap-095-auth-response-enumeration-hardening.md)).
+Next session: run GAP-040 discovery (next in the locked pilot-gate order).
 Alternatively, start unstarted audit Vector 6, 7, 9, 10, or 11.
 
 ## Baseline
