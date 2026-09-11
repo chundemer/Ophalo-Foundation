@@ -1,8 +1,8 @@
 # BL155 — GAP-095: Auth-response enumeration hardening
 
-**Status:** 095-2 landed 2026-09-11 — `ExchangeAuthService` no longer returns `entryContext` for
-stale/used codes, awaiting Christian's diff review. 095-1 (async magic-link dispatch, closing the
-timing oracle) not started.
+**Status:** 095-2 reviewed and committed as `d1d2d0dc` 2026-09-11 — `ExchangeAuthService` no longer
+returns `entryContext` for stale/used codes. 095-1 (async magic-link dispatch, closing the timing
+oracle) not started.
 
 **Scope:** [workboard](../workboard.md) Next item 7; audit Vector 8 F8.9, F8.10.
 **Supervised-pilot gate.**
@@ -48,3 +48,34 @@ Existing integration tests/fakes (`AuthStartTests`, `AuthMagicLinkTests`,
 `AuthEmailFailureLoggingTests`, `KeepApiWebFactory`) will need a way to await/flush the dispatch
 queue before asserting on sent emails — exact fan-out to be confirmed at 095-1's implementation
 preflight.
+
+**Locked decisions (2026-09-11, Christian):**
+
+- Bounded `Channel<T>` with a deliberately chosen capacity, **not** `BoundedChannelFullMode.Wait`.
+  `Wait` would make enqueue block only for requests that produce a real email, recreating a timing
+  distinction under saturation — the exact oracle 095-1 exists to close. Use non-blocking
+  `TryWrite` with a drop-on-full policy instead (structured log + metric/alert on drop; no
+  behavioral difference to the caller).
+- The public `/auth/start` and `/signin` response is identical regardless of outcome: enqueued,
+  dropped-on-full, or later send failure. None of these may surface in status code, body, or
+  timing.
+- Single consumer wraps each dequeued send in try/catch and logs failures per-item; one provider
+  exception must not terminate the `BackgroundService`.
+- Shutdown: attempt a bounded drain within the host's shutdown timeout (stop accepting new work,
+  drain what's queued), and log any work still queued if cancellation wins. This is a best-effort
+  drain, not a delivery guarantee — a process crash can still lose in-memory jobs, which is
+  acceptable only because delivery is already best-effort (D4/D8). If reliable delivery across
+  restarts becomes a requirement, that is the threshold for a durable outbox, not a reason to build
+  one now.
+- Rate limiting / abuse controls on `/auth/start` remain a separate, still-important concern since
+  the endpoint is also an email-send amplification surface.
+
+**Acceptance criteria:**
+
+1. No request path awaits `IEmailSender.SendAsync`.
+2. Queue admission never blocks the HTTP response.
+3. Queue-full and send-failure outcomes are observable via logs/metrics but indistinguishable to
+   callers.
+4. Shutdown attempts a bounded drain; undrained work is logged.
+5. Timing tests cover real-email, unknown-email, queue-full, and provider-failure scenarios —
+   specifically verifying that saturation does not introduce a new oracle.
