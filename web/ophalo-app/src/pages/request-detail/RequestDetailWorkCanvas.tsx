@@ -33,10 +33,6 @@ interface RequestDetailWorkCanvasProps
   onOpenClearAttention: () => void;
   onActivateCustomerUpdateComposer: () => void;
   composerRef: Ref<UnifiedComposerHandle>;
-  customerUpdateDraft: string;
-  onCustomerUpdateDraftChange: (value: string) => void;
-  customerUpdateDraftStatus: string;
-  onCustomerUpdateDraftStatusChange: (value: string) => void;
   reviewSuccessMsg: string | null;
   actualWorkSection: ReactNode;
   activityBlock: ReactNode;
@@ -63,10 +59,6 @@ export function RequestDetailWorkCanvas({
   onOpenClearAttention,
   onActivateCustomerUpdateComposer,
   composerRef,
-  customerUpdateDraft,
-  onCustomerUpdateDraftChange,
-  customerUpdateDraftStatus,
-  onCustomerUpdateDraftStatusChange,
   reviewSuccessMsg,
   actualWorkSection,
   activityBlock,
@@ -83,7 +75,7 @@ export function RequestDetailWorkCanvas({
       tabIndex={-1}
       className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)]"
     >
-      <UnifiedComposer ref={composerRef} requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} customerUpdateDraft={customerUpdateDraft} onCustomerUpdateDraftChange={onCustomerUpdateDraftChange} customerUpdateDraftStatus={customerUpdateDraftStatus} onCustomerUpdateDraftStatusChange={onCustomerUpdateDraftStatusChange} highlight={highlights.sendUpdate} bare />
+      <UnifiedComposer ref={composerRef} requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} highlight={highlights.sendUpdate} bare />
     </div>
   );
 

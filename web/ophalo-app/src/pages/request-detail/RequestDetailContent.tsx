@@ -28,10 +28,6 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
   canRecordShareIntent: boolean;
   needsShare: boolean;
   onOpenShareDrawer: () => void;
-  customerUpdateDraft: string;
-  onCustomerUpdateDraftChange: (value: string) => void;
-  customerUpdateDraftStatus: string;
-  onCustomerUpdateDraftStatusChange: (value: string) => void;
   reviewSuccessMsg: string | null;
   timelineFilter: TimelineFilter;
   onTimelineFilterChange: (filter: TimelineFilter) => void;
@@ -377,10 +373,6 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         onOpenClearAttention={onOpenClearAttention}
         onActivateCustomerUpdateComposer={activateCustomerUpdateComposer}
         composerRef={composerRef}
-        customerUpdateDraft={props.customerUpdateDraft}
-        onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange}
-        customerUpdateDraftStatus={props.customerUpdateDraftStatus}
-        onCustomerUpdateDraftStatusChange={props.onCustomerUpdateDraftStatusChange}
         reviewSuccessMsg={props.reviewSuccessMsg}
         actualWorkSection={actualWorkSection}
         activityBlock={activityBlock}

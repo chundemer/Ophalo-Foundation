@@ -110,10 +110,6 @@ function renderContent() {
       canRecordShareIntent={false}
       needsShare={false}
       onOpenShareDrawer={vi.fn()}
-      customerUpdateDraft=""
-      onCustomerUpdateDraftChange={vi.fn()}
-      customerUpdateDraftStatus="idle"
-      onCustomerUpdateDraftStatusChange={vi.fn()}
       reviewSuccessMsg={null}
       timelineFilter="all"
       onTimelineFilterChange={vi.fn()}

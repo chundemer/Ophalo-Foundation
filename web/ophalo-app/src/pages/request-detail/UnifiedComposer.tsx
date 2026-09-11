@@ -17,13 +17,6 @@ interface UnifiedComposerProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-  // GAP-073 / ADR-502: the customer-update draft now lives in the shared per-request store
-  // (`useComposerDraft`), not in props drilled from `RequestDetail`. These props are unused as of
-  // slice 073-1 and the drill is deleted in slice 073-2; kept optional so callers still compile.
-  customerUpdateDraft?: string;
-  onCustomerUpdateDraftChange?: (v: string) => void;
-  customerUpdateDraftStatus?: string;
-  onCustomerUpdateDraftStatusChange?: (v: string) => void;
   highlight?: HighlightLevel;
   // bare: no outer card chrome (border/bg/highlight) — used when a parent wraps this together
   // with TimingPanel in one shared Communication & Planning surface (locked correction,

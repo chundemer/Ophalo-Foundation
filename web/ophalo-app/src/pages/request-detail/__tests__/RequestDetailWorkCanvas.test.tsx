@@ -52,10 +52,6 @@ function renderCanvas(
       onOpenClearAttention={vi.fn()}
       onActivateCustomerUpdateComposer={vi.fn()}
       composerRef={createRef<UnifiedComposerHandle>()}
-      customerUpdateDraft=""
-      onCustomerUpdateDraftChange={vi.fn()}
-      customerUpdateDraftStatus="idle"
-      onCustomerUpdateDraftStatusChange={vi.fn()}
       reviewSuccessMsg={reviewSuccessMsg}
       actualWorkSection={<div data-testid="region-actual-work" />}
       activityBlock={<div data-testid="region-activity" />}

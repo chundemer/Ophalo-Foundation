@@ -1,8 +1,8 @@
 # BL150 — GAP-073: Request-detail composer draft safety
 
-**Status:** Slice 073-1 implemented 2026-09-10, awaiting diff review. Decisions locked in
-[ADR-502](../decisions/ADR-502-request-detail-composer-draft-safety.md). Slice 073-2 (dead-prop
-cleanup) not started.
+**Status:** Slice 073-1 landed (`3599ee3c`). Slice 073-2 (dead-prop cleanup) landed 2026-09-10,
+awaiting diff review — GAP-073 code-complete. Decisions locked in
+[ADR-502](../decisions/ADR-502-request-detail-composer-draft-safety.md).
 
 **Scope reference:** [workboard](../workboard.md) Next item 3 (AUDIT-V4-A); audit
 [production-readiness audit](../audits/production-readiness-audit.md) Vector 4 F4.1–F4.2,
@@ -152,3 +152,32 @@ Verification: `tsc --noEmit` clean; `check:tokens` pass; `git diff --check` clea
 (Christian)** — mock workbench for draft isolation on Prev/Next, `beforeunload` prompt + restore on
 Cmd-R, and field-scoped clear-on-success; real API (two-tab stale-version conflict) for the 409
 `readOnly`/copy-out/version-advance recovery on both composer paths.
+
+## Slice 073-2 — delivered (pending review)
+
+Deletion-only removal of the now-dead customer-update draft prop chain that 073-1 orphaned. No
+behavior change; the props were already unused and made optional in 073-1.
+
+Production (`web/ophalo-app/src`):
+
+- `pages/RequestDetail.tsx` — removed `businessUpdateDraft` / `businessUpdateDraftStatus` `useState`
+  and the 4 props passed to `RequestDetailContent`.
+- `pages/request-detail/RequestDetailContent.tsx` — removed the 4 prop-type lines and the 4
+  pass-throughs to `RequestDetailWorkCanvas`.
+- `pages/request-detail/RequestDetailWorkCanvas.tsx` — removed the 4 prop-type lines, 4 destructures,
+  and the 4 attributes on `<UnifiedComposer>`.
+- `pages/request-detail/UnifiedComposer.tsx` — removed the 4 optional `customerUpdateDraft*`
+  prop-type lines (and the now-obsolete GAP-073 comment).
+
+Tests (dead props dropped from render helpers / mock prop objects only, no assertion changes):
+`RequestDetailWorkCanvas.test.tsx`, `RequestDetailContent.canvasFrame.test.tsx`,
+`RequestDetailContent.responsiveShrink.test.tsx`, `RequestDetailContent.pendingReviewsRefresh.test.tsx`,
+`RequestDetailContent.actualWorkHistoryRefresh.test.tsx`,
+`RequestDetailContent.actualWorkWorkspaceRoute.test.tsx`.
+
+Drift from the anticipated gate: **4 prod + 6 test files** (brief anticipated 7 test) —
+`UnifiedComposer.activateCustomerUpdate.test.tsx` was already de-propped in 073-1, so it drops off.
+10 total changed files, within the 8-prod / 12-total gate.
+
+Verification: `tsc --noEmit` clean; `check:tokens` pass; `git diff --check` clean; full `ophalo-app`
+suite **1184/1184** (unchanged — no tests added or removed).

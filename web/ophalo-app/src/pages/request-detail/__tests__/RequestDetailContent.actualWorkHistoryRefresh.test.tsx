@@ -127,10 +127,6 @@ describe("RequestDetailContent — Actual Work submit refreshes history (Batch 5
         canRecordShareIntent={false}
         needsShare={false}
         onOpenShareDrawer={vi.fn()}
-        customerUpdateDraft=""
-        onCustomerUpdateDraftChange={vi.fn()}
-        customerUpdateDraftStatus="idle"
-        onCustomerUpdateDraftStatusChange={vi.fn()}
         reviewSuccessMsg={null}
         timelineFilter="all"
         onTimelineFilterChange={vi.fn()}
@@ -163,10 +159,6 @@ describe("RequestDetailContent — Internal financial review card gating (Slice 
     canRecordShareIntent: false,
     needsShare: false,
     onOpenShareDrawer: vi.fn(),
-    customerUpdateDraft: "",
-    onCustomerUpdateDraftChange: vi.fn(),
-    customerUpdateDraftStatus: "idle",
-    onCustomerUpdateDraftStatusChange: vi.fn(),
     reviewSuccessMsg: null,
     timelineFilter: "all" as const,
     onTimelineFilterChange: vi.fn(),
@@ -224,10 +216,6 @@ describe("RequestDetailContent — replacement-copy correction (BL136 4e-iii)", 
     canRecordShareIntent: false,
     needsShare: false,
     onOpenShareDrawer: vi.fn(),
-    customerUpdateDraft: "",
-    onCustomerUpdateDraftChange: vi.fn(),
-    customerUpdateDraftStatus: "idle",
-    onCustomerUpdateDraftStatusChange: vi.fn(),
     reviewSuccessMsg: null,
     timelineFilter: "all" as const,
     onTimelineFilterChange: vi.fn(),
@@ -287,10 +275,6 @@ describe("RequestDetailContent — Proposed Scope removal (locked Workbench spec
         canRecordShareIntent={false}
         needsShare={false}
         onOpenShareDrawer={vi.fn()}
-        customerUpdateDraft=""
-        onCustomerUpdateDraftChange={vi.fn()}
-        customerUpdateDraftStatus="idle"
-        onCustomerUpdateDraftStatusChange={vi.fn()}
         reviewSuccessMsg={null}
         timelineFilter="all"
         onTimelineFilterChange={vi.fn()}

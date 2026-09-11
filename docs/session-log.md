@@ -45,12 +45,15 @@ The only remaining GAP-038 work is the founder's paired activation in the pilot 
 
 **GAP-073 — request-detail composer draft safety (pilot gate).** [ADR-502](decisions/ADR-502-request-detail-composer-draft-safety.md);
 [BL150](build-log/150-gap-073-request-detail-composer-draft-safety.md) carries the spec + the
-073-1 completion record. **Slice 073-1 implemented + browser-verified 2026-09-10, awaiting Christian's diff review** —
-9-file frontend gate (`useComposerDraft` shared sessionStorage store, `unloadGuard`, both composers
-rewired, `readOnly`-on-409 + version-advance reset on both paths); `ophalo-app` 1184/1184; browser
-verification complete (mock workbench + real-API two-tab 409). Remaining after review: **slice 073-2**
-(deletion-only removal of the dead `customerUpdateDraft*` / `businessUpdateDraft*` prop chain —
-4 prod + 7 test files). Hot blocker: none.
+073-1 (`3599ee3c`) + 073-2 completion records. **Slice 073-1 landed 2026-09-10** — 9-file frontend
+gate (`useComposerDraft` shared sessionStorage store, `unloadGuard`, both composers rewired,
+`readOnly`-on-409 + version-advance reset on both paths); browser-verified (mock workbench + real-API
+two-tab 409). **Slice 073-2 landed 2026-09-10, awaiting Christian's diff review** — deletion-only
+removal of the now-dead `customerUpdateDraft*` / `businessUpdateDraft*` prop chain from
+`RequestDetail` / `RequestDetailContent` / `RequestDetailWorkCanvas` / `UnifiedComposer` + 6
+pass-through test files (4 prod + 6 test; brief said 7 test — `UnifiedComposer.activateCustomerUpdate`
+was already de-propped in 073-1). `tsc` clean, `check:tokens` pass, `ophalo-app` 1184/1184.
+**All of GAP-073 is code-complete.** Hot blocker: none.
 
 ## Next
 

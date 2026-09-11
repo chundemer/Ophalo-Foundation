@@ -606,8 +606,6 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   const [clearAttentionOpen, setClearAttentionOpen] = useState(false);
   const [reassignOwnerOpen, setReassignOwnerOpen] = useState(false);
   const [watchersOpen, setWatchersOpen] = useState(false);
-  const [businessUpdateDraft, setBusinessUpdateDraft] = useState("");
-  const [businessUpdateDraftStatus, setBusinessUpdateDraftStatus] = useState("");
   const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>("communication");
   const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
   const reviewSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -834,10 +832,6 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         canRecordShareIntent={canShare}
         needsShare={needsShareEffective}
         onOpenShareDrawer={() => setShareModalOpen(true)}
-        customerUpdateDraft={businessUpdateDraft}
-        onCustomerUpdateDraftChange={setBusinessUpdateDraft}
-        customerUpdateDraftStatus={businessUpdateDraftStatus}
-        onCustomerUpdateDraftStatusChange={setBusinessUpdateDraftStatus}
         reviewSuccessMsg={reviewSuccessMsg}
         timelineFilter={timelineFilter}
         onTimelineFilterChange={setTimelineFilter}
