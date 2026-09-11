@@ -8,8 +8,12 @@ If a line here would need editing when the workboard changes, it belongs in the 
 diff review ([BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md)). GAP-095 is complete —
 both slices reviewed and committed (095-2 `d1d2d0dc`, 095-1 `67648891`)
 ([BL155](build-log/155-gap-095-auth-response-enumeration-hardening.md)).
-Next session: run GAP-040 discovery (next in the locked pilot-gate order).
-Alternatively, start unstarted audit Vector 6, 7, 9, 10, or 11.
+GAP-040 discovery ran 2026-09-11 (see workboard item 8) — no false claims found, but Price Book /
+Proposed-vs-Actual-Work is missing from marketing copy and the "trust and continuity layer" tagline
+isn't on the marketing pages. Christian deferred the copy fix until app work stabilizes; don't
+re-run discovery, just pick it back up from the workboard findings when ready.
+Next session: continue down the locked pilot-gate order after GAP-040 (GAP-063, GAP-048, GAP-049),
+or start unstarted audit Vector 6, 7, 9, 10, or 11.
 
 ## Baseline
 
