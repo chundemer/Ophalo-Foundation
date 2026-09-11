@@ -1147,6 +1147,10 @@ public static class KeepEndpoints
 
         // Customer page — anonymous, resolved by page token (Phase 8-B1-β)
         // Returns 200 (active) or 410 (expired). Expired body: { businessName, referenceCode, isExpired, newRequestUrl }.
+        // Rate limited (AUDIT-V6-A / F6.1): the same composite IP+pageToken "customer-write"
+        // policy as every other {pageToken} route (ADR-129) — this route isn't read-only either
+        // (it debounce-writes CustomerPageLastViewedAtUtc), and was the one anonymous route
+        // missing a limiter entirely.
         app.MapGet("/keep/r/{pageToken}", async (
             string pageToken,
             GetKeepCustomerPageService service,
@@ -1160,7 +1164,7 @@ public static class KeepEndpoints
             return page.IsExpired
                 ? Results.Json(page, statusCode: StatusCodes.Status410Gone)
                 : Results.Ok(page);
-        });
+        }).RequireRateLimiting("customer-write");
 
         // Customer message routes — anonymous, one route per intent, rate limited (ADR-129..131, ADR-342)
         app.MapPost("/keep/r/{pageToken}/question",

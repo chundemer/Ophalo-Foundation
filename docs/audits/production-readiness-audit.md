@@ -399,14 +399,40 @@ dirty guards, `request-detail/helpers.ts`, and `SystemClock.cs`. Heavy overlap w
 
 - [ ] Public intake forms (`/keep/s/[business-slug]`, magic-link exchange) have IP-based +
       token-bucket rate limiting against spam / abuse.
-- [ ] Public pages expose zero internal metadata — no internal notes, pricing margins, tech
-      assignment history, or raw internal DB IDs.
-- [ ] `GET /updates/guides/img/{name}` (and any other name/path-parameter file serving) rejects
+- [x] Public pages expose zero internal metadata — no internal notes, pricing margins, tech
+      assignment history, or raw internal DB IDs. (F6.2 remains open — a dormant, low-impact
+      externally observable internal-ID exposure, not a leak of guarded content.)
+- [x] `GET /updates/guides/img/{name}` (and any other name/path-parameter file serving) rejects
       path traversal and only serves from the allowlisted asset store.
+
+**Coverage swept (2026-09-11):** every `Map{Get,Post,Put,Delete,Patch}` under `src/OpHalo.Api`
+(165 call sites across 20 files) classified as authorized / rate-limited / neither, group-aware
+(`MapGroup("/auth").RequireRateLimiting("auth")` covers `/start`, `/signin`, `/exchange`,
+`/continue`, `/mobile-handoff/redeem`; `/me`, `/logout` add `RequireAuthorization()` on top). The
+only anonymous surface in the API is the documented public-intake / customer-page / customer-message
+cluster in `KeepEndpoints.cs` plus `POST /accounts/invite/accept` (rate-limited under `"auth"`).
+Every anonymous route is rate-limited **except** `GET /keep/r/{pageToken}` (F6.1).
 
 **Findings**
 
-_None recorded yet._
+| ID | Severity | Location | Finding | Impact |
+| --- | --- | --- | --- | --- |
+| F6.1 | pilot-risk | `src/OpHalo.Api/Keep/KeepEndpoints.cs:1150-1163` | `GET /keep/r/{pageToken}` (the anonymous customer-facing request page) has no `.RequireRateLimiting(...)`, unlike every other anonymous route in the API (`public-intake`, `customer-write`, `auth`). It is also not read-only: `GetKeepCustomerPageService.ExecuteAsync` loads a tracked entity and calls `RecordCustomerPageView` (debounced 5 min) + `CommitPageViewAsync` on every non-expired hit. | `PageToken` is high-entropy, so brute-force guessing isn't realistic, but an attacker who already has (or leaks) one token — or is scripting a load test — can hit this route at unlimited rate: unbounded DB reads (guard evaluation, tracked-entity load, event-timeline query) plus a real write path on every request, with none of the throttling every sibling anonymous route has. |
+| F6.2 | hardening (open) | `src/OpHalo.Api/Keep/KeepEndpoints.cs:1227-1229, 1257-1259` | `HandlePublicIntake` / `HandlePublicIntakeBySlug` return `{ RequestId, ReferenceCode, PageToken }` to the anonymous caller on `201 Created`. `RequestId` is the raw internal `KeepRequest` primary key; the customer-facing frontend (`web/ophalo-web/src/app/keep/intake/[token]/IntakeForm.tsx:134-199`) only ever reads `pageToken` and `referenceCode` off the response — `requestId` is dead on the consuming side. | A dormant, low-impact externally observable internal-ID exposure — not an active leak of protected content (no internal notes/pricing/routing ride along), but an unused raw internal DB ID handed to an anonymous caller, contrary to the checklist's "no raw internal DB IDs" bar and the `KeepCustomerPageResult` cluster's own stated design ("no internal IDs... safe for public exposure"). Deferred out of the AUDIT-V6-A/F6.1 slice: `tests/OpHalo.IntegrationTests/Api/KeepPublicIntakeSlugApiTests.cs:198,214,278` and `KeepIntakeApiTests.cs:127,643` assert on / query by `body.RequestId`, so dropping it needs those repointed to `PageToken`/`ReferenceCode` — a tiny separate DTO-contract follow-up. |
+
+**Verified clean, no finding:**
+- `ToPublicIntakeInfoResponse` (`businessName`, `logoUrl`, `websiteUrl`, `phone` only) and
+  `KeepCustomerPageResult` (`KeepCustomerPageMapper.BuildExpiredResult` / `BuildActiveResult`,
+  `src/OpHalo.Keep.Application/Requests/KeepCustomerPageMapper.cs:17-58`) carry no internal IDs,
+  account/user IDs, notes, or pricing; the customer-visible event timeline is filtered by
+  `Visibility == All` at both the application mapper and the persistence query
+  (`EfKeepCustomerWritePersistence.cs:55`) — defense in depth.
+- `GET /updates/guides/img/{name}` sits behind `RequireAuthorization()` (not actually a public
+  surface) and is doubly closed against traversal: the route regex
+  (`UpdatesEndpoints.cs:17`, `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(png|jpe?g|webp)$`) admits no `/`
+  or `..`, and the resolved key is `GuideImagePrefix + name`
+  (`R2UpdatesContentSource.cs:95`, prefix `platform/updates/guides/img/`) — traversal is closed by
+  the regex alone, and the prefix keeps every resolved key inside the allowlisted asset path.
 
 ---
 
