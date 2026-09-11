@@ -29,6 +29,7 @@ public sealed class SendInviteService(
     ICurrentUser currentUser,
     IUserAccessPolicy userAccessPolicy,
     IFeatureAccessPolicy featurePolicy,
+    IAuthIssuanceThrottle issuanceThrottle,
     IEmailSender emailSender,
     IOptions<MagicLinkSettings> settings,
     IClock clock,
@@ -40,6 +41,15 @@ public sealed class SendInviteService(
     private static readonly Error ConfigurationError =
         Error.Create("Account.InconsistentState",
             "Invite link cannot be built — PublicBaseUrl is not configured.");
+
+    // Shared with StartAuthService/SignInAuthService/MemberManagementService (GAP-094/BL154):
+    // Recipient is the same global 3/15min allowance as magic-link issuance; Account is a
+    // 20/60min allowance per issuing account. Acquired atomically together right before token
+    // mutation so a denial leaves no email/token side effect.
+    private const int RecipientPermitLimit = 3;
+    private static readonly TimeSpan RecipientWindow = TimeSpan.FromMinutes(15);
+    private const int AccountPermitLimit = 20;
+    private static readonly TimeSpan AccountWindow = TimeSpan.FromMinutes(60);
 
     public async Task<Result<SendInviteResult>> HandleAsync(
         string email,
@@ -108,6 +118,22 @@ public sealed class SendInviteService(
             if (seatLimit > 0 && context.OccupiedSeats >= seatLimit)
                 return Result<SendInviteResult>.Failure(InviteErrors.SeatLimitReached);
         }
+
+        // Acquired right before token mutation (BL154): a denied recipient or account
+        // allowance leaves the invite row and email untouched. All-or-nothing across both
+        // partitions so a denied account allowance can't provisionally consume the recipient
+        // allowance (and vice versa).
+        var allowed = await issuanceThrottle.TryAcquireAsync(
+            [
+                new AuthIssuanceThrottleRequest(
+                    AuthIssuanceThrottleScopes.Recipient, normalizedEmail, RecipientPermitLimit, RecipientWindow),
+                new AuthIssuanceThrottleRequest(
+                    AuthIssuanceThrottleScopes.Account, currentUser.AccountId.ToString(), AccountPermitLimit, AccountWindow)
+            ],
+            cancellationToken);
+        if (!allowed)
+            return Result<SendInviteResult>.Failure(
+                Error.Create("Auth.IssuanceRateLimited", "Too many attempts. Try again later."));
 
         var rawToken = InviteTokenGenerator.GenerateRawToken();
         var tokenHash = InviteTokenGenerator.HashToken(rawToken);

@@ -4,10 +4,10 @@
 Locked decisions → [decision-index](decisions/decision-index.md). Working guardrails → CLAUDE.md.
 If a line here would need editing when the workboard changes, it belongs in the workboard, not here.
 
-**Updated 2026-09-11.** GAP-094 094-1 (public magic-link issuance throttle) is implemented and
-verified, committed as `197457b8`, awaiting Christian's diff review
-([BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md)). Next session: after that review
-lands, implement 094-2 (authenticated invite issuance), then GAP-095.
+**Updated 2026-09-11.** GAP-094 is code-complete: 094-1 (public magic-link issuance throttle,
+committed as `197457b8`) and 094-2 (authenticated invite issuance, reusing 094-1's seam unchanged)
+both await Christian's diff review ([BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md)).
+Next session: after that review lands, run GAP-095 discovery/preflight.
 Alternatively, start unstarted audit Vector 6, 7, 9, 10, or 11.
 
 ## Baseline

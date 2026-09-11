@@ -1,7 +1,8 @@
 # BL154 — GAP-094: Auth-code and invite issuance rate limiting
 
-**Status:** 094-1 implemented and verified 2026-09-11, awaiting Christian's diff review.
-094-2 begins only after that review/commit.
+**Status:** All of GAP-094 is code-complete. 094-1 is implemented, verified, and committed as
+`197457b8` on `main`, still awaiting Christian's diff review. **094-2 landed 2026-09-11** on top of
+that same commit, reusing its seam unchanged — also awaiting Christian's diff review.
 
 **Scope:** [workboard](../workboard.md) Next item 6; audit Vector 8 F8.4, F8.5, F8.11.
 **Supervised-pilot gate.**
@@ -46,7 +47,8 @@ unknown/ineligible contract remains 200 below cap.
 Christian generates the migration; Claude must not run `dotnet ef`. This is six production files,
 one migration family, two integration test files, and docs — still within the hard batch limit.
 
-**094-1 implemented and verified 2026-09-11, awaiting Christian's diff review.** `IAuthIssuanceThrottle`
+**094-1 implemented and verified, committed as `197457b8` 2026-09-11, awaiting Christian's diff
+review.** `IAuthIssuanceThrottle`
 (Application) takes one-or-more `AuthIssuanceThrottleRequest`s and acquires them atomically —
 all-or-nothing across the whole set in one PostgreSQL transaction, row-lock-ordered by (scope,
 key hash) to avoid deadlocks — so 094-2's two-key (recipient + account) invite acquisition reuses
@@ -77,19 +79,44 @@ clean.
 
 ## 094-2 — authenticated invite issuance
 
-Begin only after 094-1 is reviewed/committed. Modify `SendInviteService.cs` and
-`MemberManagementService.cs`; add coverage in `InviteTests.cs` and `MemberManagementTests.cs`; then
-update this build log/workboard/session log. Reuse 094-1's seam unchanged.
+**Landed 2026-09-11**, reusing 094-1's `IAuthIssuanceThrottle` seam unchanged — no migration in this
+slice. `SendInviteService.HandleAsync` and `MemberManagementService.ResendInviteAsync` each acquire
+the shared `Recipient` allowance (3/15min, same global bucket as magic-link issuance — keyed on
+`target.NormalizedEmail` on the resend path) plus the new `Account` allowance (20/60min, keyed on
+`currentUser.AccountId`) atomically in one `TryAcquireAsync` call, right before token
+generation/mutation — after authorization and the seat-limit check, so a seat-limit or
+already-active/removed rejection never consumes the allowance. `ResendInviteAsync` acquires before
+`RefreshInvite`/`RestoreInvite` + commit for both `Email` and `ManualShare` delivery, so
+`ManualShare` can't bypass the cap; denial returns the same `Auth.IssuanceRateLimited` → body-free
+429 already wired in `ErrorHttpMapper`. No endpoint signature, client contract, email template, token
+lifetime, frontend, or GAP-095 change — as scoped.
 
-Regression: a fourth invite/resend issuance to one recipient is 429 with no email or token mutation;
-the twenty-first issuance from one account in an hour is 429; manual-share resend consumes the
-allowance and remains unable to bypass the token-rotation guard.
+Two production files (`SendInviteService.cs`, `MemberManagementService.cs`); two test files
+(`InviteTests.cs`, `MemberManagementTests.cs`) — well inside the hard batch limit.
 
-No endpoint signature, client contract, email template, token lifetime, frontend, or GAP-095 change
-belongs in either slice.
+Verification: 4 new regression tests (`SendInvite_FourthIssuanceToOneRecipient_...`,
+`SendInvite_TwentyFirstIssuanceFromOneAccount_...`, `ResendInvite_FourthIssuanceToOneRecipient_...
+ManualShareCannotBypassCap`, `ResendInvite_TwentyFirstIssuanceFromOneAccount_...`) — each mutation-
+tested by temporarily moving its service's `TryAcquireAsync` call to after the commit and confirming
+the test then fails (proving the assertions catch a real ordering regression, not just a stale
+`MembershipStatus`). Full `InviteTests` + `MemberManagementTests` 64/64 passed against a real
+Postgres container; full `OpHalo.IntegrationTests` 1677/1680 (3 pre-existing failures unrelated to
+this slice — an Npgsql connection timeout in a PriceBook migration test, a Sentry envelope-capture
+timeout, and a known-flaky catalog-item concurrent-create race; none touch Auth/Invite/
+MemberManagement code); `git diff --check` clean; Foundation.Application/Infrastructure/Api/
+IntegrationTests/ArchitectureTests all build clean.
+
+Repo-wide `rg -n "accounts/me/invite|resend-invite" tests/` confirmed no other test file issues
+invites, so no BL154-094-1-style cross-test cap collision to fix.
+
+Decision-queue follow-up (not done here — would touch the already-committed 094-1 files): the
+`RecipientPermitLimit`/`RecipientWindow` constants are now private and duplicated across four
+services (`StartAuthService`, `SignInAuthService`, `SendInviteService`, `MemberManagementService`).
+Hoist them next to `AuthIssuanceThrottleScopes` in `IAuthIssuanceThrottle.cs` in a future cleanup
+slice.
+
+**All of GAP-094 is code-complete.** Hot blocker: none. Awaiting Christian's diff review.
 
 ## Claude handoff
 
-Start 094-1 only. Report the file gate, Application/Infrastructure/API/migration/test layers, and
-the 3/15 recipient plus 20/60 account limits before editing. Do not substitute in-memory state,
-alter email timing, or combine 094-2/GAP-095. Stop for Christian to generate/review the migration.
+GAP-094 is done. Next: GAP-095 discovery/preflight.

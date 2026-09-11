@@ -29,6 +29,7 @@ public sealed class MemberManagementService(
     IUserAccessPolicy userAccessPolicy,
     IFeatureAccessPolicy featurePolicy,
     IAccountSessionService sessionService,
+    IAuthIssuanceThrottle issuanceThrottle,
     IEmailSender emailSender,
     IOptions<MagicLinkSettings> settings,
     IClock clock,
@@ -36,6 +37,16 @@ public sealed class MemberManagementService(
 {
     private static readonly Error Unauthorized =
         Error.Create("auth.unauthorized", "Authentication required.");
+
+    // Shared with StartAuthService/SignInAuthService/SendInviteService (GAP-094/BL154):
+    // Recipient is the same global 3/15min allowance as magic-link issuance; Account is a
+    // 20/60min allowance per issuing account. Acquired atomically together right before token
+    // mutation, for both Email and ManualShare delivery, so a denial leaves no side effect and
+    // ManualShare can't bypass the cap.
+    private const int RecipientPermitLimit = 3;
+    private static readonly TimeSpan RecipientWindow = TimeSpan.FromMinutes(15);
+    private const int AccountPermitLimit = 20;
+    private static readonly TimeSpan AccountWindow = TimeSpan.FromMinutes(60);
 
     // -------------------------------------------------------------------------
     // List
@@ -339,6 +350,22 @@ public sealed class MemberManagementService(
             return Result<ResendInviteResult>.Failure(
                 Error.Create("Account.InconsistentState",
                     "Invite link cannot be built — PublicBaseUrl is not configured."));
+
+        // Acquired right before token mutation (BL154), for both Email and ManualShare
+        // delivery: a denied recipient or account allowance leaves the invite row and any
+        // delivery untouched, and ManualShare can't bypass the cap. All-or-nothing across both
+        // partitions.
+        var allowed = await issuanceThrottle.TryAcquireAsync(
+            [
+                new AuthIssuanceThrottleRequest(
+                    AuthIssuanceThrottleScopes.Recipient, target.NormalizedEmail, RecipientPermitLimit, RecipientWindow),
+                new AuthIssuanceThrottleRequest(
+                    AuthIssuanceThrottleScopes.Account, currentUser.AccountId.ToString(), AccountPermitLimit, AccountWindow)
+            ],
+            cancellationToken);
+        if (!allowed)
+            return Result<ResendInviteResult>.Failure(
+                Error.Create("Auth.IssuanceRateLimited", "Too many attempts. Try again later."));
 
         var rawToken = InviteTokenGenerator.GenerateRawToken();
         var tokenHash = InviteTokenGenerator.HashToken(rawToken);

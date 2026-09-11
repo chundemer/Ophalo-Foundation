@@ -848,8 +848,100 @@ public sealed class MemberManagementTests : IClassFixture<KeepApiWebFactory>, IA
     }
 
     // =========================================================================
+    // Test 27 — Resend-invite issuance rate limiting (GAP-094/BL154): manual-share
+    //           resend consumes the shared allowance same as email and can't bypass the cap.
+    // =========================================================================
+
+    [Fact]
+    public async Task ResendInvite_FourthIssuanceToOneRecipient_Returns429_ManualShareCannotBypassCap()
+    {
+        const string inviteeEmail = "capped-resend@example.com";
+        var (accountId, _, ownerCookie) = await SeedAccountAsync();
+        await SetMaxUserSeatsAsync(accountId, 100);
+        var inviteId = await SeedInvitedMemberAsync(accountId, inviteeEmail);
+
+        // First two resends via manual_share, third via email — all consume the same shared
+        // 3/15min recipient allowance regardless of delivery mode.
+        var first = await AuthRequest(ownerCookie).PostAsJsonAsync(
+            $"/accounts/me/members/{inviteId}/resend-invite", new { delivery = "manual_share" });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var second = await AuthRequest(ownerCookie).PostAsJsonAsync(
+            $"/accounts/me/members/{inviteId}/resend-invite", new { delivery = "manual_share" });
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        var secondBody = await second.Content.ReadFromJsonAsync<JsonElement>();
+        var secondInviteUrl = secondBody.GetProperty("inviteUrl").GetString()!;
+        const string tokenParam = "token=";
+        var secondToken = Uri.UnescapeDataString(
+            secondInviteUrl[(secondInviteUrl.IndexOf(tokenParam, StringComparison.Ordinal) + tokenParam.Length)..]);
+
+        _factory.EmailSender.Clear();
+        var third = await AuthRequest(ownerCookie).PostAsJsonAsync(
+            $"/accounts/me/members/{inviteId}/resend-invite", new { delivery = "email" });
+        Assert.Equal(HttpStatusCode.OK, third.StatusCode);
+        Assert.Single(_factory.EmailSender.SentEmails, e => e.To == inviteeEmail);
+        var thirdToken = _factory.EmailSender.SentEmails.Single(e => e.To == inviteeEmail).ExtractInviteToken()!;
+
+        // The second (manual_share) token is already invalid — the third (email) resend
+        // rotated past it before the cap was reached.
+        var acceptSecond = await _client.PostAsJsonAsync("/accounts/invite/accept", new { token = secondToken });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, acceptSecond.StatusCode);
+
+        // Fourth resend — a different delivery mode (manual_share) — is denied, proving the
+        // cap isn't per-delivery-mode and can't be bypassed by switching modes.
+        var fourth = await AuthRequest(ownerCookie).PostAsJsonAsync(
+            $"/accounts/me/members/{inviteId}/resend-invite", new { delivery = "manual_share" });
+        Assert.Equal(HttpStatusCode.TooManyRequests, fourth.StatusCode);
+        Assert.Empty(await fourth.Content.ReadAsStringAsync());
+
+        // The third (email) resend's still-live token must remain valid — the denied fourth
+        // attempt must not have rotated it further.
+        var acceptThird = await _client.PostAsJsonAsync("/accounts/invite/accept", new { token = thirdToken });
+        Assert.Equal(HttpStatusCode.OK, acceptThird.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResendInvite_TwentyFirstIssuanceFromOneAccount_Returns429()
+    {
+        var (accountId, _, ownerCookie) = await SeedAccountAsync();
+        await SetMaxUserSeatsAsync(accountId, 100);
+
+        // Seed 7 invited members and resend to each, cycling so no recipient exceeds its
+        // 3/15min allowance, isolating the 20/60min per-account allowance.
+        var inviteIds = new List<Guid>();
+        for (var i = 0; i < 7; i++)
+            inviteIds.Add(await SeedInvitedMemberAsync(accountId, $"resend-member{i}@example.com"));
+
+        for (var i = 0; i < 20; i++)
+        {
+            var response = await AuthRequest(ownerCookie).PostAsJsonAsync(
+                $"/accounts/me/members/{inviteIds[i % 7]}/resend-invite", new { delivery = "email" });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        _factory.EmailSender.Clear();
+
+        // 21st: recipient bucket 6 has had 2 prior resends (still under its cap of 3), so only
+        // the account allowance can deny this one.
+        var twentyFirst = await AuthRequest(ownerCookie).PostAsJsonAsync(
+            $"/accounts/me/members/{inviteIds[6]}/resend-invite", new { delivery = "email" });
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, twentyFirst.StatusCode);
+        Assert.Empty(_factory.EmailSender.SentEmails);
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
+
+    private async Task SetMaxUserSeatsAsync(Guid accountId, int maxUserSeats)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        await db.AccountEntitlements
+            .Where(e => e.AccountId == accountId)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.MaxUserSeats, maxUserSeats));
+    }
 
     /// <summary>
     /// Seeds a Trial account with an Active primary owner.

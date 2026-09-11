@@ -608,8 +608,80 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
     }
 
     // =========================================================================
+    // POST /accounts/me/invite — issuance rate limiting (GAP-094/BL154)
+    // =========================================================================
+
+    [Fact]
+    public async Task SendInvite_FourthIssuanceToOneRecipient_Returns429_NoEmailOrTokenMutation()
+    {
+        const string inviteeEmail = "capped@example.com";
+        var (accountId, _, cookie) = await SeedAccountAsync();
+        await SetMaxUserSeatsAsync(accountId, 100);
+
+        // First send + two resends consume the shared 3/15min recipient allowance.
+        for (var i = 0; i < 3; i++)
+        {
+            var r = await AuthRequest(cookie).PostAsJsonAsync("/accounts/me/invite",
+                new { email = inviteeEmail, role = "operator" });
+            Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        }
+
+        // Third send's token — still live — proves whether the denied fourth rotated it.
+        var thirdToken = _factory.EmailSender.SentEmails.Last(e => e.To == inviteeEmail).ExtractInviteToken()!;
+        _factory.EmailSender.Clear();
+
+        var fourth = await AuthRequest(cookie).PostAsJsonAsync("/accounts/me/invite",
+            new { email = inviteeEmail, role = "operator" });
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, fourth.StatusCode);
+        Assert.Empty(await fourth.Content.ReadAsStringAsync());
+        Assert.Empty(_factory.EmailSender.SentEmails);
+
+        // The third request's still-unconsumed token must remain valid — the denied fourth
+        // attempt must not have rotated it.
+        var accept = await _client.PostAsJsonAsync("/accounts/invite/accept", new { token = thirdToken });
+        Assert.Equal(HttpStatusCode.OK, accept.StatusCode);
+    }
+
+    [Fact]
+    public async Task SendInvite_TwentyFirstIssuanceFromOneAccount_Returns429()
+    {
+        var (accountId, _, cookie) = await SeedAccountAsync();
+        await SetMaxUserSeatsAsync(accountId, 100);
+
+        // Spread 20 issuances across 7 recipients (max 3 each) so the shared per-recipient
+        // 3/15min allowance never trips — isolating the 20/60min per-account allowance.
+        for (var i = 0; i < 20; i++)
+        {
+            var email = $"member{i % 7}@example.com";
+            var r = await AuthRequest(cookie).PostAsJsonAsync("/accounts/me/invite",
+                new { email, role = "operator" });
+            Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        }
+
+        _factory.EmailSender.Clear();
+
+        // 21st issuance: recipient bucket 6 has had 2 prior uses (still under its 3 cap), so
+        // only the account allowance can deny this one.
+        var twentyFirst = await AuthRequest(cookie).PostAsJsonAsync("/accounts/me/invite",
+            new { email = "member6@example.com", role = "operator" });
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, twentyFirst.StatusCode);
+        Assert.Empty(_factory.EmailSender.SentEmails);
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
+
+    private async Task SetMaxUserSeatsAsync(Guid accountId, int maxUserSeats)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        await db.AccountEntitlements
+            .Where(e => e.AccountId == accountId)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.MaxUserSeats, maxUserSeats));
+    }
 
     /// <summary>
     /// Seeds a Trial account. By default uses Owner role for the seeded member.
