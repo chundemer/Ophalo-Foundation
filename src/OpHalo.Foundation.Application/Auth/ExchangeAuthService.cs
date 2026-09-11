@@ -71,14 +71,17 @@ public sealed class ExchangeAuthService(
         if (code is null)
             return Fail(AccountAuthCodeErrors.NotFound, null);
 
+        // GAP-095 (F8.10): stale/used codes omit entryContext, same as an unknown code —
+        // otherwise a since-expired/consumed/invalidated link leaks that it was ever valid
+        // plus its account-type classification to anyone who ever possessed it.
         if (code.IsExpired(nowUtc))
-            return Fail(AccountAuthCodeErrors.Expired, code.EntryContext);
+            return Fail(AccountAuthCodeErrors.Expired, null);
 
         if (code.IsConsumed)
-            return Fail(AccountAuthCodeErrors.AlreadyConsumed, code.EntryContext);
+            return Fail(AccountAuthCodeErrors.AlreadyConsumed, null);
 
         if (code.IsInvalidated)
-            return Fail(AccountAuthCodeErrors.CannotConsumeInvalidated, code.EntryContext);
+            return Fail(AccountAuthCodeErrors.CannotConsumeInvalidated, null);
 
         if (code.EntryContext is null)
             return Fail(AccountErrors.InconsistentState, null);

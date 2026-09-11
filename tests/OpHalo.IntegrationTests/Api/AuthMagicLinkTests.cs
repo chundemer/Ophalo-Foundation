@@ -284,7 +284,7 @@ public sealed class AuthMagicLinkTests : IClassFixture<KeepApiWebFactory>, IAsyn
         Assert.Equal(HttpStatusCode.UnprocessableEntity, second.StatusCode);
         var body = await ReadProblemAsync(second);
         Assert.Equal("AuthCode.AlreadyConsumed", body.Code);
-        Assert.Equal("existing_member", body.EntryContext);
+        Assert.Null(body.EntryContext);
     }
 
     [Fact]

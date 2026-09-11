@@ -187,14 +187,14 @@ public sealed class AuthStartTests : IClassFixture<KeepApiWebFactory>, IAsyncLif
         Assert.NotNull(secondCode);
         Assert.NotEqual(firstCode, secondCode);
 
-        // Old code → 422 with entryContext=new_account.
+        // Old code → 422, no entryContext (stale codes don't leak classification).
         var exchangeResponse = await _client.PostAsJsonAsync("/auth/exchange",
             new { code = firstCode });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, exchangeResponse.StatusCode);
         var body = await ReadProblemAsync(exchangeResponse);
         Assert.Equal("AuthCode.CannotConsumeInvalidated", body.Code);
-        Assert.Equal("new_account", body.EntryContext);
+        Assert.Null(body.EntryContext);
     }
 
     // -------------------------------------------------------------------------
@@ -359,7 +359,7 @@ public sealed class AuthStartTests : IClassFixture<KeepApiWebFactory>, IAsyncLif
     }
 
     [Fact]
-    public async Task Exchange_ConsumedNewAccountCode_Returns422WithEntryContext()
+    public async Task Exchange_ConsumedNewAccountCode_Returns422NoEntryContext()
     {
         var code = await IssueNewAccountCodeAsync();
 
@@ -373,7 +373,7 @@ public sealed class AuthStartTests : IClassFixture<KeepApiWebFactory>, IAsyncLif
 
         var body = await ReadProblemAsync(second);
         Assert.Equal("AuthCode.AlreadyConsumed", body.Code);
-        Assert.Equal("new_account", body.EntryContext);
+        Assert.Null(body.EntryContext);
     }
 
     [Fact]

@@ -4,10 +4,14 @@
 Locked decisions → [decision-index](decisions/decision-index.md). Working guardrails → CLAUDE.md.
 If a line here would need editing when the workboard changes, it belongs in the workboard, not here.
 
-**Updated 2026-09-11.** GAP-094 is code-complete: 094-1 (public magic-link issuance throttle,
-committed as `197457b8`) and 094-2 (authenticated invite issuance, reusing 094-1's seam unchanged)
-both await Christian's diff review ([BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md)).
-Next session: after that review lands, run GAP-095 discovery/preflight.
+**Updated 2026-09-11.** GAP-094 is code-complete (094-1 `197457b8`, 094-2), awaiting Christian's
+diff review ([BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md)). GAP-095 095-2
+(`entryContext` removal for stale/used `/auth/exchange` codes) also landed 2026-09-11 and awaits
+diff review ([BL155](build-log/155-gap-095-auth-response-enumeration-hardening.md)); its decisions
+are locked (async dispatch = in-memory `Channel<T>`, no durable outbox) but 095-1 (async magic-link
+dispatch, closing the timing oracle) is not started.
+Next session: after review lands, implement 095-1, then run GAP-040 discovery (next in the locked
+pilot-gate order).
 Alternatively, start unstarted audit Vector 6, 7, 9, 10, or 11.
 
 ## Baseline
