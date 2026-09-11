@@ -4,7 +4,7 @@
 Locked decisions → [decision-index](decisions/decision-index.md). Working guardrails → CLAUDE.md.
 If a line here would need editing when the workboard changes, it belongs in the workboard, not here.
 
-**Updated 2026-09-10.**
+**Updated 2026-09-11.**
 
 ## Baseline
 
@@ -54,6 +54,13 @@ removal of the now-dead `customerUpdateDraft*` / `businessUpdateDraft*` prop cha
 pass-through test files (4 prod + 6 test; brief said 7 test — `UnifiedComposer.activateCustomerUpdate`
 was already de-propped in 073-1). `tsc` clean, `check:tokens` pass, `ophalo-app` 1184/1184.
 **All of GAP-073 is code-complete.** Hot blocker: none.
+
+**GAP-091 — Quick Capture draft persistence (pilot gate).** [BL152](build-log/152-gap-091-quick-capture-draft-persistence.md)
+carries the spec + completion record. **Implemented 2026-09-11, awaiting Christian's diff
+review** — per-user AsyncStorage autosave/restore/discard + `beforeRemove` dismiss guard in
+`mobile/ophalo-mobile/app/modal.tsx`; logout/401 draft cleanup in `AuthContext.tsx`; new
+`@react-native-async-storage/async-storage` dependency. `tsc` clean, `vitest` 33/33.
+**GAP-091 is code-complete.** Hot blocker: none.
 
 ## Next
 

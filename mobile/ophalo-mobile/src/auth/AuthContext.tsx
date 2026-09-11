@@ -1,8 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { api, ApiError, setOn401Handler } from '../api/client';
+import { clearQuickCaptureDraft } from '../hooks/quickCaptureDraft';
 import { clearSessionToken, getAppInstallationId, getSessionToken, setSessionToken } from './secureStore';
 
 async function upsertDevice(): Promise<void> {
@@ -42,11 +44,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isRoleBlocked, setIsRoleBlocked] = useState(false);
 
+  // The 401 handler below is registered once; it reads this ref (not the `user` state
+  // closure) so it always sees the account that was actually signed in at 401 time.
+  const userRef = useRef<MeResponse | null>(null);
+  userRef.current = user;
+
   useEffect(() => {
     setOn401Handler(() => {
+      const accountUserId = userRef.current?.accountUserId;
       void clearSessionToken().catch(() => {});
       setUser(null);
       queryClient.clear();
+      // Forced sign-out (session revoked/expired): clear this user's Quick Capture draft so a
+      // shared field device can't surface the prior user's customer PII on the next sign-in.
+      if (accountUserId) void clearQuickCaptureDraft(AsyncStorage, accountUserId);
     });
     return () => { setOn401Handler(null); };
   }, [queryClient]);
@@ -93,12 +104,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // logout is guaranteed to clear local state — it never throws.
   // API cleanup (device revocation, session revocation) is best-effort.
   async function logout(): Promise<void> {
+    const accountUserId = user?.accountUserId;
     const token = await getSessionToken().catch(() => null);
     const installId = await getAppInstallationId().catch(() => null);
     await clearSessionToken().catch(() => {});
     setUser(null);
     setIsRoleBlocked(false);
     queryClient.clear();
+    if (accountUserId) void clearQuickCaptureDraft(AsyncStorage, accountUserId);
 
     void (async () => {
       if (installId) {

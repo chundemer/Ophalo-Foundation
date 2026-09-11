@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -10,7 +11,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useNavigation } from 'expo-router';
 
 import { useAuth } from '@/src/auth/AuthContext';
 import { ApiError } from '@/src/api/client';
@@ -24,6 +25,8 @@ import {
   usePhoneLookup,
   validateAddressIfOpen,
 } from '@/src/hooks/useQuickCapture';
+import { QuickCaptureDraftFields, isDraftBlank } from '@/src/hooks/quickCaptureDraft';
+import { useQuickCaptureDraft } from '@/src/hooks/useQuickCaptureDraft';
 
 const SOURCE_OPTIONS: { label: string; value: string }[] = [
   { label: 'Phone call', value: 'phone' },
@@ -45,6 +48,12 @@ function CaptureModalContent() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { isOnline } = useNetworkState();
+  const { user } = useAuth();
+  const navigation = useNavigation();
+
+  const { hydrated, restoredDraft, saveDraft, flushDraft, discardDraft } = useQuickCaptureDraft(
+    user?.accountUserId ?? null,
+  );
 
   const [phone, setPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -76,6 +85,137 @@ function CaptureModalContent() {
       setLookupApplied(true);
     }
   }, [lookup, lookupApplied]);
+
+  const draftFields: QuickCaptureDraftFields = {
+    phone,
+    customerName,
+    customerEmail,
+    description,
+    source,
+    showAddress,
+    addrLine1,
+    addrLine2,
+    addrCity,
+    addrState,
+    addrZip,
+  };
+  // Kept current for the navigation guard and the create/discard cleanup paths, which run
+  // outside React's render cycle and would otherwise close over a stale field snapshot.
+  const draftFieldsRef = useRef(draftFields);
+  draftFieldsRef.current = draftFields;
+  // Set right before navigating away after a successful create, so the beforeRemove guard
+  // below doesn't fire on the resulting navigation — form state hasn't been reset yet at that
+  // point (setState is batched), so isDraftBlank(draftFieldsRef.current) would still be false.
+  const suppressGuardRef = useRef(false);
+
+  // Gates autosave: without this, the first post-hydration render still shows blank React
+  // state (this effect below hasn't applied the restore yet), so autosave would see a blank
+  // form and discard() the just-restored draft, only re-saving it 300ms later — an app
+  // termination inside that window would lose the restore. Autosave stays off until this
+  // effect has run at least once (whether or not there was anything to restore).
+  const [restoreApplied, setRestoreApplied] = useState(false);
+
+  // Apply a restored draft exactly once, right after hydration completes.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (restoredDraft) {
+      setPhone(restoredDraft.phone);
+      setCustomerName(restoredDraft.customerName);
+      setCustomerEmail(restoredDraft.customerEmail);
+      setDescription(restoredDraft.description);
+      setSource(restoredDraft.source);
+      setShowAddress(restoredDraft.showAddress);
+      setAddrLine1(restoredDraft.addrLine1);
+      setAddrLine2(restoredDraft.addrLine2);
+      setAddrCity(restoredDraft.addrCity);
+      setAddrState(restoredDraft.addrState);
+      setAddrZip(restoredDraft.addrZip);
+    }
+    setRestoreApplied(true);
+    // Intentionally hydrated-only: restoredDraft is set once by the hook and must not be
+    // re-applied on every subsequent field edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
+
+  // Debounced autosave on every field change, once hydration and the restore step have settled.
+  useEffect(() => {
+    if (!hydrated || !restoreApplied) return;
+    saveDraft(draftFields);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    hydrated,
+    restoreApplied,
+    phone,
+    customerName,
+    customerEmail,
+    description,
+    source,
+    showAddress,
+    addrLine1,
+    addrLine2,
+    addrCity,
+    addrState,
+    addrZip,
+  ]);
+
+  // Intercepts every dismissal path (Cancel tap, swipe-down, hardware back) while the form
+  // has content. Flushes the pending autosave immediately rather than leaving it to the
+  // debounce, since the screen is about to be removed.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (suppressGuardRef.current || isDraftBlank(draftFieldsRef.current)) return;
+      e.preventDefault();
+      Alert.alert('Save draft and close?', undefined, [
+        { text: 'Keep editing', style: 'cancel' },
+        {
+          text: 'Close',
+          onPress: () => {
+            void flushDraft(draftFieldsRef.current).finally(() => {
+              // Must be set before dispatch: the resulting removal re-fires this same
+              // beforeRemove listener, which would otherwise reopen this confirm forever.
+              suppressGuardRef.current = true;
+              navigation.dispatch(e.data.action);
+            });
+          },
+        },
+      ]);
+    });
+    return unsubscribe;
+  }, [navigation, flushDraft]);
+
+  function resetFormFields(): void {
+    setPhone('');
+    setCustomerName('');
+    setCustomerEmail('');
+    setDescription('');
+    setSource('phone');
+    setLookupApplied(false);
+    setShowAddress(false);
+    setAddrLine1('');
+    setAddrLine2('');
+    setAddrCity('');
+    setAddrState('');
+    setAddrZip('');
+    setAddrErrors({});
+  }
+
+  function handleDiscardDraft(): void {
+    Alert.alert(
+      'Discard this capture?',
+      "This can't be undone.",
+      [
+        { text: 'Keep editing', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => {
+            void discardDraft();
+            resetFormFields();
+          },
+        },
+      ],
+    );
+  }
 
   const inputBg = isDark ? '#2C2C2E' : '#F2F2F7';
   const inputColor = isDark ? '#FFFFFF' : '#000000';
@@ -113,6 +253,10 @@ function CaptureModalContent() {
           serviceZip: addrZip.trim() || undefined,
         }),
       });
+      // Cleanup is awaited (cancels any pending autosave + removes the persisted draft)
+      // before navigating away, so no queued write can land after this request now exists.
+      await discardDraft();
+      suppressGuardRef.current = true;
       router.replace({ pathname: '/requests/[id]', params: { id: result.requestId } });
     } catch (err) {
       if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
@@ -122,6 +266,16 @@ function CaptureModalContent() {
       }
     }
   }
+
+  if (!hydrated) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  const hasDraftContent = !isDraftBlank(draftFields);
 
   return (
     <KeyboardAvoidingView
@@ -151,6 +305,24 @@ function CaptureModalContent() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        {restoredDraft && (
+          <View style={styles.draftBanner}>
+            <Text style={styles.draftBannerText}>
+              Restored draft from {new Date(restoredDraft.savedAt).toLocaleString()}
+            </Text>
+          </View>
+        )}
+
+        {hasDraftContent && (
+          <TouchableOpacity
+            onPress={handleDiscardDraft}
+            style={styles.discardDraftLink}
+            accessibilityLabel="Discard draft"
+          >
+            <Text style={styles.discardDraftText}>Discard draft</Text>
+          </TouchableOpacity>
+        )}
+
         {!isOnline && (
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineText}>No connection — save disabled until online.</Text>
@@ -373,6 +545,16 @@ function CaptureModalContent() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  draftBanner: {
+    backgroundColor: '#E5F3FF',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  draftBannerText: { fontSize: 14, color: '#0B5FA5' },
+  discardDraftLink: { alignSelf: 'flex-start', marginBottom: 16 },
+  discardDraftText: { fontSize: 13, color: '#DC3545' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
