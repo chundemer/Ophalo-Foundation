@@ -4,9 +4,11 @@
 Locked decisions → [decision-index](decisions/decision-index.md). Working guardrails → CLAUDE.md.
 If a line here would need editing when the workboard changes, it belongs in the workboard, not here.
 
-**Updated 2026-09-11.** GAP-093 is code-complete, awaiting Christian's diff review
-([BL153](build-log/153-gap-093-session-account-lifecycle-gate.md)). Next session: after that review
-lands, implement GAP-094, then GAP-095. Alternatively, start unstarted audit Vector 6, 7, 9, 10, or 11.
+**Updated 2026-09-11.** GAP-094 094-1 (public magic-link issuance throttle) is implemented and
+verified, committed as `197457b8`, awaiting Christian's diff review
+([BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md)). Next session: after that review
+lands, implement 094-2 (authenticated invite issuance), then GAP-095.
+Alternatively, start unstarted audit Vector 6, 7, 9, 10, or 11.
 
 ## Baseline
 
@@ -65,11 +67,25 @@ review** — per-user AsyncStorage autosave/restore/discard + `beforeRemove` dis
 **GAP-091 is code-complete.** Hot blocker: none.
 
 **GAP-093 — session-layer account-lifecycle gate (pilot gate).** [BL153](build-log/153-gap-093-session-account-lifecycle-gate.md)
-carries the preflight + completion record. **Implemented 2026-09-11, awaiting Christian's diff
-review** — `SessionData`/`SessionStore`/`SessionAuthenticationHandler` fail closed on
+was reviewed, committed as `b7c815e4`, and pushed to `main` on 2026-09-11. It makes
+`SessionData`/`SessionStore`/`SessionAuthenticationHandler` fail closed on
 `Account.LifecycleState != Active` immediately after the existing membership gate; 4 prod + 1 test
 file, no drift from preflight. `AuthApiTests` 37/37 (2 new regressions), unit 1909/1909,
-architecture 14/14. **GAP-093 is code-complete.** Hot blocker: none.
+architecture 14/14. Hot blocker: none.
+
+**GAP-094 — auth-code / invite issuance rate limiting (pilot gate).**
+[BL154](build-log/154-gap-094-auth-issuance-rate-limiting.md) carries the locked decisions, file
+gate, and completion record. **094-1 (public magic-link issuance) implemented and verified
+2026-09-11, committed as `197457b8`, awaiting Christian's diff review** — `IAuthIssuanceThrottle`
+(Application) acquires one-or-more partitions all-or-nothing in one PostgreSQL transaction, reused
+unchanged by 094-2's two-key acquisition; `EfAuthIssuanceThrottle` (Infrastructure) is entity-free —
+`INSERT … ON CONFLICT … DO UPDATE … WHERE … RETURNING` per partition, no DbSet/model registration;
+`/auth/start` + `/auth/signin` share a 3-per-15-minute recipient allowance, denial is a body-free
+429 (`Auth.IssuanceRateLimited`). Migration `20260911120000_AddAuthIssuanceThrottles` hand-written
+(no `.Designer.cs`, no model snapshot change). 50/50 auth integration tests pass against real
+Postgres, including a cross-IP proof (`RateLimitIntegrationTests.cs`) showing the 4th denied attempt
+creates no new auth-code row and doesn't invalidate the 3rd request's still-exchangeable code.
+**094-2 (authenticated invite issuance) begins only after this review/commit.** Hot blocker: none.
 
 **`ophalo-web` Next maintenance.** Separate, implementation-ready maintenance record:
 [BL151](build-log/151-ophalo-web-next-16-3-maintenance-preflight.md). Upgrade only Next `16.2.9` →
