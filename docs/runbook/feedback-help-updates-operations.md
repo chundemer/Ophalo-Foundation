@@ -67,8 +67,12 @@ API's R2 read credential from Railway.
 4. Prefer the Cloudflare dashboard for the first publish. It makes the bucket/object target visible
    and avoids introducing a local credential file. A founder may later use `wrangler` with that
    same narrowly scoped credential, but only after a small reviewed publish command exists.
-5. Before replacing an existing feed, download its current object as a rollback copy. Repository
-   history remains the source of truth; R2 is not the editorial system of record.
+5. Before replacing an existing feed, download its current object as a rollback copy, named
+   `platform/updates_<YYYY-MM-DD>.json` (the publish date of the copy being replaced) and stored
+   in the same bucket alongside the live object. Repository history remains the source of truth;
+   R2 is not the editorial system of record — these dated copies are a manual rollback aid only,
+   not a versioning system, and the application never reads them (see step 3 under "Subsequent R2
+   publishes").
 
 ### Vercel: PWA feature flag
 
@@ -122,6 +126,24 @@ Publish it once to establish the read path and clear the missing-object fallback
 
 If the feed is malformed, a warm API instance serves its last known good payload; a cold instance
 can show an empty feed. Correct the repository source, republish it, and verify again.
+
+## Subsequent R2 publishes
+
+Every publish after the first replaces the live object in place; the live key never changes.
+
+1. Start from the committed `docs/content/updates.json` and run
+   `pnpm --dir web/ophalo-app validate:updates`, same as the first publish.
+2. In the R2 bucket, download the current `platform/updates.json` and re-upload that unmodified
+   copy under the object key `platform/updates_<YYYY-MM-DD>.json`, where the date is the publish
+   date of the copy being replaced (not today's date). This is the rollback copy from the founder
+   publishing steps above.
+3. Upload the new content to `platform/updates.json`, overwriting it. The application only ever
+   reads that exact key (`R2UpdatesContentSource.FeedObjectKey`); dated copies are inert backups
+   and are never read by the API.
+4. Verify as in the first publish: `#/help` shows the new content within five minutes, and no new
+   `content_source_failure` alerts appear in Railway logs.
+5. Dated backups are not pruned automatically; delete old ones from the bucket periodically if
+   clutter becomes a problem.
 
 ## Pilot constraints to keep explicit
 
