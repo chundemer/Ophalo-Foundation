@@ -40,7 +40,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof FeedbackDialog>
 }
 
 async function typeMessage(text: string) {
-  await userEvent.type(screen.getByLabelText("What got in your way?"), text);
+  await userEvent.type(screen.getByLabelText("What would you like to share?"), text);
 }
 
 const sendButton = () => screen.getByRole("button", { name: "Send feedback" });
@@ -94,7 +94,7 @@ describe("FeedbackDialog", () => {
     submitImpl = submit;
     renderDialog();
 
-    await userEvent.click(screen.getByLabelText("What got in your way?"));
+    await userEvent.click(screen.getByLabelText("What would you like to share?"));
     await userEvent.paste("x".repeat(4_001));
 
     expect(screen.getByText(/1 character over the 4,000 limit/)).toBeInTheDocument();

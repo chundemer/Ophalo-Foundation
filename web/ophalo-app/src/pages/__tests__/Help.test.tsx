@@ -102,14 +102,14 @@ describe("Help page", () => {
     expect(window.localStorage.getItem(WATERMARK_KEY)).toBeNull();
   });
 
-  it("shows no 'Report a problem' action unless the shell passes onReportProblem", async () => {
+  it("shows no 'Share feedback' action unless the shell passes onReportProblem", async () => {
     mockGetUpdates.mockResolvedValue(FEED);
     renderHelp();
     await screen.findByText("Texts delayed");
-    expect(screen.queryByRole("button", { name: "Report a problem" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Share feedback" })).not.toBeInTheDocument();
   });
 
-  it("renders 'Report a problem' and calls onReportProblem when the shell provides it", async () => {
+  it("renders 'Share feedback' and calls onReportProblem when the shell provides it", async () => {
     mockGetUpdates.mockResolvedValue(FEED);
     const onReportProblem = vi.fn();
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -119,7 +119,7 @@ describe("Help page", () => {
       </QueryClientProvider>,
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Report a problem" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Share feedback" }));
     expect(onReportProblem).toHaveBeenCalledTimes(1);
   });
 

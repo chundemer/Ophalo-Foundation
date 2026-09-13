@@ -72,11 +72,11 @@ describe("App — in-product feedback entry point", () => {
     vi.stubEnv("VITE_FEEDBACK_ENABLED", "true");
     renderApp();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Report a problem" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Share feedback" }));
 
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("Send feedback");
-    expect(screen.getByLabelText("What got in your way?")).toBeInTheDocument();
+    expect(screen.getByLabelText("What would you like to share?")).toBeInTheDocument();
     expect(mockSubmitFeedback).not.toHaveBeenCalled();
   });
 
@@ -87,7 +87,7 @@ describe("App — in-product feedback entry point", () => {
     await userEvent.click(await screen.findByRole("button", { name: /account menu/i }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Send feedback" }));
 
-    expect(await screen.findByRole("dialog")).toHaveTextContent("What got in your way?");
+    expect(await screen.findByRole("dialog")).toHaveTextContent("What would you like to share?");
   });
 
   it("hides the account-menu 'Send feedback' row when the flag is off", async () => {

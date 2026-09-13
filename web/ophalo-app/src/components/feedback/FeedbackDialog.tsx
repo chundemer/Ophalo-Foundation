@@ -119,7 +119,7 @@ export function FeedbackDialog({ onClose, context }: FeedbackDialogProps) {
             htmlFor={messageId}
             className="mt-4 block text-sm font-medium text-[var(--ophalo-ink)]"
           >
-            What got in your way?
+            What would you like to share?
           </label>
           <textarea
             ref={textareaRef}
