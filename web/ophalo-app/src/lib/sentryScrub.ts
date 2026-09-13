@@ -15,7 +15,13 @@
  *     in_app) with any token-bearing path segment reduced to `[redacted]`.
  *
  * A final invariant check discards the whole event if a query string, fragment, or an
- * unredacted opaque token still appears in any retained string.
+ * unredacted opaque token still appears in a retained request URL or stack-frame filename.
+ *
+ * A stack-frame *function name* is handled differently: Sentry represents an unresolved
+ * function name as the literal string `"?"`, which is legitimate diagnostic metadata, not a
+ * leak — it must not discard the event. A suspect function name (query/fragment characters or
+ * an opaque-token-shaped segment) is instead omitted from that one frame; the rest of the event
+ * is still retained and sent.
  */
 
 import type { Event as SentryEvent } from "@sentry/react";
@@ -26,6 +32,23 @@ const OPAQUE_SEGMENT =
   /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,}|[A-Za-z0-9_-]{24,})$/i;
 
 const REDACTED = "[redacted]";
+
+/** True when `value` carries a query/fragment character or an opaque-token-shaped segment. */
+function isSuspectText(value: string | undefined): boolean {
+  if (value === undefined) return false;
+  if (/[?#]/.test(value)) return true;
+  return value.split(/[/\s]/).some((segment) => OPAQUE_SEGMENT.test(segment));
+}
+
+/**
+ * A frame's function name is retained as-is unless it is suspect, in which case it is
+ * omitted — never used to discard the whole event. Sentry's own `"?"` unresolved-function
+ * placeholder is suspect under this rule (it contains `?`) and is therefore always omitted,
+ * which is the intended behavior: it carries no information worth keeping.
+ */
+function sanitizeFunctionName(fn: string | undefined): string | undefined {
+  return isSuspectText(fn) ? undefined : fn;
+}
 
 /** Strips query and fragment, then reduces any opaque segment to `[redacted]`. */
 export function safePathname(raw: string | undefined): string | undefined {
@@ -81,7 +104,7 @@ function sanitizeException(
         ? {
             frames: frames.map((frame) => ({
               filename: safePathname(frame.filename),
-              function: frame.function,
+              function: sanitizeFunctionName(frame.function),
               lineno: frame.lineno,
               colno: frame.colno,
               in_app: frame.in_app,
@@ -95,26 +118,22 @@ function sanitizeException(
 /**
  * True when no *free-text-derived* retained field carries a query, fragment, or unredacted
  * opaque token. Scoped deliberately to the fields where a customer identifier or capability
- * token could leak — a retained request pathname and each retained stack-frame filename and
- * function. Sentry-generated metadata (`event_id`, the 40-hex release SHA, `sdk`,
- * `environment`, `level`, line/column numbers) is trusted structurally and never matched
- * against the opaque-token rule, which would otherwise discard every real production event.
+ * token could leak — a retained request pathname and each retained stack-frame filename.
+ * Frame function names are excluded here: they are sanitized per-frame by
+ * `sanitizeFunctionName` (suspect ones omitted, never a reason to discard the event).
+ * Sentry-generated metadata (`event_id`, the 40-hex release SHA, `sdk`, `environment`,
+ * `level`, line/column numbers) is trusted structurally and never matched against the
+ * opaque-token rule, which would otherwise discard every real production event.
  */
 function isProvablySafe(safe: {
   request?: { url?: string };
   exception?: { values: SafeException[] };
 }): boolean {
-  const suspect = (value: string | undefined): boolean => {
-    if (value === undefined) return false;
-    if (/[?#]/.test(value)) return true;
-    return value.split(/[/\s]/).some((segment) => OPAQUE_SEGMENT.test(segment));
-  };
-
-  if (suspect(safe.request?.url)) return false;
+  if (isSuspectText(safe.request?.url)) return false;
 
   for (const exception of safe.exception?.values ?? []) {
     for (const frame of exception.stacktrace?.frames ?? []) {
-      if (suspect(frame.filename) || suspect(frame.function)) return false;
+      if (isSuspectText(frame.filename)) return false;
     }
   }
 

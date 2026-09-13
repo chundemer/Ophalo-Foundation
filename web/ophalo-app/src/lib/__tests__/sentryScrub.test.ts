@@ -146,14 +146,79 @@ describe("scrubBrowserEvent", () => {
     expect(scrubbed!.exception!.values![0].type).toBe("RangeError");
   });
 
-  it("discards the event entirely if an opaque token still appears after rebuild", () => {
+  it("keeps the event and omits the function name when it is Sentry's unresolved '?' placeholder", () => {
     const evt = {
       release: "r",
       environment: "production",
       exception: {
-        values: [{ type: "Error", stacktrace: { frames: [{ function: "AbCdEf0123456789abcdef" }] } }],
+        values: [
+          { type: "Error", stacktrace: { frames: [{ filename: "https://app.example.com/a.js", function: "?" }] } },
+        ],
       },
     } as SentryEvent;
-    expect(scrubBrowserEvent(evt)).toBeNull();
+
+    const scrubbed = scrubBrowserEvent(evt);
+    expect(scrubbed).not.toBeNull();
+    const frame = scrubbed!.exception!.values![0].stacktrace!.frames![0] as Record<string, unknown>;
+    expect(frame.function).toBeUndefined();
+    expect(frame.filename).toBe("/a.js");
+  });
+
+  it("keeps the event and omits a function name that is query/fragment- or opaque-token-shaped", () => {
+    const evt = {
+      release: "r",
+      environment: "production",
+      exception: {
+        values: [
+          {
+            type: "Error",
+            stacktrace: {
+              frames: [
+                { filename: "https://app.example.com/a.js", function: "AbCdEf0123456789abcdef" },
+                { filename: "https://app.example.com/b.js", function: "run?x=1" },
+              ],
+            },
+          },
+        ],
+      },
+    } as SentryEvent;
+
+    const scrubbed = scrubBrowserEvent(evt);
+    expect(scrubbed).not.toBeNull();
+    const frames = scrubbed!.exception!.values![0].stacktrace!.frames as Record<string, unknown>[];
+    expect(frames[0].function).toBeUndefined();
+    expect(frames[1].function).toBeUndefined();
+  });
+
+  it("still redacts a raw token or query/fragment in a retained filename or request URL", () => {
+    // Unlike a suspect function name, filename and request.url are never merely omitted —
+    // safePathname redacts opaque segments and strips query/fragment before the invariant
+    // check runs; this is unchanged by the function-name fix above.
+    const evt = {
+      release: "r",
+      environment: "production",
+      request: { url: "https://app.example.com/request/abc?token=SECRETVALUE#/request/xyz" },
+      exception: {
+        values: [
+          {
+            type: "Error",
+            stacktrace: {
+              frames: [{ filename: "https://app.example.com/keep/r/Ab_3xQ9zLmN0pQrStUvWxYz1" }],
+            },
+          },
+        ],
+      },
+    } as SentryEvent;
+
+    const scrubbed = scrubBrowserEvent(evt);
+    expect(scrubbed).not.toBeNull();
+    expect(scrubbed!.request?.url).toBe("/request/abc");
+    const frame = scrubbed!.exception!.values![0].stacktrace!.frames![0] as Record<string, unknown>;
+    expect(frame.filename).toBe("/keep/r/[redacted]");
+
+    const json = JSON.stringify(scrubbed);
+    expect(json).not.toMatch(/SECRETVALUE/);
+    expect(json).not.toMatch(/Ab_3xQ9zLmN0pQrStUvWxYz1/);
+    expect(json).not.toMatch(/[?#]/);
   });
 });
