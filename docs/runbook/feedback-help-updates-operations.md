@@ -53,26 +53,51 @@ Do not treat the feature as live until the launch checklist below has passed end
 
 ## One-time access setup
 
+### Cloudflare R2: bucket split (ADR-503)
+
+Help & Updates content lives in its own bucket, **`ophalo-platform-content`**, separate from
+**`ophalo-business-documents`** (private tenant/customer artifacts, ADR-471). Cloudflare R2 API
+tokens scope to a bucket, not an object prefix, so any credential against
+`ophalo-business-documents` — including a read-only one — can read real customer documents once
+that bucket has a live consumer. Never create a local-development credential against
+`ophalo-business-documents`. Founder-publishing and local-read credentials for editorial content
+are scoped to `ophalo-platform-content` only.
+
+If `ophalo-platform-content` does not yet exist:
+
+1. Sign in to the Cloudflare account that owns `ophalo.com`.
+2. Open **Storage & databases → R2** and create a new bucket named `ophalo-platform-content`.
+3. Copy the current live objects from `ophalo-business-documents` into it: `platform/updates.json`
+   and any objects under `platform/updates/guides/img/`. (The committed
+   `docs/content/updates.json` is the source of truth for the feed object if a clean re-upload is
+   simpler than a copy.)
+4. Set the API's `R2:PlatformContent:*` variables (bucket name + credentials) in Railway to point
+   at the new bucket, redeploy, and confirm `#/help` still resolves with no new
+   `content_source_failure` alerts.
+5. If a read-only local token was ever issued against `ophalo-business-documents` for this
+   feature, revoke it now. It should never have been scoped to that bucket, and should not be used
+   even as a bridge beyond a short-lived emergency.
+
 ### Cloudflare R2: founder publishing access
 
 Use a separate founder-held **write** credential for publishing. Do not reuse, expose, or copy the
 API's R2 read credential from Railway.
 
 1. Sign in to the Cloudflare account that owns `ophalo.com`.
-2. Open **Storage & databases → R2** and select the existing
-   `ophalo-business-documents` bucket.
+2. Open **Storage & databases → R2** and select the **`ophalo-platform-content`** bucket (not
+   `ophalo-business-documents` — see above).
 3. Create an Account API token named, for example, `ophalo-updates-publisher` with **Object Read &
    Write** permission scoped only to that bucket. Store it in the password manager. Do not commit
    it, place it in a tracked `.env` file, or paste it into chat.
 4. Prefer the Cloudflare dashboard for the first publish. It makes the bucket/object target visible
    and avoids introducing a local credential file. A founder may later use `wrangler` with that
    same narrowly scoped credential, but only after a small reviewed publish command exists.
-5. Before replacing an existing feed, download its current object as a rollback copy, named
-   `platform/updates_<YYYY-MM-DD>.json` (the publish date of the copy being replaced) and stored
-   in the same bucket alongside the live object. Repository history remains the source of truth;
-   R2 is not the editorial system of record — these dated copies are a manual rollback aid only,
-   not a versioning system, and the application never reads them (see step 3 under "Subsequent R2
-   publishes").
+5. The R2 dashboard does not support renaming an object in place, so rollback copies live in the
+   repository, not the bucket: see "Subsequent R2 publishes" below. Repository history remains
+   the source of truth; R2 is not the editorial system of record.
+
+A local read-only token for verifying the Help UI against real content locally should also be
+scoped to `ophalo-platform-content` only.
 
 ### Vercel: PWA feature flag
 
@@ -118,7 +143,7 @@ Publish it once to establish the read path and clear the missing-object fallback
    `docs/contracts/updates.schema.json`, including required fields, length limits, allowed values,
    and ISO date-time formats. Do not publish when this command fails; JSON syntax alone is not
    sufficient.
-3. In the R2 bucket, upload it with the exact object key **`platform/updates.json`**. Preserve the
+3. In the `ophalo-platform-content` bucket, upload it with the exact object key **`platform/updates.json`**. Preserve the
    lower-case spelling and slash; `updates.json` at the bucket root is not read by the application.
 4. Wait up to five minutes, then sign in to the PWA and open `#/help`. A healthy initial feed shows
    the calm empty state rather than an error.
@@ -129,21 +154,24 @@ can show an empty feed. Correct the repository source, republish it, and verify 
 
 ## Subsequent R2 publishes
 
-Every publish after the first replaces the live object in place; the live key never changes.
+Every publish after the first replaces the live object in place; the live key never changes. The
+rollback copy lives in the repository (`docs/content/archive/updates.json`), not in R2, since the
+R2 dashboard has no in-place rename to give an uploaded object a dated backup name.
 
-1. Start from the committed `docs/content/updates.json` and run
+1. Before editing, copy the current `docs/content/updates.json` (the version already live in R2)
+   to `docs/content/archive/updates.json`, overwriting whatever was there. This single file always
+   holds whatever is currently live — it is not a dated history; full history is in `git log --
+   docs/content/updates.json` if an older version is ever needed.
+2. Edit `docs/content/updates.json` with the new content and run
    `pnpm --dir web/ophalo-app validate:updates`, same as the first publish.
-2. In the R2 bucket, download the current `platform/updates.json` and re-upload that unmodified
-   copy under the object key `platform/updates_<YYYY-MM-DD>.json`, where the date is the publish
-   date of the copy being replaced (not today's date). This is the rollback copy from the founder
-   publishing steps above.
-3. Upload the new content to `platform/updates.json`, overwriting it. The application only ever
-   reads that exact key (`R2UpdatesContentSource.FeedObjectKey`); dated copies are inert backups
-   and are never read by the API.
-4. Verify as in the first publish: `#/help` shows the new content within five minutes, and no new
+3. Commit both files together (the new `updates.json` and the updated `archive/updates.json`)
+   before publishing to R2, so the repository always reflects what is about to go live and what
+   was live immediately before it.
+4. In the `ophalo-platform-content` bucket, upload `docs/content/updates.json`, overwriting the object at
+   `platform/updates.json`. There is no separate rollback object in R2.
+5. Verify as in the first publish: `#/help` shows the new content within five minutes, and no new
    `content_source_failure` alerts appear in Railway logs.
-5. Dated backups are not pruned automatically; delete old ones from the bucket periodically if
-   clutter becomes a problem.
+6. To roll back, upload `docs/content/archive/updates.json` back to `platform/updates.json`.
 
 ## Pilot constraints to keep explicit
 
@@ -234,7 +262,7 @@ alert promptly because an abandoned record retains its message only for the lock
 - [ ] `pnpm --dir web/ophalo-app validate:updates` passes for the canonical feed (038-R0).
 - [ ] `docs/content/updates.json` passes schema validation and is committed/reviewed as the
       canonical source.
-- [ ] It is uploaded to `ophalo-business-documents/platform/updates.json`.
+- [ ] It is uploaded to `ophalo-platform-content/platform/updates.json`.
 - [ ] Railway has feedback enabled and the sealed founder webhook present.
 - [x] The current PWA production build has `VITE_FEEDBACK_ENABLED=true`; redeploy only if that
       setting changes or R3 exposes a stale build.

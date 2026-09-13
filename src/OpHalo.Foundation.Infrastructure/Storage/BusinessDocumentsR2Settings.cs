@@ -1,7 +1,10 @@
 namespace OpHalo.Foundation.Infrastructure.Storage;
 
-/// <summary>Bound from the "R2" configuration section.</summary>
-public sealed class R2Settings
+/// <summary>
+/// Bound from the "R2:BusinessDocuments" configuration section (ADR-503). Scoped to the
+/// `ophalo-business-documents` bucket — private tenant/customer artifacts only.
+/// </summary>
+public sealed class BusinessDocumentsR2Settings
 {
     public string CloudflareAccountId { get; init; } = string.Empty;
     public string BucketName { get; init; } = string.Empty;

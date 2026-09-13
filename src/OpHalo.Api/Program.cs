@@ -210,9 +210,11 @@ builder.Services.AddSingleton<MagicLinkDispatchQueue>();
 builder.Services.AddSingleton<IMagicLinkDispatchQueue>(sp => sp.GetRequiredService<MagicLinkDispatchQueue>());
 builder.Services.AddHostedService<MagicLinkDispatchBackgroundService>();
 
-// --- Business document storage (ADR-471) ---
-var r2Settings = builder.Configuration.GetSection("R2").Get<R2Settings>()
-    ?? new R2Settings();
+// --- Business document storage (ADR-471, ADR-503) ---
+// ophalo-business-documents bucket only. Never share settings/credentials with the platform
+// content source below — the two are separate trust boundaries (ADR-503).
+var businessDocumentsR2Settings = builder.Configuration.GetSection("R2:BusinessDocuments").Get<BusinessDocumentsR2Settings>()
+    ?? new BusinessDocumentsR2Settings();
 
 // Dev-only local-disk fallback when R2 is not configured. Outside Development, register the real
 // R2 adapter only when configured. No feature consumes IBusinessDocumentStorage yet (2c.2b), so an
@@ -220,25 +222,29 @@ var r2Settings = builder.Configuration.GetSection("R2").Get<R2Settings>()
 // process startup for a service nothing resolves. Once 2c.2b adds an upload feature, that feature
 // must fail closed at its own request boundary if IBusinessDocumentStorage isn't registered; startup
 // itself must never require R2 again.
-if (builder.Environment.IsDevelopment() && !r2Settings.IsConfigured)
+if (builder.Environment.IsDevelopment() && !businessDocumentsR2Settings.IsConfigured)
 {
     builder.Services.AddSingleton<IBusinessDocumentStorage, LocalDiskBusinessDocumentStorage>();
 }
-else if (r2Settings.IsConfigured)
+else if (businessDocumentsR2Settings.IsConfigured)
 {
-    builder.Services.AddSingleton(r2Settings);
+    builder.Services.AddSingleton(businessDocumentsR2Settings);
     builder.Services.AddSingleton<IBusinessDocumentStorage, R2BusinessDocumentStorage>();
 }
 
-// --- Help & Updates content (GAP-038, BL149) ---
-// The seam is ALWAYS resolvable (BL149 correction #3): the real R2 adapter when R2 is
-// configured, an unavailable fallback otherwise. The fallback drives the contracted
-// empty-feed / 503 behaviour instead of a DI activation 500. Unlike IBusinessDocumentStorage,
-// this feed IS consumed (GET /updates), so "register nothing" is not an option.
+// --- Help & Updates content (GAP-038, BL149, ADR-503) ---
+// ophalo-platform-content bucket only — founder-authored editorial content, not tenant data.
+// The seam is ALWAYS resolvable (BL149 correction #3): the real R2 adapter when configured, an
+// unavailable fallback otherwise. The fallback drives the contracted empty-feed / 503 behaviour
+// instead of a DI activation 500. Unlike IBusinessDocumentStorage, this feed IS consumed
+// (GET /updates), so "register nothing" is not an option.
+var platformContentR2Settings = builder.Configuration.GetSection("R2:PlatformContent").Get<PlatformContentR2Settings>()
+    ?? new PlatformContentR2Settings();
+
 builder.Services.AddMemoryCache();
-if (r2Settings.IsConfigured)
+if (platformContentR2Settings.IsConfigured)
 {
-    // R2Settings is already registered as a singleton by the business-document block above.
+    builder.Services.AddSingleton(platformContentR2Settings);
     builder.Services.AddSingleton<IUpdatesContentSource, R2UpdatesContentSource>();
 }
 else

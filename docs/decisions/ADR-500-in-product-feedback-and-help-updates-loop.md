@@ -21,8 +21,9 @@ a growing unsent backlog** for failed feedback delivery (no operator status/reso
 items this ADR deferred to it. Where the following differ from the body text below, these govern;
 BL149 holds the full detail.
 
-- **Remote content source (§1).** The founder JSON document lives in the existing R2 bucket
-  (ADR-471) at key `platform/updates.json`, read through a dedicated read-only `IUpdatesContentSource`.
+- **Remote content source (§1).** The founder JSON document lives in the dedicated
+  `ophalo-platform-content` R2 bucket (ADR-503; split from the ADR-471 business-document bucket) at
+  key `platform/updates.json`, read through a dedicated read-only `IUpdatesContentSource`.
   It carries a top-level `"schema": 1`; content-shape changes are additive (ADR-501 §3), a breaking
   change bumps `schema`. Founder publishes by overwriting the object (Cloudflare dashboard /
   `wrangler`), no deploy. Rollback = restore the previous R2 object version.

@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "entries": [
+    {
+      "id": "sample-known-issue-2026-09",
+      "published_at": "2026-09-12T00:00:00Z",
+      "section": "known_issue",
+      "status": "active",
+      "title": "Sample: known issue",
+      "body": "This is a sample known-issue entry. Replace or remove before publishing — it renders under the \"Known issues\" heading."
+    },
+    {
+      "id": "sample-whats-new-2026-09",
+      "published_at": "2026-09-12T00:00:00Z",
+      "section": "whats_new",
+      "title": "Sample: what's new",
+      "body": "This is a sample what's-new entry with the highlight banner on. It renders under \"Updates\" here and also drives the Requests-list banner until it expires.",
+      "highlight": true,
+      "banner_until": "2026-09-19T00:00:00Z"
+    },
+    {
+      "id": "feedback-2026-09",
+      "published_at": "2026-09-12T00:00:00Z",
+      "section": "coming_soon",
+      "title": "In-app feedback",
+      "body": "Soon you'll be able to send feedback and report problems directly from the app via the Help menu — no more emailing support. We'll let you know here as soon as it's live."
+    }
+  ],
+  "guides": []
+}

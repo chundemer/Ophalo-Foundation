@@ -4,6 +4,10 @@
 **Date:** 2026-08-01
 **Related:** ADR-469; build-log/108; build-log/110
 
+**Amended 2026-09-12 by ADR-503:** the R2 bucket named below is dedicated to private tenant/customer
+artifacts only. Founder-maintained editorial content (GAP-038 Help & Updates) lives in a separate
+`ophalo-platform-content` bucket and is out of this ADR's scope.
+
 ## Decision
 
 OpHalo's production business-document store is a **private Cloudflare R2 bucket**, accessed by the

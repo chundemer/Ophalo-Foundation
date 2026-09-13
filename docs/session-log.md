@@ -4,7 +4,7 @@
 Locked decisions → [decision-index](decisions/decision-index.md). Working guardrails → CLAUDE.md.
 If a line here would need editing when the workboard changes, it belongs in the workboard, not here.
 
-**Updated 2026-09-11.** GAP-094 and GAP-095 are reviewed, merged, and deployed to `main`.
+**Updated 2026-09-12.** GAP-094 and GAP-095 are reviewed, merged, and deployed to `main`.
 Feedback / Help & Updates is code-complete; 038-R0 (enforced schema validation) and 038-R1
 (`platform/updates.json` published to R2, verified via a clean production `#/help` read with no new
 `content_source_failure` alerts) are done. The remaining handoff is **038-R3**: verify authenticated
@@ -14,6 +14,26 @@ Follow [the founder operations guide](runbook/feedback-help-updates-operations.m
 After that verification, start the **Proposed Work & Commercial Quotes** decision session from the
 [workboard decision queue](workboard.md#decision-queue). GAP-040 marketing copy remains deliberately
 deferred until the underlying application feature set stabilizes.
+
+**In-progress side work (pre-R3), 2026-09-13 to continue:**
+Entry point is `web/ophalo-app/src/pages/Help.tsx` (plus `App.tsx`'s `usesFinancialCanvas`
+grouping and `Help.test.tsx`) — restyling the Help & Updates page to match the workbench design
+system (white cards, `KeepBadge` pills, cool `--keep-workspace-canvas`, section micro-headers).
+Visually confirmed against real R2-backed data in a running local app (2026-09-13); still
+**uncommitted**.
+[ADR-503](decisions/ADR-503-platform-content-bucket-split.md)'s bucket split is fully live: the
+`ophalo-platform-content` bucket is provisioned and holds `platform/updates.json`;
+`Program.cs` now binds `BusinessDocumentsR2Settings`/`PlatformContentR2Settings` from
+`R2:BusinessDocuments`/`R2:PlatformContent` instead of one shared `R2Settings` — implemented and
+verified via `dotnet build` + `OpHalo.ArchitectureTests` (14/14), **uncommitted**; Railway now
+carries `R2__BusinessDocuments__*` (existing business-documents credential, renamed) and
+`R2__PlatformContent__*` (new read-only platform-content token) in place of the old flat `R2__*`
+vars, and local dev has its own read-only `R2:PlatformContent:*` user-secrets. Production `#/help`
+verified live against the new bucket (2026-09-13); local dev has full R2 read parity — the prior
+hot blocker is resolved.
+Next: get the `Program.cs` split + Help.tsx restyle reviewed and committed, then resume **038-R3**
+(verify authenticated Help, banner dismissal, one harmless feedback submission reaching the founder
+channel, founder acceptance of the single-webhook outage posture).
 
 ## Baseline
 
@@ -49,12 +69,15 @@ thanked identically, `ApiError` message map) + "Report a problem" `#/help` heade
 `itemsRef` math replaced with a DOM-order registrar) + `MobileNavMenu`, gated on
 `VITE_FEEDBACK_ENABLED`; `ophalo-app` 1169/1169. **All of GAP-038 038-2 is code-complete.**
 The remaining release splits are: **038-R0** run the enforced `pnpm validate:updates` schema check;
-**038-R1** upload `docs/content/updates.json` to R2 at `platform/updates.json`; **038-R2** is
-already complete (the production PWA has `VITE_FEEDBACK_ENABLED=true`); **038-R3** verify authenticated Help,
-banner dismissal, and one harmless feedback submission reaching the founder channel. Production API
-feedback is already configured. R3 also requires explicit founder acceptance of the single-webhook
-outage posture; do not scale beyond one API replica without the deferred worker/cache hardening.
-The standalone publisher/preview convenience is future GAP-087, not a release prerequisite.
+**038-R1** upload `docs/content/updates.json` to R2 at `platform/updates.json`; **038-R2** set
+`VITE_FEEDBACK_ENABLED=true` on the Vercel **Production** environment and redeploy — found missing
+during 038-R3 verification 2026-09-11 ("Report a problem" was visible in dev but absent from live
+production `#/help`), fixed the same day (var set + redeploy), "Report a problem" now confirmed
+visible in production; **038-R3** verify authenticated Help, banner dismissal, and one harmless
+feedback submission reaching the founder channel. Production API feedback is already configured. R3
+also requires explicit founder acceptance of the single-webhook outage posture; do not scale beyond
+one API replica without the deferred worker/cache hardening. The standalone publisher/preview
+convenience is future GAP-087, not a release prerequisite.
 
 **GAP-073 — request-detail composer draft safety (pilot gate).** [ADR-502](decisions/ADR-502-request-detail-composer-draft-safety.md);
 [BL150](build-log/150-gap-073-request-detail-composer-draft-safety.md) carries the spec + the
@@ -93,8 +116,12 @@ then pass local build/typecheck and founder-owned Vercel preview acceptance. Rea
 SDK/Docker reproducibility are intentionally separate follow-ups; do not batch this with GAP-073.
 
 **Feedback production release.** 038-R0 (enforced schema validation) and 038-R1 (R2 feed publish,
-verified 2026-09-11) are done. 038-R2 was already complete: the PWA feature flag is enabled.
+verified 2026-09-11) are done. 038-R2 was found incomplete during 038-R3 verification 2026-09-11
+(`VITE_FEEDBACK_ENABLED` missing from Vercel Production) and fixed the same day.
 Remaining: **038-R3** (authenticated end-to-end verification and founder outage-posture acceptance).
+Two gaps surfaced during 038-R3 discussion 2026-09-11, deliberately not addressed until R3 finishes:
+**GAP-087** (workboard) now also covers stale-entry pruning/lifecycle, not just the publisher UI; new
+**GAP-097** (workboard) covers guide search/categorization/deep-link discoverability.
 The runbook carries access, rollback, guide, and feedback-triage steps. Do not create another
 feedback batch unless operational verification exposes a concrete defect.
 

@@ -29,11 +29,11 @@ public sealed class R2UpdatesContentSource : IUpdatesContentSource, IDisposable
     private readonly string _bucketName;
     private readonly ILogger<R2UpdatesContentSource> _logger;
 
-    public R2UpdatesContentSource(R2Settings settings, ILogger<R2UpdatesContentSource> logger)
+    public R2UpdatesContentSource(PlatformContentR2Settings settings, ILogger<R2UpdatesContentSource> logger)
     {
         ArgumentNullException.ThrowIfNull(settings);
         if (!settings.IsConfigured)
-            throw new InvalidOperationException("R2Settings is incomplete; the updates content source cannot start.");
+            throw new InvalidOperationException("PlatformContentR2Settings is incomplete; the updates content source cannot start.");
 
         _bucketName = settings.BucketName;
         _logger = logger;

@@ -18,11 +18,11 @@ public sealed class R2BusinessDocumentStorage : IBusinessDocumentStorage, IDispo
     private readonly string _bucketName;
     private readonly ILogger<R2BusinessDocumentStorage> _logger;
 
-    public R2BusinessDocumentStorage(R2Settings settings, ILogger<R2BusinessDocumentStorage> logger)
+    public R2BusinessDocumentStorage(BusinessDocumentsR2Settings settings, ILogger<R2BusinessDocumentStorage> logger)
     {
         ArgumentNullException.ThrowIfNull(settings);
         if (!settings.IsConfigured)
-            throw new InvalidOperationException("R2Settings is incomplete; storage cannot start.");
+            throw new InvalidOperationException("BusinessDocumentsR2Settings is incomplete; storage cannot start.");
 
         _bucketName = settings.BucketName;
         _logger = logger;
