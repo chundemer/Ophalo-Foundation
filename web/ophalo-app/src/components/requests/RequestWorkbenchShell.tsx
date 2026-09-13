@@ -215,7 +215,17 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
   const liveNextId = liveIdx >= 0 && liveIdx < liveIds.length - 1 ? liveIds[liveIdx + 1] : undefined;
 
   return (
-    <div ref={containerRef} className="flex h-full min-h-0 flex-1">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      {/* Decision 2 (BL149 038-1b-iii) suppressed the banner in the 360px two-pane rail —
+          RequestListContent below never renders it while paneMode is true (see the
+          `banner={paneMode ? undefined : updatesBanner}` passthrough). That left it unreachable
+          from the wide-screen Attention/All/Mine workflow entirely, so it renders here instead,
+          full-width above both panes, using the same `updatesBanner` node (same dismissal state,
+          same eligibility) — never both places at once. */}
+      {paneMode && updatesBanner && (
+        <div className="max-w-6xl mx-auto w-full shrink-0 px-4 pt-4 sm:px-6">{updatesBanner}</div>
+      )}
+      <div ref={containerRef} className="flex min-h-0 flex-1">
       {/* Backlog item 4 (2026-08-21): the pane no longer owns vertical scroll itself — with
           overflow-y-auto here, nested flex children default to min-height:auto and grow past
           the available height, so this wrapper (not RequestListContent's own scroll region)
@@ -281,6 +291,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
           onNavigateToActualWorkspace={onNavigateToActualWorkspace}
         />
       )}
+      </div>
     </div>
   );
 }

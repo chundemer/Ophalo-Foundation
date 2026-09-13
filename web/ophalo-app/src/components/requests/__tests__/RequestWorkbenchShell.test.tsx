@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RequestWorkbenchShell } from "../RequestWorkbenchShell";
 import { mockViewCounts, mockRequestSummaries } from "../../../mocks/fixtures";
 import type { KeepRequestListResult } from "../../../lib/apiClient";
+import type { ReactNode } from "react";
 
 // Step 5: the shell's own routing/live-navigation-bridge logic is under test here, not
 // RequestDetail's internals (network fetch, modals, capture flows — covered elsewhere). Stub it
@@ -97,6 +98,7 @@ function fireWidth(width: number) {
 function renderShell(
   onSelectRequest: (requestId: string, navContext?: { requestIds: string[] }) => void = () => {},
   route?: { page: "requests" } | { page: "detail"; requestId: string; focusPanel?: string },
+  updatesBanner?: ReactNode,
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
@@ -113,6 +115,7 @@ function renderShell(
         narrowPrevId={undefined}
         narrowNextId={undefined}
         onNarrowNavigate={() => {}}
+        updatesBanner={updatesBanner}
       />
     </QueryClientProvider>,
   );
@@ -182,6 +185,22 @@ describe("RequestWorkbenchShell", () => {
     fireWidth(1000);
     await waitFor(() => expect(screen.getByText(mockRequestSummaries[0].customerName)).toBeInTheDocument());
     expect(screen.queryByText(/loading priority preview/i)).not.toBeInTheDocument();
+  });
+
+  it("renders the updates banner above the two-pane workbench at/above the protected minimum width, exactly once", async () => {
+    renderShell(undefined, undefined, <div data-testid="updates-banner-marker">Banner</div>);
+    await waitFor(() => expect(mockGetRequests).toHaveBeenCalled());
+    fireWidth(1001);
+    await waitFor(() => expect(screen.getByRole("button", { name: /open request/i })).toBeInTheDocument());
+    expect(screen.getAllByTestId("updates-banner-marker")).toHaveLength(1);
+  });
+
+  it("renders the updates banner inside the one-pane Requests list below the protected minimum width, exactly once", async () => {
+    renderShell(undefined, undefined, <div data-testid="updates-banner-marker">Banner</div>);
+    await waitFor(() => expect(mockGetRequests).toHaveBeenCalled());
+    fireWidth(1000);
+    await waitFor(() => expect(screen.getByText(mockRequestSummaries[0].customerName)).toBeInTheDocument());
+    expect(screen.getAllByTestId("updates-banner-marker")).toHaveLength(1);
   });
 
   it("renders the Queue pane plus Priority Preview at/above the protected minimum width", async () => {
