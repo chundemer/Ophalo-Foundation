@@ -239,7 +239,7 @@ The **Help & Updates** row is added to the desktop account menu and `MobileNavMe
 - **Single scrolling page, sectioned — not tabbed.** Order: **Known issues** (active first, then a
   muted "Recently resolved" group) → **Updates** (what's new, newest first) → **Coming soon** →
   **Guides**. Tabs are deferred until a section's length actually justifies them.
-- A **"Report a problem"** action is persistently reachable from the page header (§5), plus the
+- A **"Share feedback"** action is persistently reachable from the page header (§5), plus the
   feed's last-updated time and each entry's date.
 - **Light markdown subset** for every `body` (entries and guides): paragraphs, **bold**, ordered and
   unordered lists, and links. No headings inside a body, no tables, no raw HTML, no arbitrary
@@ -264,9 +264,9 @@ The **Help & Updates** row is added to the desktop account menu and `MobileNavMe
 ### 5. Friction submission path (ADR-293, restated and bound here)
 
 - **`POST /api/v1/feedback`** (authenticated, rate-limited, fail-soft).
-- Reachable from the `#/help` header and from a lightweight in-workflow entry point (a "Report a
-  problem / Send feedback" action); exact non-help entry points enumerated in the build-log.
-- Request body: required short `message` ("What got in your way?"), optional `category`
+- Reachable from the `#/help` header and from a lightweight in-workflow entry point (a "Share
+  feedback / Send feedback" action); exact non-help entry points enumerated in the build-log.
+- Request body: required short `message` ("What would you like to share?"), optional `category`
   (`bug | confusing | missing_thing | too_slow | other`), and client context: current route,
   `request id` when on a request-detail surface, app build, platform/device, timestamp.
 - Server owns webhook secret, payload validation (reject blank/oversized), rate limiting, and

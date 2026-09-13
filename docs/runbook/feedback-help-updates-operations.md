@@ -17,7 +17,7 @@ The loop has two directions, both inside the authenticated Keep application:
    coming-soon notices, and concise how-to guides. The account menu and mobile navigation expose
    the same destination; an unread indicator and an optional Requests-list banner call attention
    to important entries.
-2. **Businesses → OpHalo:** "Report a problem" in Help and "Send feedback" in the account menu
+2. **Businesses → OpHalo:** "Share feedback" in Help and "Send feedback" in the account menu
    open the feedback dialog. A submission is stored before delivery is attempted, then sent to the
    private founder channel with the server-resolved business and submitter identity, plus stable
    account/account-user IDs, needed for safe follow-up. No internal deep link exists in this pilot
