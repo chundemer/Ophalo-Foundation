@@ -13,7 +13,7 @@
 
 | Item | Owner | Outcome / acceptance |
 | --- | --- | --- |
-| GAP-039 Batch 4 | Founder | Configure Railway/Vercel/Sentry DSNs, `/health/ready`, release/environment identity and founder alert; verify delivery and run the production-candidate/redaction gate. [ADR-495](decisions/ADR-495-gap-039-redacted-error-capture-and-release-safety.md), [BL140](build-log/140-gap-039-sentry-implementation-handoff.md). |
+| GAP-039 Batch 4 | Founder | Console config (Railway/Vercel/Sentry DSNs, `/health/ready`, founder alerts) and the PWA controlled-error/redaction/release verification are **done 2026-09-13** — see [sentry-configuration.md](runbook/sentry-configuration.md). Found and fixed a real browser-scrubber defect along the way (`0c3c8b3e`): a `"?"` unresolved-function-name placeholder was being treated as a leaked query string and silently discarding the whole event. Remaining: the API controlled-error test (trigger mechanism undecided — no permanent failure endpoint by design), the invalid-`VITE_PUBLIC_BASE_URL` fail-safe test, and recording evidence + named incident roles in the runbook. [ADR-495](decisions/ADR-495-gap-039-redacted-error-capture-and-release-safety.md), [BL140](build-log/140-gap-039-sentry-implementation-handoff.md). |
 | GAP-069 | Founder decision → engineering | Choose Railway persistent volume or external key store, record ownership/rotation/restore, then persist/protect the API key ring and narrowly trust the Railway proxy. Redeploy preserves keys; spoofed forwarded headers fail; startup warnings are gone. |
 
 ## Next
