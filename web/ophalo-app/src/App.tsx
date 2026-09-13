@@ -401,13 +401,15 @@ function AppShell() {
   // band stays pinned and the capture surface owns its own scroll, rather than the document
   // growing past the viewport.
   const boundedShell = workbenchWideActive || route.page === "actual-work";
-  // Financial work uses one cool workspace canvas: Actual Work review and the entitlement-gated
-  // Price Book. Request communication/data keeps the warm operational canvas.
+  // Financial work and reference content share one cool workspace canvas: Actual Work review,
+  // the entitlement-gated Price Book, and Help & Updates. Request communication/data keeps the
+  // warm operational canvas.
   const usesFinancialCanvas =
     route.page === "actual-work" ||
     route.page === "pricebook" ||
     route.page === "pricebook-item" ||
-    route.page === "pricebook-assembly";
+    route.page === "pricebook-assembly" ||
+    route.page === "help";
 
   // Every route is a column: mobile top bar or desktop top-nav header above the content.
   return (

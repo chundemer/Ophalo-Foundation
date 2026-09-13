@@ -95,7 +95,10 @@ describe("Help page", () => {
     renderHelp();
 
     expect(await screen.findByRole("heading", { name: "Known issues" })).toBeInTheDocument();
-    expect(screen.getAllByText("No updates yet.").length).toBeGreaterThan(0);
+    expect(screen.getByText("No known issues")).toBeInTheDocument();
+    expect(screen.getByText("No updates yet")).toBeInTheDocument();
+    expect(screen.getByText("Nothing planned yet")).toBeInTheDocument();
+    expect(screen.getByText("No guides published yet")).toBeInTheDocument();
     expect(window.localStorage.getItem(WATERMARK_KEY)).toBeNull();
   });
 
