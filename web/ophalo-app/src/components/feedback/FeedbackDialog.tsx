@@ -91,9 +91,12 @@ export function FeedbackDialog({ onClose, context }: FeedbackDialogProps) {
             Thanks for the feedback
           </h2>
           {/* Neutral for both outcomes: a 202 only guarantees durable queueing, never delivery —
-              claiming "it went to the team" would be a fabricated "sent". */}
+              claiming "it went to the team" would be a fabricated "sent". Locked copy (GAP-098,
+              ADR-500 amendment): honest about possible follow-up, and points to Help & Updates
+              instead of implying an individual ticket/SLA. */}
           <p className="mt-2 text-sm text-[var(--ophalo-ink)]">
-            Thanks for taking the time to share this. We read every note.
+            Thanks — we review every submission. We may contact the account owner if we need more
+            detail. Updates that affect multiple businesses will appear in Help & Updates.
           </p>
           <div className="mt-5 flex justify-end">
             <KeepButton type="button" variant="primary" onClick={onClose}>

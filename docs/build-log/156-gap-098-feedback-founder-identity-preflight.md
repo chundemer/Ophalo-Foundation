@@ -2,7 +2,7 @@
 
 **Status:** Slice A landed 2026-09-13 (test corrections applied — real two-attempt retry proving
 fresh identity resolution, plus a worker-path reader-exception case). Slice B (frontend confirmation
-copy) not started.
+copy) landed 2026-09-13. GAP-098 complete.
 
 **Scope:** [workboard](../workboard.md#audit-and-operational-gap-registry) GAP-098; amends
 [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) (2026-09-13 amendment).
@@ -70,3 +70,12 @@ reader-throws (fail-soft) cases.
   fallback): 3/3. Full Feedback filter: 75/75.
 - `OpHalo.ArchitectureTests`: 14/14.
 - `git diff --check`: clean.
+
+## Slice B — frontend confirmation copy (2026-09-13)
+
+`FeedbackDialog.tsx`'s post-submit paragraph is now the ADR-500-amended verbatim text: "Thanks —
+we review every submission. We may contact the account owner if we need more detail. Updates that
+affect multiple businesses will appear in Help & Updates." Shown identically for both `200`
+(delivered) and `202` (queued) — unchanged neutral-outcome behavior, copy only.
+`FeedbackDialog.test.tsx`'s `NEUTRAL_THANKS` constant updated to match; no other call site
+referenced the old copy. 2 files. `vitest run FeedbackDialog.test.tsx`: 9/9.

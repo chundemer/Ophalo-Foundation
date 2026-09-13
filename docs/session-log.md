@@ -4,41 +4,17 @@
 Locked decisions → [decision-index](decisions/decision-index.md). Working guardrails → CLAUDE.md.
 If a line here would need editing when the workboard changes, it belongs in the workboard, not here.
 
-**Updated 2026-09-12.** GAP-094 and GAP-095 are reviewed, merged, and deployed to `main`.
+**Updated 2026-09-13.** GAP-094, GAP-095, and GAP-098 are reviewed, merged, and deployed to `main`.
 Feedback / Help & Updates is code-complete; 038-R0 (enforced schema validation) and 038-R1
 (`platform/updates.json` published to R2, verified via a clean production `#/help` read with no new
-`content_source_failure` alerts) are done. **Before 038-R3, complete GAP-098**
-([workboard](workboard.md#audit-and-operational-gap-registry)): enrich the private founder-channel
-alert with server-resolved submitter/business follow-up identity and stable account/account-user IDs
-(no invented internal deep link), make the feedback confirmation honest about possible follow-up and
-Help & Updates, and establish the restricted
-Google Workspace feedback register as the pilot response-accountability record. Then run **038-R3**:
-verify authenticated Help, banner dismissal, and one harmless feedback submission reaching the
-founder channel, and get explicit founder acceptance of the single-webhook outage posture.
-Follow [the founder operations guide](runbook/feedback-help-updates-operations.md).
+`content_source_failure` alerts) are done. GAP-098's founder-alert identity enrichment and honest
+confirmation copy are done ([BL156](build-log/156-gap-098-feedback-founder-identity-preflight.md)).
+Next: run **038-R3** — verify authenticated Help, banner dismissal, and one harmless feedback
+submission reaching the founder channel, and get explicit founder acceptance of the single-webhook
+outage posture. Follow [the founder operations guide](runbook/feedback-help-updates-operations.md).
 After that verification, start the **Proposed Work & Commercial Quotes** decision session from the
 [workboard decision queue](workboard.md#decision-queue). GAP-040 marketing copy remains deliberately
 deferred until the underlying application feature set stabilizes.
-
-**In-progress side work (pre-R3), 2026-09-13 to continue:**
-Entry point is `web/ophalo-app/src/pages/Help.tsx` (plus `App.tsx`'s `usesFinancialCanvas`
-grouping and `Help.test.tsx`) — restyling the Help & Updates page to match the workbench design
-system (white cards, `KeepBadge` pills, cool `--keep-workspace-canvas`, section micro-headers).
-Visually confirmed against real R2-backed data in a running local app (2026-09-13); still
-**uncommitted**.
-[ADR-503](decisions/ADR-503-platform-content-bucket-split.md)'s bucket split is fully live: the
-`ophalo-platform-content` bucket is provisioned and holds `platform/updates.json`;
-`Program.cs` now binds `BusinessDocumentsR2Settings`/`PlatformContentR2Settings` from
-`R2:BusinessDocuments`/`R2:PlatformContent` instead of one shared `R2Settings` — implemented and
-verified via `dotnet build` + `OpHalo.ArchitectureTests` (14/14), **uncommitted**; Railway now
-carries `R2__BusinessDocuments__*` (existing business-documents credential, renamed) and
-`R2__PlatformContent__*` (new read-only platform-content token) in place of the old flat `R2__*`
-vars, and local dev has its own read-only `R2:PlatformContent:*` user-secrets. Production `#/help`
-verified live against the new bucket (2026-09-13); local dev has full R2 read parity — the prior
-hot blocker is resolved.
-Next: get the `Program.cs` split + Help.tsx restyle reviewed and committed, then complete **GAP-098**
-before resuming **038-R3** (verify authenticated Help, banner dismissal, one harmless feedback
-submission reaching the founder channel, founder acceptance of the single-webhook outage posture).
 
 ## Baseline
 

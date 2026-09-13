@@ -22,8 +22,11 @@ vi.mock("../../../lib/apiClient", async () => {
 import { ApiError } from "../../../lib/apiClient";
 
 // Neutral for both 200 and 202 — a queued (202) submission is not confirmed delivery, so the copy
-// must never imply "sent to the team".
-const NEUTRAL_THANKS = "Thanks for taking the time to share this. We read every note.";
+// must never imply "sent to the team". Locked verbatim wording (GAP-098, ADR-500 amendment):
+// honest about possible follow-up, and points to Help & Updates rather than an individual ticket/SLA.
+const NEUTRAL_THANKS =
+  "Thanks — we review every submission. We may contact the account owner if we need more " +
+  "detail. Updates that affect multiple businesses will appear in Help & Updates.";
 
 const RETENTION_LINE =
   "If feedback cannot be delivered immediately, its message and limited submission context may be " +
