@@ -467,6 +467,21 @@ if (app.Environment.IsEnvironment("Testing"))
     app.MapGet("/__test/unhandled", ThrowTestFailure);
 }
 
+// TEMPORARY — GAP-039 Batch 4 controlled API error test (see BL140). Founder-only, indistinguishable
+// from an absent route for any other caller. Remove this block and the "Diagnostics" config section
+// once the test evidence is recorded.
+// No .RequireAuthorization(): that pipeline issues 401 for unauthenticated callers, which would
+// make this route distinguishable from an absent one. The founder check below returns 404 for
+// every non-founder case — unauthenticated or authenticated-as-someone-else alike.
+app.MapGet("/diagnostics/throw", (ICurrentUser currentUser, IConfiguration configuration) =>
+{
+    var founderAccountUserId = configuration.GetValue<Guid?>("Diagnostics:FounderAccountUserId");
+    if (founderAccountUserId is null || !currentUser.IsAuthenticated || currentUser.UserId != founderAccountUserId)
+        return Results.NotFound();
+
+    throw new InvalidOperationException("GAP-039 Batch 4 controlled API error test");
+});
+
 // --- Routes ---
 app.MapKeepEndpoints();
 app.MapPriceBookEndpoints();
