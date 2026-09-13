@@ -82,6 +82,24 @@ public sealed class FounderNotifier(
         if (!string.IsNullOrWhiteSpace(founderEvent.Context))
             text.Append("\ncontext: ").Append(founderEvent.Context);
 
+        if (founderEvent.AccountId is { } accountId)
+        {
+            text.Append("\naccount: ")
+                .Append(founderEvent.BusinessName ?? "(unavailable)")
+                .Append(" (").Append(accountId).Append(')');
+        }
+
+        if (founderEvent.AccountUserId is { } accountUserId)
+        {
+            text.Append("\nsubmitter: ")
+                .Append(founderEvent.SubmitterName ?? "(unavailable)");
+            if (!string.IsNullOrWhiteSpace(founderEvent.Role))
+                text.Append(" — ").Append(founderEvent.Role);
+            if (!string.IsNullOrWhiteSpace(founderEvent.Email))
+                text.Append(" <").Append(founderEvent.Email).Append('>');
+            text.Append(" (").Append(accountUserId).Append(')');
+        }
+
         return text.ToString();
     }
 

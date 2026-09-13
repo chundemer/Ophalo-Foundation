@@ -82,6 +82,46 @@ public class FounderNotifierTests
     }
 
     [Fact]
+    public void RenderText_includes_resolved_identity_and_stable_ids_for_feedback_submitted()
+    {
+        var accountId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var accountUserId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var evt = new FounderEvent(
+            Type: "feedback_submitted",
+            Summary: "[Bug] the scope dialog froze",
+            Correlation: "sub-1",
+            AccountId: accountId,
+            AccountUserId: accountUserId,
+            BusinessName: "Acme HVAC",
+            SubmitterName: "Jane Doe",
+            Role: "Owner",
+            Email: "jane@acme.test");
+
+        var text = FounderNotifier.RenderText(evt, "Production");
+
+        Assert.Contains($"account: Acme HVAC ({accountId})", text);
+        Assert.Contains($"submitter: Jane Doe — Owner <jane@acme.test> ({accountUserId})", text);
+    }
+
+    [Fact]
+    public void RenderText_falls_back_to_unavailable_when_identity_could_not_be_resolved()
+    {
+        var accountId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var accountUserId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var evt = new FounderEvent(
+            Type: "feedback_submitted",
+            Summary: "[Bug] the scope dialog froze",
+            Correlation: "sub-1",
+            AccountId: accountId,
+            AccountUserId: accountUserId);
+
+        var text = FounderNotifier.RenderText(evt, "Production");
+
+        Assert.Contains($"account: (unavailable) ({accountId})", text);
+        Assert.Contains($"submitter: (unavailable) ({accountUserId})", text);
+    }
+
+    [Fact]
     public async Task Non_success_status_returns_false()
     {
         var handler = new StubHandler { Responder = _ => new HttpResponseMessage(HttpStatusCode.InternalServerError) };

@@ -21,6 +21,30 @@ a growing unsent backlog** for failed feedback delivery (no operator status/reso
 items this ADR deferred to it. Where the following differ from the body text below, these govern;
 BL149 holds the full detail.
 
+**Amendment (2026-09-13, GAP-098 — feedback follow-up).** Feedback is a founder-to-business
+communication loop, not anonymous product telemetry. The private, access-controlled founder channel
+must therefore carry server-resolved account/business name, submitting account-user display name,
+membership role, email, and stable account/account-user IDs sufficient for timely follow-up. There
+is no internal deep link in this slice: OpHalo has no cross-workspace support/admin route or
+workspace-switching authorization model, so no URL convention may be invented. This narrow
+operational disclosure is permitted only in that channel: identity is never accepted from the
+browser, is not copied into `feedback_submissions`, and phone is not included by default.
+Retries resolve the current account-user record and still deliver the feedback if it is unavailable.
+The product confirms receipt honestly: it may contact the account owner for more detail, while
+broad outcomes appear in Help & Updates. This does not create an individual ticket status, SLA, or
+bidirectional Google Chat integration. GAP-098 must be complete before 038-R3.
+
+**Pilot operating decision (2026-09-13).** A restricted Google Workspace feedback register is the
+founder's accountability record for every accepted submission. It is an external operating ledger,
+not an OpHalo ticket feature: each founder-channel alert is manually recorded by correlation ID with
+received time, business, submitter, category, Chat-message link or short summary, owner, status,
+follow-up date/method/outcome, and any Help & Updates entry link. Do not copy the full feedback body
+or phone number into the register. Each valid submission requires a recorded response before closure,
+or a documented contact-delivery failure; this is an internal operating standard, not a customer SLA.
+The register is restricted to founders/authorized support staff and has a founder-defined retention
+period. This external register satisfies pilot follow-up tracking; no in-app feedback-review or
+customer-reply UI is introduced by GAP-098.
+
 - **Remote content source (§1).** The founder JSON document lives in the dedicated
   `ophalo-platform-content` R2 bucket (ADR-503; split from the ADR-471 business-document bucket) at
   key `platform/updates.json`, read through a dedicated read-only `IUpdatesContentSource`.
@@ -247,8 +271,11 @@ The **Help & Updates** row is added to the desktop account menu and `MobileNavMe
   `request id` when on a request-detail surface, app build, platform/device, timestamp.
 - Server owns webhook secret, payload validation (reject blank/oversized), rate limiting, and
   delivery of a **compact private notification to the founder channel**.
-- **Never auto-attached:** customer message bodies, phone numbers, emails, page tokens, internal
-  notes, broad logs (ADR-293 + ADR-495 boundary).
+- **Founder-channel identity:** the private, access-controlled founder notification includes only
+  server-resolved business name, submitter display name, membership role, email, and stable
+  account/account-user IDs. It never includes phone by default, client-supplied identity, page
+  tokens, internal notes, broad logs, or an invented internal deep link; it does not persist a
+  contact snapshot with the feedback.
 - **Delivery failure must not lose the note.** On a channel error the backend persists the payload
   to a **durable, retrievable store** and still returns success to the client — no fabricated
   "sent" over a black hole. A minimal `feedback` table is acceptable and is **not** the "ticket

@@ -26,13 +26,32 @@ namespace OpHalo.Foundation.Application.Notifications;
 /// Optional opaque non-PII submission-context JSON (route, request id, app build, platform,
 /// client timestamp) for <c>feedback_submitted</c>.
 /// </param>
+/// <param name="AccountId">
+/// (GAP-098) The submitting account's stable id, for <c>feedback_submitted</c>. Always present for
+/// that event type — carried in place of an internal deep link, which OpHalo has no authorization
+/// model to support safely.
+/// </param>
+/// <param name="AccountUserId">(GAP-098) The submitting account-user's stable id.</param>
+/// <param name="BusinessName">
+/// (GAP-098) Server-resolved business name, or <c>null</c> when the account-user membership is not
+/// currently active (removed/suspended/missing) — never client-supplied.
+/// </param>
+/// <param name="SubmitterName">(GAP-098) Server-resolved submitter display name, or <c>null</c>.</param>
+/// <param name="Role">(GAP-098) Server-resolved membership role, or <c>null</c>.</param>
+/// <param name="Email">(GAP-098) Server-resolved submitter email, or <c>null</c>.</param>
 public sealed record FounderEvent(
     string Type,
     string Summary,
     string? Correlation = null,
     int? Count = null,
     string? OldestAge = null,
-    string? Context = null);
+    string? Context = null,
+    Guid? AccountId = null,
+    Guid? AccountUserId = null,
+    string? BusinessName = null,
+    string? SubmitterName = null,
+    string? Role = null,
+    string? Email = null);
 
 /// <summary>
 /// Posts a compact structured event to the founder channel. Every implementation is

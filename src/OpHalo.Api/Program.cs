@@ -261,6 +261,10 @@ builder.Services.AddSingleton<UpdatesFeedCache>();
 builder.Services.AddScoped<IFeedbackPersistence, EfFeedbackPersistence>();
 builder.Services.AddScoped<FeedbackSubmissionService>();
 
+// GAP-098: server-resolved follow-up identity for the founder alert, keyed on the submission's
+// account/account-user pair. Resolved fresh on every delivery attempt (below), never persisted.
+builder.Services.AddScoped<IFeedbackIdentityReader, EfFeedbackIdentityReader>();
+
 // 038-2c operational completion: a per-minute worker drives the delivery retry schedule
 // (backoff 5/15/60/180 min after the synchronous attempt), the backlog/abandoned founder-channel
 // alert, and the 7-day-delivered / 30-day-abandoned retention sweep. The alert throttle is a

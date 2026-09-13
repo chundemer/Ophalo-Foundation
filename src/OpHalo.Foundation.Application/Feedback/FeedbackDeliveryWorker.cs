@@ -35,6 +35,7 @@ namespace OpHalo.Foundation.Application.Feedback;
 public sealed class FeedbackDeliveryWorker(
     IFeedbackPersistence persistence,
     IFounderNotifier founderNotifier,
+    IFeedbackIdentityReader identityReader,
     FounderAlertThrottle alertThrottle,
     IClock clock,
     ILogger<FeedbackDeliveryWorker> logger)
@@ -90,12 +91,20 @@ public sealed class FeedbackDeliveryWorker(
 
             submission.MarkAttempted(nowUtc);
 
+            var identity = await TryResolveIdentityAsync(submission.AccountId, submission.AccountUserId, cancellationToken);
+
             var delivered = await founderNotifier.NotifyAsync(
                 new FounderEvent(
                     Type: "feedback_submitted",
                     Summary: $"[{submission.Category}] {submission.Message}",
                     Correlation: submission.Id.ToString(),
-                    Context: submission.ContextJson),
+                    Context: submission.ContextJson,
+                    AccountId: submission.AccountId,
+                    AccountUserId: submission.AccountUserId,
+                    BusinessName: identity?.BusinessName,
+                    SubmitterName: identity?.SubmitterName,
+                    Role: identity?.Role,
+                    Email: identity?.Email),
                 cancellationToken);
 
             if (delivered)
@@ -184,6 +193,24 @@ public sealed class FeedbackDeliveryWorker(
 
         if (deleted > 0)
             logger.LogInformation("Feedback retention sweep hard-deleted {DeletedCount} rows.", deleted);
+    }
+
+    /// <summary>
+    /// GAP-098: resolves follow-up identity for the founder alert. Fail-soft — a reader exception
+    /// is logged and treated the same as an unavailable membership; it never blocks retry delivery.
+    /// </summary>
+    private async Task<FeedbackFounderIdentity?> TryResolveIdentityAsync(
+        Guid accountId, Guid accountUserId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await identityReader.GetAsync(accountId, accountUserId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Feedback founder-identity resolution failed; delivering with IDs only.");
+            return null;
+        }
     }
 
     private static string FormatAge(TimeSpan age)

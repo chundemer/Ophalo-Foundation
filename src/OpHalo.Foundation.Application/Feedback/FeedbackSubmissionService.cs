@@ -33,6 +33,7 @@ public enum FeedbackSubmissionOutcome
 public sealed class FeedbackSubmissionService(
     IFeedbackPersistence persistence,
     IFounderNotifier founderNotifier,
+    IFeedbackIdentityReader identityReader,
     ICurrentUser currentUser,
     IClock clock,
     ILogger<FeedbackSubmissionService> logger)
@@ -94,12 +95,20 @@ public sealed class FeedbackSubmissionService(
         var body = submission.Message;
         submission.MarkAttempted(nowUtc);
 
+        var identity = await TryResolveIdentityAsync(submission.AccountId, submission.AccountUserId, cancellationToken);
+
         var delivered = await founderNotifier.NotifyAsync(
             new FounderEvent(
                 Type: "feedback_submitted",
                 Summary: $"[{submission.Category}] {body}",
                 Correlation: submission.Id.ToString(),
-                Context: submission.ContextJson),
+                Context: submission.ContextJson,
+                AccountId: submission.AccountId,
+                AccountUserId: submission.AccountUserId,
+                BusinessName: identity?.BusinessName,
+                SubmitterName: identity?.SubmitterName,
+                Role: identity?.Role,
+                Email: identity?.Email),
             cancellationToken);
 
         if (delivered)
@@ -122,5 +131,23 @@ public sealed class FeedbackSubmissionService(
 
         return Result<FeedbackSubmissionOutcome>.Success(
             delivered ? FeedbackSubmissionOutcome.Delivered : FeedbackSubmissionOutcome.Queued);
+    }
+
+    /// <summary>
+    /// GAP-098: resolves follow-up identity for the founder alert. Fail-soft — a reader exception
+    /// is logged and treated the same as an unavailable membership; it never blocks delivery.
+    /// </summary>
+    private async Task<FeedbackFounderIdentity?> TryResolveIdentityAsync(
+        Guid accountId, Guid accountUserId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await identityReader.GetAsync(accountId, accountUserId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Feedback founder-identity resolution failed; delivering with IDs only.");
+            return null;
+        }
     }
 }

@@ -7,9 +7,14 @@ If a line here would need editing when the workboard changes, it belongs in the 
 **Updated 2026-09-12.** GAP-094 and GAP-095 are reviewed, merged, and deployed to `main`.
 Feedback / Help & Updates is code-complete; 038-R0 (enforced schema validation) and 038-R1
 (`platform/updates.json` published to R2, verified via a clean production `#/help` read with no new
-`content_source_failure` alerts) are done. The remaining handoff is **038-R3**: verify authenticated
-Help, banner dismissal, and one harmless feedback submission reaching the founder channel, and get
-explicit founder acceptance of the single-webhook outage posture.
+`content_source_failure` alerts) are done. **Before 038-R3, complete GAP-098**
+([workboard](workboard.md#audit-and-operational-gap-registry)): enrich the private founder-channel
+alert with server-resolved submitter/business follow-up identity and stable account/account-user IDs
+(no invented internal deep link), make the feedback confirmation honest about possible follow-up and
+Help & Updates, and establish the restricted
+Google Workspace feedback register as the pilot response-accountability record. Then run **038-R3**:
+verify authenticated Help, banner dismissal, and one harmless feedback submission reaching the
+founder channel, and get explicit founder acceptance of the single-webhook outage posture.
 Follow [the founder operations guide](runbook/feedback-help-updates-operations.md).
 After that verification, start the **Proposed Work & Commercial Quotes** decision session from the
 [workboard decision queue](workboard.md#decision-queue). GAP-040 marketing copy remains deliberately
@@ -31,9 +36,9 @@ carries `R2__BusinessDocuments__*` (existing business-documents credential, rena
 vars, and local dev has its own read-only `R2:PlatformContent:*` user-secrets. Production `#/help`
 verified live against the new bucket (2026-09-13); local dev has full R2 read parity — the prior
 hot blocker is resolved.
-Next: get the `Program.cs` split + Help.tsx restyle reviewed and committed, then resume **038-R3**
-(verify authenticated Help, banner dismissal, one harmless feedback submission reaching the founder
-channel, founder acceptance of the single-webhook outage posture).
+Next: get the `Program.cs` split + Help.tsx restyle reviewed and committed, then complete **GAP-098**
+before resuming **038-R3** (verify authenticated Help, banner dismissal, one harmless feedback
+submission reaching the founder channel, founder acceptance of the single-webhook outage posture).
 
 ## Baseline
 

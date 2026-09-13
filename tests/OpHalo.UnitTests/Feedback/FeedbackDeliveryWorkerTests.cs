@@ -22,12 +22,14 @@ public class FeedbackDeliveryWorkerTests
 
     private readonly FakePersistence _persistence = new();
     private readonly FakeNotifier _notifier = new();
+    private readonly FakeIdentityReader _identityReader = new();
     private readonly FounderAlertThrottle _throttle = new();
     private DateTime _now = Now;
 
     private FeedbackDeliveryWorker Worker() => new(
         _persistence,
         _notifier,
+        _identityReader,
         _throttle,
         new FakeClock(() => _now),
         NullLogger<FeedbackDeliveryWorker>.Instance);
@@ -64,6 +66,70 @@ public class FeedbackDeliveryWorkerTests
         Assert.Equal(Now, submission.DeliveredAtUtc);
         Assert.Contains(submission, _persistence.Updated);
         Assert.Equal("feedback_submitted", _notifier.Events[0].Type);
+        Assert.Equal(AccountId, _notifier.Events[0].AccountId);
+        Assert.Equal(UserId, _notifier.Events[0].AccountUserId);
+    }
+
+    [Fact]
+    public async Task Retry_resolves_current_identity_on_every_attempt()
+    {
+        var submission = Pending();
+        _persistence.Due.Add(submission);
+        _notifier.DeliveryResult = false;
+        _identityReader.Identity = new FeedbackFounderIdentity("Acme HVAC", "Jane Doe", "Owner", "jane@acme.test");
+
+        await Worker().RunOnceAsync(CancellationToken.None);
+
+        var firstEvent = _notifier.Events.Single(e => e.Type == "feedback_submitted");
+        Assert.Equal("Acme HVAC", firstEvent.BusinessName);
+        Assert.Equal("Jane Doe", firstEvent.SubmitterName);
+        Assert.Equal(FeedbackDeliveryState.Pending, submission.DeliveryState);
+
+        // Membership changed (e.g. a role update) between the two attempts.
+        _now = submission.NextAttemptAtUtc!.Value;
+        _identityReader.Identity = new FeedbackFounderIdentity("Acme HVAC", "Jane Doe", "Admin", "jane@acme.test");
+        _notifier.DeliveryResult = true;
+
+        await Worker().RunOnceAsync(CancellationToken.None);
+
+        var feedbackEvents = _notifier.Events.Where(e => e.Type == "feedback_submitted").ToList();
+        Assert.Equal(2, feedbackEvents.Count);
+        var secondEvent = feedbackEvents[1];
+        Assert.Equal("Admin", secondEvent.Role);
+        Assert.Equal(FeedbackDeliveryState.Delivered, submission.DeliveryState);
+    }
+
+    [Fact]
+    public async Task Identity_reader_exception_on_retry_never_blocks_delivery()
+    {
+        var submission = Pending();
+        _persistence.Due.Add(submission);
+        _notifier.DeliveryResult = true;
+        _identityReader.ThrowOnGet = true;
+
+        var ex = await Record.ExceptionAsync(() => Worker().RunOnceAsync(CancellationToken.None));
+
+        Assert.Null(ex);
+        Assert.Equal(FeedbackDeliveryState.Delivered, submission.DeliveryState);
+        var evt = _notifier.Events.Single(e => e.Type == "feedback_submitted");
+        Assert.Null(evt.BusinessName);
+        Assert.Equal(AccountId, evt.AccountId);
+    }
+
+    [Fact]
+    public async Task Retry_still_delivers_with_ids_only_when_membership_is_unavailable()
+    {
+        var submission = Pending();
+        _persistence.Due.Add(submission);
+        _notifier.DeliveryResult = true;
+        _identityReader.Identity = null;
+
+        await Worker().RunOnceAsync(CancellationToken.None);
+
+        Assert.Equal(FeedbackDeliveryState.Delivered, submission.DeliveryState);
+        var evt = _notifier.Events.Single(e => e.Type == "feedback_submitted");
+        Assert.Null(evt.BusinessName);
+        Assert.Equal(AccountId, evt.AccountId);
     }
 
     [Theory]
@@ -222,6 +288,19 @@ public class FeedbackDeliveryWorkerTests
             SweepDeliveredBefore = deliveredBeforeUtc;
             SweepAbandonedBefore = abandonedBeforeUtc;
             return Task.FromResult(0);
+        }
+    }
+
+    private sealed class FakeIdentityReader : IFeedbackIdentityReader
+    {
+        public FeedbackFounderIdentity? Identity { get; set; }
+        public bool ThrowOnGet { get; set; }
+
+        public Task<FeedbackFounderIdentity?> GetAsync(
+            Guid accountId, Guid accountUserId, CancellationToken cancellationToken)
+        {
+            if (ThrowOnGet) throw new InvalidOperationException("resolve failed");
+            return Task.FromResult(Identity);
         }
     }
 

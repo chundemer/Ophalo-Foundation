@@ -22,11 +22,13 @@ public class FeedbackSubmissionServiceTests
 
     private readonly FakePersistence _persistence = new();
     private readonly FakeNotifier _notifier = new();
+    private readonly FakeIdentityReader _identityReader = new();
     private readonly FakeCurrentUser _currentUser = new(AccountId, UserId, isAuthenticated: true);
 
     private FeedbackSubmissionService Service() => new(
         _persistence,
         _notifier,
+        _identityReader,
         _currentUser,
         new FakeClock(Now),
         NullLogger<FeedbackSubmissionService>.Instance);
@@ -179,6 +181,64 @@ public class FeedbackSubmissionServiceTests
         public Task<int> DeleteExpiredAsync(
             DateTime deliveredBeforeUtc, DateTime abandonedBeforeUtc, CancellationToken cancellationToken) =>
             Task.FromResult(0);
+    }
+
+    [Fact]
+    public async Task Notifier_payload_carries_resolved_identity_and_stable_ids()
+    {
+        _notifier.Result = true;
+        _identityReader.Identity = new FeedbackFounderIdentity("Acme HVAC", "Jane Doe", "Owner", "jane@acme.test");
+
+        await Submit();
+
+        var evt = Assert.Single(_notifier.Events);
+        Assert.Equal(AccountId, evt.AccountId);
+        Assert.Equal(UserId, evt.AccountUserId);
+        Assert.Equal("Acme HVAC", evt.BusinessName);
+        Assert.Equal("Jane Doe", evt.SubmitterName);
+        Assert.Equal("Owner", evt.Role);
+        Assert.Equal("jane@acme.test", evt.Email);
+    }
+
+    [Fact]
+    public async Task Unavailable_membership_still_delivers_with_stable_ids_only()
+    {
+        _notifier.Result = true;
+        _identityReader.Identity = null;
+
+        await Submit();
+
+        var evt = Assert.Single(_notifier.Events);
+        Assert.Equal(AccountId, evt.AccountId);
+        Assert.Equal(UserId, evt.AccountUserId);
+        Assert.Null(evt.BusinessName);
+        Assert.Null(evt.SubmitterName);
+    }
+
+    [Fact]
+    public async Task Identity_reader_exception_never_blocks_delivery()
+    {
+        _notifier.Result = true;
+        _identityReader.ThrowOnGet = true;
+
+        var result = await Submit();
+
+        Assert.True(result.IsSuccess);
+        var evt = Assert.Single(_notifier.Events);
+        Assert.Null(evt.BusinessName);
+    }
+
+    private sealed class FakeIdentityReader : IFeedbackIdentityReader
+    {
+        public FeedbackFounderIdentity? Identity { get; set; }
+        public bool ThrowOnGet { get; set; }
+
+        public Task<FeedbackFounderIdentity?> GetAsync(
+            Guid accountId, Guid accountUserId, CancellationToken cancellationToken)
+        {
+            if (ThrowOnGet) throw new InvalidOperationException("resolve failed");
+            return Task.FromResult(Identity);
+        }
     }
 
     private sealed class FakeNotifier : IFounderNotifier

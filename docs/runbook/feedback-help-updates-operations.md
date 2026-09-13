@@ -1,11 +1,13 @@
 # Feedback, Help & Updates — Founder Operations Guide
 
-**Purpose:** operate the authenticated feedback and Help & Updates loop without turning it into a
-support-ticket system or publishing claims/content that the product cannot support.
+**Purpose:** operate the authenticated feedback and Help & Updates loop as a real founder-to-business
+communication loop, without turning it into a support-ticket system or publishing claims/content
+that the product cannot support.
 
 **Authority:** [ADR-500](../decisions/ADR-500-in-product-feedback-and-help-updates-loop.md) and
 [BL149](../build-log/149-gap-038-in-product-feedback-help-updates-implementation.md). This guide
-does not change their product, privacy, or delivery decisions.
+does not change their product, privacy, or delivery decisions; the GAP-098 amendment to ADR-500
+governs founder-channel follow-up identity before 038-R3.
 
 ## What customers and businesses get
 
@@ -17,8 +19,10 @@ The loop has two directions, both inside the authenticated Keep application:
    to important entries.
 2. **Businesses → OpHalo:** "Report a problem" in Help and "Send feedback" in the account menu
    open the feedback dialog. A submission is stored before delivery is attempted, then sent to the
-   founder channel. Failed delivery is retried automatically; this is not an operator-facing ticket
-   queue or customer-support portal.
+   private founder channel with the server-resolved business and submitter identity, plus stable
+   account/account-user IDs, needed for safe follow-up. No internal deep link exists in this pilot
+   slice. Failed delivery is retried automatically; this is not an operator-facing ticket queue or
+   customer-support portal.
 
 Customer-facing public intake and request-tracking pages do not show this surface.
 
@@ -33,7 +37,8 @@ Customer-facing public intake and request-tracking pages do not show this surfac
 | Guide images | Only PNG, JPEG, or WebP; store under `platform/updates/guides/img/`. Reference them only as `/updates/guides/img/<immutable-name>` from a guide body. |
 | Image naming | Use immutable, content-addressed names such as `send-update-7f3a91c2.png`; never overwrite an existing guide image. |
 | Feedback delivery | Persist-first and at-least-once. The founder channel must tolerate duplicate delivery IDs. Successful records are minimized promptly; failed/abandoned records follow the locked retention policy. |
-| Privacy | Do not put customer PII, access tokens, or raw request content into an Update entry, guide, or operational log. |
+| Privacy | Do not put customer PII, access tokens, or raw request content into an Update entry, guide, or operational log. The restricted private founder feedback alert is the exception: it may carry server-resolved business name, submitter name/role, email, and stable account/account-user IDs; no phone by default or invented internal deep link. |
+| Follow-up accountability | A restricted Google Workspace feedback register is the pilot system of record. It is operated manually; it is not an in-app ticket queue or customer-reply feature. |
 
 ## Current activation status
 
@@ -245,13 +250,28 @@ CMS or raw HTML publishing path today.
 2. The API accepts it only after persistence; it may return `202` even if immediate notification is
    uncertain because retry is already scheduled. A `503` means it was not persisted and may be
    retried by the business.
-3. The founder receives the webhook event and reviews it in the founder channel. Delivery can be
-   duplicated, so use the delivery ID to deduplicate if the channel/tool supports it.
-4. Triage the signal, not the person: group recurring issues, redact any copied PII before creating
-   a work item, and record a concrete decision in the workboard/ADR/build log as appropriate.
-5. Close the communication loop with a `known_issue` or `whats_new` entry when it helps affected
-   businesses. Do not promise an individual response time or turn the feed into a case-management
-   system.
+3. The founder receives the webhook event with the business, submitter name/role, email, stable
+   account/account-user IDs, and delivery ID. Delivery can be duplicated, so use the delivery ID to deduplicate
+   if the channel/tool supports it.
+4. Create a row in the restricted Google Workspace feedback register for every accepted alert. Use
+   correlation ID, received time, business, submitter, category, Chat-message link or short summary,
+   owner, status, follow-up date/method/outcome, and any Help & Updates entry link. Do not copy the
+   full feedback body or phone number into the register.
+5. Review `New` rows each business day; reply to the submitter (or account owner when appropriate)
+   by email and record the sent response. A row closes only after a recorded response or documented
+   contact-delivery failure.
+   This is an internal operating standard, not a customer-facing SLA.
+6. Group recurring issues, redact copied PII before creating a work item, and record a concrete
+   decision in the workboard/ADR/build log as appropriate. Close broad-impact communication with a
+   `known_issue` or `whats_new` entry; do not turn the register into a case-management system.
+
+### Google Workspace feedback register
+
+The founder owns a Google Sheet or equivalent restricted Workspace register. Limit access to founders
+and authorized support staff, set its retention period before pilot use, and review access regularly.
+The canonical row statuses are `New`, `Response sent`, `Closed`, and `Contact delivery failed`.
+`Closed` requires the recorded response date, method, and outcome; `Contact delivery failed` requires
+a short reason. The register holds follow-up metadata, not a duplicate feedback archive.
 
 A simple founder cadence is sufficient for pilot: review new feedback on business days, publish an
 active known issue when it materially affects multiple businesses, and review any retry/backlog
