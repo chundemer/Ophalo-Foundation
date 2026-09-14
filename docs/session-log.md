@@ -23,12 +23,17 @@ placeholder as a leaked query string and silently discarded the whole event — 
 with correct release/environment tags, an empty message (no PII), and the founder alert email
 arrived.
 
+The controlled **API** error test is done and passed. Mechanism: a temporary founder-only
+`GET /diagnostics/throw` route (`64ae48b3`), gated on `Diagnostics:FounderAccountUserId` and
+returning 404 for every non-founder case (unauthenticated or wrong account) so it stayed
+indistinguishable from an absent route; reverted the same session after verification. Confirmed in
+production: correct release/environment tags, correlation-id tag present, no query/body/identity
+leakage, resolved server stack, and the founder alert email arrived.
+
 Remaining for Batch 4:
 
-1. Controlled **API** error test — the trigger mechanism is still an open decision (no permanent
-   failure endpoint exists by design; e.g. a temporary route added and removed the same session).
-2. Invalid-`VITE_PUBLIC_BASE_URL` fail-safe test.
-3. Record the evidence plus named incident roles (release owner, technical responder,
+1. Invalid-`VITE_PUBLIC_BASE_URL` fail-safe test.
+2. Record the evidence plus named incident roles (release owner, technical responder,
    customer-communication owner, alert recipient, rollback path) in
    [sentry-configuration.md](runbook/sentry-configuration.md).
 

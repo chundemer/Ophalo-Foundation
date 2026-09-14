@@ -168,14 +168,28 @@ New-issue and resolved-issue-regression founder-email alert rules are live for b
 each alert's test notification reached the founder inbox. The non-secret configuration/rotation
 record is [Sentry Configuration Runbook](../runbook/sentry-configuration.md).
 
-### Batch 4 — production-candidate verification — paused (founder-owned)
+### Batch 4 — production-candidate verification — in progress (founder-owned)
 
-Paused at the safe smoke-login provision step: `support@ophalo.com` is available as the dedicated
-alias, but must be explicitly invited as a lowest-permission member of the founder's internal-only
-account before use. After that: verify a controlled browser error and a deliberately safe
-authenticated API error; inspect release/environment/correlation/redaction and founder-email
-delivery; prove deployed source maps are absent; exercise the invalid-public-base-URL fail-safe;
-test preview separation if preview capture is enabled; and record the evidence plus named incident
-roles in the runbook. The API controlled-error route remains an explicit implementation/operational
-decision: there is no permanent production failure endpoint. This gate precedes GAP-033.
+The authenticated-PWA controlled-error test is done and passed, after finding and fixing a real
+defect: `scrubBrowserEvent`'s invariant check treated Sentry's `"?"` unresolved-function-name
+placeholder as a leaked query string and silently discarded the whole event (`7a87e41a`/`0c3c8b3e`,
+tests updated). Re-verified live in production: correct release/environment tags, an empty message
+(no PII), and the founder alert email arrived.
+
+The controlled API error test is done and passed. Decision: rather than a permanent failure
+endpoint, a temporary founder-only `GET /diagnostics/throw` route was added (`64ae48b3`), gated on a
+`Diagnostics:FounderAccountUserId` config value compared against `ICurrentUser.UserId`, returning
+404 (not 401/403) for every non-founder case — unauthenticated or authenticated-as-someone-else
+alike — so it stayed indistinguishable from an absent route. No `.RequireAuthorization()`, since
+that pipeline's 401 challenge would itself distinguish an unauthenticated caller from a wrong-account
+one. No new Sentry plumbing was needed: `RequestContextSentryEventProcessor` and
+`SentryTelemetryScrubber` already supply release/environment/correlation-id tags and redaction
+generically. Verified live in production, then the route was reverted the same session and the
+Railway `Diagnostics__FounderAccountUserId` variable removed — the route is not part of permanent
+history. Confirmed: correct release/environment tags, correlation-id tag present, no query/body/
+identity leakage, resolved server stack, and the founder alert email arrived.
+
+Remaining: exercise the invalid-`VITE_PUBLIC_BASE_URL` fail-safe; test preview separation if preview
+capture is enabled; and record the evidence plus named incident roles in the runbook. This gate
+precedes GAP-033.
 
