@@ -4,28 +4,24 @@
 scope, sequencing, gates, and deferrals. Locked decisions are in
 [decision-index](decisions/decision-index.md); completed-work evidence is in `docs/build-log/`.
 
-**Updated 2026-09-14.** GAP-039 Batch 4 (production-candidate verification) is **done** — see
-[sentry-configuration.md](runbook/sentry-configuration.md) for the console configuration, named
-incident roles, and the controlled-error/fail-safe test evidence, and
-[workboard.md](workboard.md#done--evidence-index) for the closing entry. GAP-094, GAP-095, and
-GAP-098 are reviewed, merged, and deployed to `main`. Feedback / Help & Updates is code-complete:
-038-R0/R1/R2 are complete.
+**Updated 2026-09-14.** GAP-039 Batch 4 and GAP-038 (Feedback / Help & Updates production release,
+including 038-R3 founder verification) are both **done** — see
+[workboard.md](workboard.md#done--evidence-index). A founder publisher/preview tool for
+`updates.json` and guide content (GAP-087) stays deferred; publishing strategy to be revisited
+later. GAP-094, GAP-095, and GAP-098 are reviewed, merged, and deployed to `main`.
 
-## Start here — 038-R3 (Feedback / Help & Updates founder verification)
+## Start here — GAP-069 (durable API-key store, ownership, rotation, restore, proxy trust)
 
-Still pending — see the concise [founder guide](founder/feedback-and-updates-guide.md) and the
-[full operations guide](runbook/feedback-help-updates-operations.md). Do not start another feedback
-implementation batch unless R3 exposes a concrete defect. Keep the API at one replica until GAP-081
-worker/cache hardening is delivered.
+Founder decision, then engineering. GAP-069 is the remaining pre-pilot gate alongside the
+already-complete GAP-039. See the workboard's **Now** section for acceptance criteria.
 
 ## Next several sessions
 
-1. Complete 038-R3 above.
-2. Make the **GAP-069** durable API-key-store, ownership, rotation, restore, and proxy-trust
-   decision. GAP-069 must complete before a customer-facing pilot (GAP-039 is now done).
-3. Run the **Proposed Work & Commercial Quotes** decision session. Its first deliverable is a
+1. Make the **GAP-069** decision and implement it. GAP-069 is now the only outstanding item before
+   a customer-facing pilot.
+2. Run the **Proposed Work & Commercial Quotes** decision session. Its first deliverable is a
    decision record, not code; use its workboard Decision Queue entry and the cited ADRs/build logs.
-4. Resume the ordered pilot workboard queue: **GAP-099** (team-member access-control clarity and
+3. Resume the ordered pilot workboard queue: **GAP-099** (team-member access-control clarity and
    production parity), then **GAP-063**, **GAP-048**, **GAP-049**, and **GAP-092**. GAP-040 remains
    deliberately deferred until the underlying application stabilizes.
 
