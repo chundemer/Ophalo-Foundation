@@ -13,7 +13,6 @@
 
 | Item | Owner | Outcome / acceptance |
 | --- | --- | --- |
-| GAP-039 Batch 4 | Founder | Console config (Railway/Vercel/Sentry DSNs, `/health/ready`, founder alerts) and the PWA controlled-error/redaction/release verification are **done 2026-09-13** — see [sentry-configuration.md](runbook/sentry-configuration.md). Found and fixed a real browser-scrubber defect along the way (`0c3c8b3e`): a `"?"` unresolved-function-name placeholder was being treated as a leaked query string and silently discarding the whole event. Remaining: the API controlled-error test (trigger mechanism undecided — no permanent failure endpoint by design), the invalid-`VITE_PUBLIC_BASE_URL` fail-safe test, and recording evidence + named incident roles in the runbook. [ADR-495](decisions/ADR-495-gap-039-redacted-error-capture-and-release-safety.md), [BL140](build-log/140-gap-039-sentry-implementation-handoff.md). |
 | GAP-069 | Founder decision → engineering | Choose Railway persistent volume or external key store, record ownership/rotation/restore, then persist/protect the API key ring and narrowly trust the Railway proxy. Redeploy preserves keys; spoofed forwarded headers fail; startup warnings are gone. |
 
 ## Next
@@ -171,7 +170,8 @@ The frozen [pilot readiness tracker](pilot-readiness-bug-tracker.md) is the auth
 | --- | --- |
 | GAP-050 | Account-scoped related-work indicator for the same canonical customer: `924b808e` (backend read path), `bdf90c33` (panel + navigation); [BL096](build-log/096-phase-4-request-detail-preflight-handoff.md). Promoted from DEF-050; never appeared in the legacy tracker. |
 | GAP-033 | Public-intake trust/event allowlist: `11c19d3d`, `89a776d8`; [BL145](build-log/145-gap-033-public-intake-trust-and-event-feed-allowlist.md). |
-| GAP-039 implementation | API/PWA Sentry code/runbooks: `d7d0ee22`, `fd34af34`, `baf07265`, `a69a8edf`, `70e75a3f`; operational Batch 4 remains Now. |
+| GAP-039 implementation | API/PWA Sentry code/runbooks: `d7d0ee22`, `fd34af34`, `baf07265`, `a69a8edf`, `70e75a3f`. |
+| GAP-039 Batch 4 | Operational production-candidate verification **done 2026-09-14**: console config, PWA and API controlled-error tests, the browser-scrubber fix (`0c3c8b3e`), the invalid-`VITE_PUBLIC_BASE_URL` fail-safe test (verified via existing automated tests), and named incident roles — see [sentry-configuration.md](runbook/sentry-configuration.md). [ADR-495](decisions/ADR-495-gap-039-redacted-error-capture-and-release-safety.md), [BL140](build-log/140-gap-039-sentry-implementation-handoff.md). |
 | GAP-065 / GAP-065A | Financial-review discovery: `faf7b64`, `e27c48c`, `6ab880b`, `baaeff1`, `f231126`, `606203d`; [BL138](build-log/138-gap-065-owner-admin-financial-review-discovery-and-delivery-plan.md). |
 | GAP-068 | Multi-workspace sign-in/invited name: `755c7eaf`, verification `2cda916d`; [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md). |
 | GAP-016 / GAP-021 | ADR-444 phone path; native parity separately deferred. |
@@ -179,4 +179,4 @@ The frozen [pilot readiness tracker](pilot-readiness-bug-tracker.md) is the auth
 
 ## Pilot gate checklist
 
-Before a supervised customer-facing pilot: GAP-039 Batch 4, GAP-069, GAP-099 before staff access is managed, GAP-073 before staff send customer updates, GAP-091 before field techs rely on Quick Capture, GAP-040, GAP-063, GAP-048 before sharing private pages, and GAP-049 before relying on closed-request follow-ups. GAP-047 was dropped as a gate on 2026-09-07 (staff do not triage by Internal priority). GAP-064 needs a written alert-policy decision; until then the founder deliberately watches the queue.
+Before a supervised customer-facing pilot: GAP-039 Batch 4 (done 2026-09-14), GAP-069, GAP-099 before staff access is managed, GAP-073 before staff send customer updates, GAP-091 before field techs rely on Quick Capture, GAP-040, GAP-063, GAP-048 before sharing private pages, and GAP-049 before relying on closed-request follow-ups. GAP-047 was dropped as a gate on 2026-09-07 (staff do not triage by Internal priority). GAP-064 needs a written alert-policy decision; until then the founder deliberately watches the queue.

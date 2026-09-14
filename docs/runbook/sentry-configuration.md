@@ -101,7 +101,36 @@ are also wanted. Preview events must remain in the `preview` Sentry environment.
 
 ## Incident response
 
+**Roles (solo founder stage — reassign here when this changes):**
+
+| Role | Owner |
+| --- | --- |
+| Release owner | Christian |
+| Technical responder | Christian |
+| Customer-communication owner | Christian |
+| Alert recipient | Christian (founder-email alert rules on both Sentry projects) |
+
+**Rollback path:** redeploy the previous known-good Railway (API) or Vercel (PWA) deployment; do not
+attempt a fix-forward deploy until service is restored.
+
 For a new Sentry alert: inspect the release and environment first, copy the API correlation ID when
 present, then search Railway logs for that ID. If errors coincide with a release and impact users,
 rollback the API or PWA deployment first; investigate and fix forward after service is restored.
 Record the incident outcome without recording protected event data or credentials.
+
+## GAP-039 Batch 4 verification evidence
+
+- **PWA controlled-error test:** passed in production after fixing a `scrubBrowserEvent` defect that
+  discarded events whose stack frames had an unresolved function name (`"?"` was misread as a leaked
+  query string) — fix in commit `0c3c8b3e`. Re-verified: correct release/environment tags, empty
+  message (no PII), founder alert delivered.
+- **API controlled-error test:** passed in production via a temporary founder-only diagnostic route
+  (added in `64ae48b3`, reverted in `75086f17` after verification). Confirmed correct
+  release/environment tags, correlation-id tag present, no query/body/identity leakage, resolved
+  server stack, founder alert delivered.
+- **Invalid-`VITE_PUBLIC_BASE_URL` fail-safe test:** verified via existing automated tests rather
+  than a live invalid-value deploy (isolating a bad value to one Preview branch was blocked by the
+  variable's Secret type). `main.tsx` renders `ConfigurationError` whenever
+  `publicBaseUrlResult.ok` is `false`; `main.config-failure.test.tsx` proves that branch for a
+  missing value and `publicBaseUrl.test.ts` proves `ok: false` for a malformed value and a
+  non-http(s) scheme — together covering the same fail-safe path a live deploy would have exercised.
