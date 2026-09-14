@@ -32,7 +32,17 @@ leakage, resolved server stack, and the founder alert email arrived.
 
 Remaining for Batch 4:
 
-1. Invalid-`VITE_PUBLIC_BASE_URL` fail-safe test.
+1. Invalid-`VITE_PUBLIC_BASE_URL` fail-safe test — paused mid-session. The Vercel
+   `VITE_PUBLIC_BASE_URL` variable is typed **Secret** (write-only; Vercel won't reveal its value
+   after saving) and currently scoped to "Production and Preview" together. Editing that entry's
+   scope in the Vercel UI to isolate Production from Preview was judged too risky to attempt blind
+   (no way to confirm the real production value is preserved on save). Planned safer path instead:
+   leave the existing entry untouched, and add a **new** `VITE_PUBLIC_BASE_URL` entry scoped to
+   Preview and narrowed via Vercel's "Select a Custom Preview Branch" to one throwaway branch, so
+   the invalid value only reaches that branch's Preview deployments. Separately, unrelated to this
+   test and not urgent: Vercel flags that a `VITE_`-prefixed variable (intentionally inlined into
+   the public browser bundle by Vite) shouldn't be typed Secret, since Secret implies confidentiality
+   this value never had — worth revisiting the variable's type later.
 2. Record the evidence plus named incident roles (release owner, technical responder,
    customer-communication owner, alert recipient, rollback path) in
    [sentry-configuration.md](runbook/sentry-configuration.md).
