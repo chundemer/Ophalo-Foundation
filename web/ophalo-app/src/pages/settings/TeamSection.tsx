@@ -299,6 +299,27 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
               >
                 Manual share
               </button>
+              {confirmRemove ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleRemove}
+                    disabled={busy}
+                    className="text-xs font-medium text-[var(--ophalo-danger)] hover:underline disabled:opacity-40"
+                  >
+                    Confirm remove
+                  </button>
+                  <button onClick={() => setConfirmRemove(false)} className="text-xs text-[var(--ophalo-muted)] hover:underline">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { clearState(); setConfirmRemove(true); }}
+                  className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline"
+                >
+                  Remove
+                </button>
+              )}
             </>
           )}
 

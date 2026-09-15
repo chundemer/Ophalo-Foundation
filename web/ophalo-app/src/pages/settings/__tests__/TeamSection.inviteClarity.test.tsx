@@ -9,6 +9,7 @@ import type { ListMembersResponse } from "../../../lib/apiClient.types";
 
 const mockListMembers = vi.fn();
 const mockInviteMember = vi.fn();
+const mockRemoveMember = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>(
@@ -20,6 +21,7 @@ vi.mock("../../../lib/apiClient", async () => {
       ...actual.api,
       listMembers: (...a: unknown[]) => mockListMembers(...a),
       inviteMember: (...a: unknown[]) => mockInviteMember(...a),
+      removeMember: (...a: unknown[]) => mockRemoveMember(...a),
     },
   };
 });
@@ -105,5 +107,37 @@ describe("TeamSection — invite clarity (Session 3b)", () => {
       await screen.findByText(/pending acceptance/i),
     ).toBeInTheDocument();
     expect(screen.queryByText(/receive an email link/i)).not.toBeInTheDocument();
+  });
+});
+
+// GAP-099 (BL157) — a pending invite (mistyped or suppressed recipient) must be cancelable
+// without waiting for expiry; cancellation frees the seat server-side (RemoveAsync/Remove()).
+const invitedMember: ListMembersResponse = {
+  members: [
+    {
+      accountUserId: "au-2",
+      email: "typo@apex.example",
+      role: "operator",
+      status: "invited",
+      isCurrentUser: false,
+      isPrimaryOwner: false,
+      activatedAtUtc: null,
+      inviteExpiresAtUtc: "2026-09-22T00:00:00Z",
+    },
+  ],
+  seatUsage: { occupiedSeats: 1, maxSeats: 5, atLimit: false, limitApplies: true },
+};
+
+describe("TeamSection — invited member cancel (GAP-099 / BL157)", () => {
+  it("lets an Owner cancel a pending invite via the existing confirmed Remove action", async () => {
+    mockListMembers.mockResolvedValue(invitedMember);
+    mockRemoveMember.mockResolvedValue(undefined);
+    renderSection();
+
+    await screen.findByText("typo@apex.example");
+    fireEvent.click(screen.getByRole("button", { name: /^remove$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm remove/i }));
+
+    await waitFor(() => expect(mockRemoveMember).toHaveBeenCalledWith("au-2"));
   });
 });
