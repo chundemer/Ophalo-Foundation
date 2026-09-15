@@ -302,6 +302,28 @@ Keep does not ask you to replace every system. It gives your team the continuity
 work those systems do not keep connected.
 ```
 
+## Subscription Test
+
+OpHalo earns a subscription only when it closes a business-critical loop that the owner would
+otherwise have to manage through memory, paper, personal messages, or repeated manual entry. A
+feature being convenient is not sufficient.
+
+For every proposed commercial capability, require a clear answer to all four questions:
+
+- Which costly or risky operational gap does it close?
+- What authoritative fact, owner, and next action keep that loop from being dropped?
+- What observable business outcome lets the owner see the value?
+- Why is the outcome recurring enough that the business would keep paying for it?
+
+The target is not feature breadth or a generic field-service utility. It is a dependable operating
+system for protecting work-to-cash continuity: capture the opportunity, keep the customer promise,
+retain what happened in the field, resolve the office follow-through, and expose work at risk before
+the business loses revenue, trust, or time.
+
+This standard governs the commercial roadmap: the revenue-control queue, accounting handoff,
+field evidence, quote acceptance, and customer notifications must connect into complete,
+auditable loops rather than ship as disconnected conveniences.
+
 ## Proving Impact
 
 Keep should eventually help the business see whether the communication loop is improving.

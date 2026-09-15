@@ -4,26 +4,25 @@
 scope, sequencing, gates, and deferrals. Locked decisions are in
 [decision-index](decisions/decision-index.md); completed-work evidence is in `docs/build-log/`.
 
-**Updated 2026-09-14.** GAP-039 Batch 4 and GAP-038 (Feedback / Help & Updates production release,
-including 038-R3 founder verification) are both **done** — see
-[workboard.md](workboard.md#done--evidence-index). A founder publisher/preview tool for
-`updates.json` and guide content (GAP-087) stays deferred; publishing strategy to be revisited
-later. GAP-094, GAP-095, and GAP-098 are reviewed, merged, and deployed to `main`.
+**Updated 2026-09-15.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
+GAP-093, GAP-095, GAP-098, GAP-073, and GAP-094 are complete. The canonical scope, order, gates,
+and deferrals are in the [workboard](workboard.md).
 
-## Start here — GAP-069 (durable API-key store, ownership, rotation, restore, proxy trust)
+## Start here — GAP-099
 
-Founder decision, then engineering. GAP-069 is the remaining pre-pilot gate alongside the
-already-complete GAP-039. See the workboard's **Now** section for acceptance criteria.
+GAP-073 and GAP-094 are both reviewed and merged (2026-09-15, no findings on either). Take up the
+first Next item: GAP-099 team-member access-control clarity and production parity. The ordered
+scope and acceptance criteria are in the workboard's **Next** section.
 
 ## Next several sessions
 
-1. Make the **GAP-069** decision and implement it. GAP-069 is now the only outstanding item before
-   a customer-facing pilot.
+1. Continue the workboard's foundation-first order: GAP-099, GAP-063, GAP-048, GAP-049, then
+   GAP-092.
 2. Run the **Proposed Work & Commercial Quotes** decision session. Its first deliverable is a
    decision record, not code; use its workboard Decision Queue entry and the cited ADRs/build logs.
-3. Resume the ordered pilot workboard queue: **GAP-099** (team-member access-control clarity and
-   production parity), then **GAP-063**, **GAP-048**, **GAP-049**, and **GAP-092**. GAP-040 remains
-   deliberately deferred until the underlying application stabilizes.
+3. Begin **GAP-069** only at the release-readiness trigger: about two weeks before Keep becomes the
+   authoritative pilot record, after Railway Pro daily backups/PITR are enabled and the first PITR
+   recovery window exists. See [authoritative-pilot-release-readiness.md](runbook/authoritative-pilot-release-readiness.md).
 
 ## Pilot posture
 
@@ -33,5 +32,7 @@ invoices, payments, and accounting; Keep is the factual field record. See
 
 ## Current hot blockers
 
-- GAP-069: founder decision and implementation of durable API-key storage and narrowly trusted
-  Railway proxy headers.
+- No current platform blocker. The release-readiness trigger for GAP-069 is documented in the
+  workboard and the authoritative-pilot release runbook.
+- Native GAP-091 review, S18, and S19 are deferred; they must not displace the foundation-first
+  closed-loop sequence.
