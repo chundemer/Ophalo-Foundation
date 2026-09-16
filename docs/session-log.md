@@ -14,8 +14,9 @@ GAP-063 is fully closed (2026-09-16): Spam/Test terminal classification from Req
 the quiet Admin actions menu, is implemented and manually verified live (`5872f135`). See the
 workboard's Done/evidence index for the full evidence trail.
 
-Take up GAP-048 next: private-page email goes through informed share confirmation; `mailto:` is
-never delivery evidence. Full acceptance criteria on the workboard's GAP-048 entry.
+Take up GAP-048 next: its scope is now locked in the workboard and ADR-372/381 — tracker-bearing
+email requires an informed post-launch confirmation, while plain email never contains the tracker
+token or changes `NeedsShare`.
 
 ## Next several sessions
 

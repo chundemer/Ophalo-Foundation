@@ -5,10 +5,12 @@ import { LogContactModal } from "../../RequestDetail";
 import { mockRequestDetails } from "../../../mocks/fixtures";
 
 const mockLogExternalContact = vi.fn();
+const mockRecordShareIntent = vi.fn();
 
 vi.mock("../../../lib/apiClient", () => ({
   api: {
     logExternalContact: (...args: unknown[]) => mockLogExternalContact(...args),
+    recordShareIntent: (...args: unknown[]) => mockRecordShareIntent(...args),
   },
   ApiError: class ApiError extends Error {
     status: number;
@@ -22,22 +24,25 @@ vi.mock("../../../lib/apiClient", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mockLogExternalContact.mockResolvedValue(mockRequestDetails["mock-req-001"]);
+  mockRecordShareIntent.mockResolvedValue(undefined);
 });
 
-function renderModal() {
+function renderModal(overrides: { detail?: (typeof mockRequestDetails)["mock-req-001"]; initialChannel?: string } = {}) {
   const onClose = vi.fn();
   const onDetailUpdated = vi.fn();
+  const onShareIntentRecorded = vi.fn();
   render(
     <LogContactModal
       requestId="mock-req-001"
-      detail={mockRequestDetails["mock-req-001"]}
+      detail={overrides.detail ?? mockRequestDetails["mock-req-001"]}
       initialDirection="outbound"
-      initialChannel="phone"
+      initialChannel={overrides.initialChannel ?? "phone"}
       onDetailUpdated={onDetailUpdated}
       onClose={onClose}
+      onShareIntentRecorded={onShareIntentRecorded}
     />,
   );
-  return { onClose, onDetailUpdated };
+  return { onClose, onDetailUpdated, onShareIntentRecorded };
 }
 
 function clickBackdrop(container: HTMLElement) {
@@ -149,5 +154,78 @@ describe("LogContactModal — dirty-close contract", () => {
 
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe("LogContactModal — GAP-048 tracker-email share confirmation", () => {
+  it("requires an explicit post-launch confirmation before recording an email share event", async () => {
+    const user = userEvent.setup();
+    const { onShareIntentRecorded } = renderModal({
+      detail: mockRequestDetails["mock-req-002"],
+      initialChannel: "email",
+    });
+
+    await user.click(screen.getByRole("link", { name: "Open email draft with request link" }));
+    expect(mockRecordShareIntent).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "I sent it — confirm" }));
+
+    expect(mockRecordShareIntent).toHaveBeenCalledWith("mock-req-001", "email");
+    expect(onShareIntentRecorded).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "I sent it — confirm" })).not.toBeInTheDocument();
+  });
+
+  it("dismissing the post-launch confirmation without confirming creates no share event", async () => {
+    const user = userEvent.setup();
+    const { onShareIntentRecorded } = renderModal({
+      detail: mockRequestDetails["mock-req-002"],
+      initialChannel: "email",
+    });
+
+    await user.click(screen.getByRole("link", { name: "Open email draft with request link" }));
+    expect(screen.getByRole("button", { name: "I sent it — confirm" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Not sent" }));
+
+    expect(mockRecordShareIntent).not.toHaveBeenCalled();
+    expect(onShareIntentRecorded).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "I sent it — confirm" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the confirmation retryable and leaves no share event on a transport failure", async () => {
+    const user = userEvent.setup();
+    mockRecordShareIntent.mockRejectedValueOnce(new Error("network"));
+    const { onShareIntentRecorded } = renderModal({
+      detail: mockRequestDetails["mock-req-002"],
+      initialChannel: "email",
+    });
+
+    await user.click(screen.getByRole("link", { name: "Open email draft with request link" }));
+    await user.click(screen.getByRole("button", { name: "I sent it — confirm" }));
+
+    expect(await screen.findByText("Could not record this share. Try again.")).toBeInTheDocument();
+    expect(onShareIntentRecorded).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "I sent it — confirm" })).toBeInTheDocument();
+
+    mockRecordShareIntent.mockResolvedValueOnce(undefined);
+    await user.click(screen.getByRole("button", { name: "I sent it — confirm" }));
+    expect(onShareIntentRecorded).toHaveBeenCalledTimes(1);
+  });
+
+  it("plain email (no share permission) has no tracker link and no confirmation step", async () => {
+    const user = userEvent.setup();
+    const plainDetail = {
+      ...mockRequestDetails["mock-req-002"],
+      availableActions: { ...mockRequestDetails["mock-req-002"].availableActions, canRecordShareIntent: false },
+    };
+    renderModal({ detail: plainDetail, initialChannel: "email" });
+
+    const link = screen.getByRole("link", { name: "Open email draft" });
+    expect(link.getAttribute("href")).not.toContain("mock-page-token-002");
+
+    await user.click(link);
+
+    expect(screen.queryByRole("button", { name: "I sent it — confirm" })).not.toBeInTheDocument();
+    expect(mockRecordShareIntent).not.toHaveBeenCalled();
   });
 });

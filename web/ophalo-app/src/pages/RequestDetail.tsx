@@ -48,6 +48,10 @@ interface LogContactModalProps {
   initialChannel: string;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
   onClose: () => void;
+  // GAP-048: called after a tracker-bearing email is explicitly confirmed sent, so the
+  // controller can refresh server-truth NeedsShare state (this modal never optimistically
+  // clears it itself — recordShareIntent returns no updated detail).
+  onShareIntentRecorded: () => void;
 }
 
 export function LogContactModal({
@@ -57,6 +61,7 @@ export function LogContactModal({
   initialChannel,
   onDetailUpdated,
   onClose,
+  onShareIntentRecorded,
 }: LogContactModalProps) {
   const [channel, setChannel] = useState(initialChannel);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,6 +69,11 @@ export function LogContactModal({
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  // GAP-048: opening the mailto: draft is not proof of delivery — only this explicit
+  // post-launch confirmation records the "email" share-intent event.
+  const [trackerEmailLaunched, setTrackerEmailLaunched] = useState(false);
+  const [shareSubmitting, setShareSubmitting] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
   const keepEditingRef = useRef<HTMLButtonElement>(null);
   const discardRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<Element | null>(null);
@@ -113,6 +123,32 @@ export function LogContactModal({
   const directMessage = customerPageUrl
     ? `${detail.businessName}: Regarding your request, please see ${customerPageUrl}`
     : `${detail.businessName}: Regarding your request.`;
+  // GAP-048: email may only carry the tracker link when the operator is permitted to record
+  // share intent; otherwise it stays a plain email with no private token.
+  const canShareTrackerViaEmail = !!customerPageUrl && detail.availableActions.canRecordShareIntent;
+  const emailMessage = canShareTrackerViaEmail
+    ? directMessage
+    : `${detail.businessName}: Regarding your request.`;
+
+  async function confirmTrackerEmailSent() {
+    if (shareSubmitting) return;
+    setShareSubmitting(true);
+    setShareError(null);
+    try {
+      await api.recordShareIntent(requestId, "email");
+      setTrackerEmailLaunched(false);
+      onShareIntentRecorded();
+    } catch {
+      setShareError("Could not record this share. Try again.");
+    } finally {
+      setShareSubmitting(false);
+    }
+  }
+
+  function dismissTrackerEmailConfirm() {
+    setTrackerEmailLaunched(false);
+    setShareError(null);
+  }
 
   async function handleSubmit(body: Parameters<typeof api.logExternalContact>[1]) {
     if (isSubmitting || conflictDisabled) return;
@@ -244,12 +280,47 @@ export function LogContactModal({
       )}
 
       {showEmail && detail.customerEmail && (
-        <a
-          href={`mailto:${detail.customerEmail}?subject=${encodeURIComponent("Regarding your request")}&body=${encodeURIComponent(directMessage)}`}
-          className={`mb-4 inline-flex w-full items-center justify-center rounded-lg border-2 border-[var(--ophalo-navy)] px-4 py-2 text-sm font-semibold text-[var(--ophalo-navy)] ${FOCUS_RING}`}
-        >
-          Open email draft with request link
-        </a>
+        <div className="mb-4">
+          <a
+            href={`mailto:${detail.customerEmail}?subject=${encodeURIComponent("Regarding your request")}&body=${encodeURIComponent(emailMessage)}`}
+            onClick={() => {
+              if (canShareTrackerViaEmail) setTrackerEmailLaunched(true);
+            }}
+            className={`inline-flex w-full items-center justify-center rounded-lg border-2 border-[var(--ophalo-navy)] px-4 py-2 text-sm font-semibold text-[var(--ophalo-navy)] ${FOCUS_RING}`}
+          >
+            {canShareTrackerViaEmail ? "Open email draft with request link" : "Open email draft"}
+          </a>
+          {canShareTrackerViaEmail && trackerEmailLaunched && (
+            <div className="mt-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-3">
+              <p className="mb-2 text-xs text-[var(--ophalo-muted)]">
+                Confirm only after you have actually sent the draft containing the request-page
+                link.
+              </p>
+              {shareError && (
+                <p aria-live="polite" className="mb-2 text-xs text-[var(--ophalo-danger)]">
+                  {shareError}
+                </p>
+              )}
+              <div className="flex items-center gap-3">
+                <KeepButton
+                  type="button"
+                  variant="teal"
+                  disabled={shareSubmitting}
+                  onClick={() => void confirmTrackerEmailSent()}
+                >
+                  {shareSubmitting ? "Confirming…" : "I sent it — confirm"}
+                </KeepButton>
+                <button
+                  type="button"
+                  onClick={dismissTrackerEmailConfirm}
+                  className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING} rounded`}
+                >
+                  Not sent
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       <ExternalContactForm
@@ -716,6 +787,14 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
     void queryClient.invalidateQueries({ queryKey: ["request-detail", requestId] });
   }
 
+  function handleShareIntentRecorded() {
+    // GAP-048: recordShareIntent returns no updated detail — refresh both the detail cache
+    // and every cached queue so the server-cleared NeedsShare cue is visible immediately,
+    // not just on the current detail view.
+    void queryClient.invalidateQueries({ queryKey: ["request-detail", requestId] });
+    void queryClient.invalidateQueries({ queryKey: ["requests"] });
+  }
+
   function handleDetailUpdated(updated: KeepRequestDetailResult) {
     queryClient.setQueryData(["request-detail", requestId], updated);
     // Detail mutations can clear an attention condition, which changes membership in the
@@ -744,6 +823,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
           initialChannel={contactModal.channel}
           onDetailUpdated={handleDetailUpdated}
           onClose={() => setContactModal(null)}
+          onShareIntentRecorded={handleShareIntentRecorded}
         />
       )}
       {serviceLocationModalOpen && detail && (

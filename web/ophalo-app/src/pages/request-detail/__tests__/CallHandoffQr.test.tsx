@@ -115,6 +115,7 @@ describe("Wiring — Contact customer drawer uses CallHandoffQr", () => {
         initialChannel="phone"
         onDetailUpdated={() => {}}
         onClose={() => {}}
+        onShareIntentRecorded={() => {}}
       />
     );
 
@@ -140,6 +141,7 @@ describe("Wiring — Contact customer drawer uses CallHandoffQr", () => {
         initialChannel="sms"
         onDetailUpdated={() => {}}
         onClose={() => {}}
+        onShareIntentRecorded={() => {}}
       />
     );
 

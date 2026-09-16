@@ -247,6 +247,10 @@ export function ActualWorkWorkspacePage({
             onDetailUpdated={(updated) =>
               queryClient.setQueryData(["request-detail", requestId], updated)
             }
+            onShareIntentRecorded={() => {
+              void queryClient.invalidateQueries({ queryKey: ["request-detail", requestId] });
+              void queryClient.invalidateQueries({ queryKey: ["requests"] });
+            }}
             onClose={() => setContactModal(null)}
           />
         )}
