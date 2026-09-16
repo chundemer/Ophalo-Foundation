@@ -17,11 +17,15 @@ GAP-073 and GAP-094 reviewed and merged 2026-09-15 (Christian; no findings on ei
 
 The foundation-first closed-loop / pilot-risk order is:
 
-1. **GAP-099 — team-member access clarity.** Verify the deployed Team list with Owner and Admin accounts, reproduce the access-control discoverability failure, then deliver clear Disable/Enable access actions without changing membership states, authorization, or owner protections. Original "reported context" for the Suspend/Reactivate discoverability failure not yet gathered — ask Christian before attempting repro.
-   - **Slice 1 — cancel a pending invite: delivered 2026-09-15, awaiting diff review.** [BL157](build-log/157-gap-099-invited-member-cancel-invite.md): a mistyped/suppressed invite had no way to be corrected or freed from a seat; Invited rows gain the existing confirmed Remove action (UI-only, no endpoint/domain change). Verified live and working.
-   - **Slice 2 — removed-member action contract fix: code-complete 2026-09-15, verified 2026-09-15, NOT yet committed — awaiting Christian's approval.** [BL158](build-log/158-gap-099-removed-member-action-contract-fix.md): `hasAcceptedBefore` (derived from `UserId != null`) replaces the broken `inviteExpiresAtUtc` inference so a Removed row shows Resend invite (never accepted) vs. Reactivate (accepted before), never the wrong/dead-end one. Backend 35/35, frontend 43/43, `tsc`/`check:tokens`/`git diff --check` clean. Live-verification blocker resolved: the earlier "This invite link is no longer valid" was a local-dev terminal copy/paste artifact (Manual Share reproduced a clean success with the same backend path) — no code change required.
-   - **Found while verifying BL158, not a BL158 defect, not yet scoped:** `CommitAcceptInviteAsync` (`EfInvitePersistence.cs:109-110`) returns the generic `Invite.InvalidToken` message for a re-clicked, already-accepted invite link — same message as a truly invalid one. `Invite.AlreadyActive` already exists with a more accurate message but today only fires from `SendInviteService`, never from accept. Low functional impact (member can still recover via normal sign-in, which re-prompts for name through the same continuation mechanism); copy/routing polish only. Needs Christian's call on whether to log as a deferred item.
-   - **Open decision, not yet resolved:** should a mistakenly-entered invite email get an explicit delete/purge action, or is "Removed rows persist forever, visible only behind 'Show removed members'" acceptable? Current architecture never hard-deletes `AccountUser` rows (Suspended/Removed are terminal but reversible, consistent with the app's audit-trail posture) — a typo'd email doesn't block inviting the *correct* address (separate row, no conflict); the open question is purely whether Removed-row clutter from typos needs its own cleanup action. Main access-clarity discoverability work (Disable/Enable rename, hidden-removed-member path) still needs live reproduction against the deployed Team list.
+1. **GAP-099 — team-member access clarity.** Close against an explicit behavior matrix, verified with both Owner and Admin accounts against the deployed Team list, rather than blocking on recovering the original Suspend/Reactivate discoverability report (2026-09-15 decision — if that original context later emerges, add it as an additional regression case, not a closure prerequisite):
+   - An eligible Owner/Admin sees Disable access for an active eligible member.
+   - An eligible Owner/Admin sees Enable access for a suspended member.
+   - Invited or Removed-never-accepted rows offer Resend invite email, Copy invite link, and destructive Remove — never Reactivate.
+   - Owner self-protection and role-management restrictions are unchanged.
+   - **Slice 1 — cancel a pending invite: delivered 2026-09-15.** [BL157](build-log/157-gap-099-invited-member-cancel-invite.md): a mistyped/suppressed invite had no way to be corrected or freed from a seat; Invited rows gain the existing confirmed Remove action (UI-only, no endpoint/domain change). Verified live and working. Committed.
+   - **Slice 2 — removed-member action contract fix + invite-action clarity: delivered, verified, and committed 2026-09-15.** [BL158](build-log/158-gap-099-removed-member-action-contract-fix.md): `hasAcceptedBefore` (derived from `UserId != null`) replaces the broken `inviteExpiresAtUtc` inference so a Removed row shows Resend invite (never accepted) vs. Reactivate (accepted before), never the wrong/dead-end one. Backend 35/35, frontend 43/43, `tsc`/`check:tokens`/`git diff --check` clean. Also: Resend invite is now the primary button, "Manual share" is relabeled "Copy invite link" with one-click clipboard copy, Remove stays a separated destructive action. Pushed to `origin/main` at `198423ca`.
+   - **Deferred, not a BL158 defect (2026-09-15):** see **Deferred / pilot learning** — invite-accept "already active" message honesty.
+   - **Resolved 2026-09-15 — no delete/purge for Removed rows.** [ADR-504](decisions/decision-index.md): `Removed` is the correct audit-preserving, seat-free terminal state; the "Show removed members" toggle keeps the default list clean. A typo'd invite is corrected by inviting the right address, not by purging the old row. Remaining GAP-099 work is the Disable/Enable access-clarity matrix above, verified live against the deployed Team list with Owner and Admin accounts.
 2. **GAP-063 — Spam/Test action.** Owner/Admin can make the existing authorized terminal classification from Request Detail, with accessible confirmation, optional ≤500-character reason, and truthful post-action state. [ADR-296](decisions/decision-index.md). Required before staff rely on the active queue.
 3. **GAP-048 — share intent.** Private-page email goes through informed share confirmation; `mailto:` is never delivery evidence. Required before staff share private pages.
 4. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up. Required before staff rely on closed-request follow-ups.
@@ -75,6 +79,14 @@ SKU terminology or behavior.
 
 ## Deferred / pilot learning
 
+- **Invite-accept "already active" message honesty (found verifying BL158/GAP-099, 2026-09-15).**
+  `CommitAcceptInviteAsync` (`EfInvitePersistence.cs:109-110`) returns the generic
+  `Invite.InvalidToken` message for a re-clicked, already-accepted invite link — same message as a
+  truly invalid one. `Invite.AlreadyActive` already exists with a more accurate message
+  ("You are already a member. Sign in...") but today only fires from `SendInviteService`, never
+  from accept. Low functional impact — the member can still recover via normal sign-in, which
+  re-prompts for name through the same continuation mechanism. Auth-message-honesty polish, not a
+  pilot gate.
 - **PWA bundle performance — post-pilot measurement slice.** Vite reports that the current
   authenticated PWA entry chunk exceeds its default 500 kB raw warning threshold (observed bundle:
   approximately 959 kB minified / 238 kB gzip). Do not raise `build.chunkSizeWarningLimit` merely
