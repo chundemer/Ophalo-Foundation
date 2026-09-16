@@ -64,13 +64,20 @@ public sealed record MemberListContext(
     AccountEntitlements Entitlements);
 
 /// <summary>One row from the member list query.</summary>
+/// <summary>
+/// <see cref="HasAcceptedBefore"/> is derived from <c>AccountUser.UserId != null</c> — set once, on
+/// accept, and never cleared. It is the stable signal for whether a Removed member ever accepted,
+/// unlike <see cref="InviteExpiresAtUtc"/>, which <c>AccountUser.Remove()</c> always nulls
+/// regardless of prior acceptance (GAP-099/BL158).
+/// </summary>
 public sealed record MemberListItem(
     Guid AccountUserId,
     string Email,
     AccountUserRole Role,
     MembershipStatus Status,
     DateTime? ActivatedAtUtc,
-    DateTime? InviteExpiresAtUtc);
+    DateTime? InviteExpiresAtUtc,
+    bool HasAcceptedBefore);
 
 /// <summary>
 /// Context for member-management mutation operations. Loaded in one pass before rules are applied.

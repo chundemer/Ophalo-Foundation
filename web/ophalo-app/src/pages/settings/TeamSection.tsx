@@ -73,6 +73,7 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
   const [selectedRole, setSelectedRole] = useState(member.role);
   const [manualShareUrl, setManualShareUrl] = useState<string | null>(null);
   const [resentEmail, setResentEmail] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   function clearState() {
     setConfirmSuspend(false);
@@ -141,6 +142,7 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
     setBusy(true);
     setRowError(null);
     setManualShareUrl(null);
+    setLinkCopied(false);
     try {
       const result = await api.resendInvite(member.accountUserId, "manual_share");
       setManualShareUrl(result?.inviteUrl ?? null);
@@ -148,6 +150,16 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
       setRowError(err instanceof ApiError ? memberErrorMsg(err.code, err.extensions) : "Something went wrong.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleCopyLink() {
+    if (!manualShareUrl) return;
+    try {
+      await navigator.clipboard.writeText(manualShareUrl);
+      setLinkCopied(true);
+    } catch {
+      // Clipboard API unavailable or denied — the link text remains visible to copy by hand.
     }
   }
 
@@ -166,8 +178,10 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
     }
   }
 
-  const isRemovedInvite = member.status === "removed" && member.inviteExpiresAtUtc !== null;
-  const isRemovedMember = member.status === "removed" && member.inviteExpiresAtUtc === null;
+  // GAP-099/BL158: derived from the stable hasAcceptedBefore fact, not inviteExpiresAtUtc — Remove()
+  // always nulls that field regardless of whether the member ever accepted.
+  const isRemovedInvite = member.status === "removed" && !member.hasAcceptedBefore;
+  const isRemovedMember = member.status === "removed" && member.hasAcceptedBefore;
   // Admins cannot manage Owner-role members; server enforces this too but we avoid surfacing actions that will always fail.
   const canManageTarget = !member.isCurrentUser && !member.isPrimaryOwner
     && (callerRole === "owner" || member.role !== "owner");
@@ -285,20 +299,25 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
           {member.status === "invited" && (
             <>
               {resentEmail && <span className="text-xs text-[var(--ophalo-success)]">Invite resent.</span>}
-              <button
-                onClick={handleResendEmail}
-                disabled={busy}
-                className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline disabled:opacity-40"
-              >
-                Resend invite
-              </button>
-              <button
-                onClick={handleManualShare}
-                disabled={busy}
-                className="text-xs text-[var(--ophalo-muted)] hover:underline disabled:opacity-40"
-              >
-                Manual share
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleResendEmail}
+                  disabled={busy}
+                  className="rounded-md bg-[var(--ophalo-navy)] px-3 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
+                >
+                  Resend invite
+                </button>
+                <button
+                  onClick={handleManualShare}
+                  disabled={busy}
+                  className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline disabled:opacity-40"
+                >
+                  Copy invite link
+                </button>
+              </div>
+              <p className="text-xs text-[var(--ophalo-muted)]">
+                Resend sends an email. Copy invite link lets you share it yourself.
+              </p>
               {confirmRemove ? (
                 <div className="flex gap-2">
                   <button
@@ -361,20 +380,25 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
           {isRemovedInvite && (
             <>
               {resentEmail && <span className="text-xs text-[var(--ophalo-success)]">Invite resent.</span>}
-              <button
-                onClick={handleResendEmail}
-                disabled={busy}
-                className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline disabled:opacity-40"
-              >
-                Resend invite
-              </button>
-              <button
-                onClick={handleManualShare}
-                disabled={busy}
-                className="text-xs text-[var(--ophalo-muted)] hover:underline disabled:opacity-40"
-              >
-                Manual share
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleResendEmail}
+                  disabled={busy}
+                  className="rounded-md bg-[var(--ophalo-navy)] px-3 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
+                >
+                  Resend invite
+                </button>
+                <button
+                  onClick={handleManualShare}
+                  disabled={busy}
+                  className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline disabled:opacity-40"
+                >
+                  Copy invite link
+                </button>
+              </div>
+              <p className="text-xs text-[var(--ophalo-muted)]">
+                Resend sends an email. Copy invite link lets you share it yourself.
+              </p>
               {confirmRemove ? (
                 <div className="flex gap-2">
                   <button
@@ -444,14 +468,23 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
             </p>
             <button
               type="button"
-              onClick={() => setManualShareUrl(null)}
+              onClick={() => { setManualShareUrl(null); setLinkCopied(false); }}
               className="text-[var(--ophalo-attention)] hover:text-[var(--ophalo-ink)] shrink-0"
               aria-label="Dismiss"
             >
               ×
             </button>
           </div>
-          <p className="text-xs font-mono text-[var(--ophalo-ink)] break-all">{manualShareUrl}</p>
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 flex-1 text-xs font-mono text-[var(--ophalo-ink)] break-all">{manualShareUrl}</p>
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="shrink-0 rounded-md border border-[var(--ophalo-attention)]/40 px-2 py-1 text-xs font-medium text-[var(--ophalo-attention)] hover:bg-amber-100"
+            >
+              {linkCopied ? "Copied!" : "Copy"}
+            </button>
+          </div>
         </div>
       )}
     </div>

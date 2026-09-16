@@ -40,7 +40,8 @@ public sealed class EfMemberManagementPersistence(OpHaloDbContext db) : IMemberM
                 au.Role,
                 au.MembershipStatus,
                 au.ActivatedAtUtc,
-                au.InviteExpiresAtUtc
+                au.InviteExpiresAtUtc,
+                au.UserId
             })
             .ToListAsync(cancellationToken);
 
@@ -51,7 +52,8 @@ public sealed class EfMemberManagementPersistence(OpHaloDbContext db) : IMemberM
                 r.Role,
                 r.MembershipStatus,
                 r.ActivatedAtUtc,
-                r.InviteExpiresAtUtc))
+                r.InviteExpiresAtUtc,
+                HasAcceptedBefore: r.UserId is not null))
             .ToList();
 
         var entitlements = await db.AccountEntitlements

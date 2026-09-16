@@ -37,6 +37,7 @@ const oneMember: ListMembersResponse = {
       isPrimaryOwner: true,
       activatedAtUtc: "2026-01-01T00:00:00Z",
       inviteExpiresAtUtc: null,
+      hasAcceptedBefore: true,
     },
   ],
   seatUsage: { occupiedSeats: 1, maxSeats: 5, atLimit: false, limitApplies: true },
@@ -123,6 +124,7 @@ const invitedMember: ListMembersResponse = {
       isPrimaryOwner: false,
       activatedAtUtc: null,
       inviteExpiresAtUtc: "2026-09-22T00:00:00Z",
+      hasAcceptedBefore: false,
     },
   ],
   seatUsage: { occupiedSeats: 1, maxSeats: 5, atLimit: false, limitApplies: true },
@@ -139,5 +141,59 @@ describe("TeamSection — invited member cancel (GAP-099 / BL157)", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirm remove/i }));
 
     await waitFor(() => expect(mockRemoveMember).toHaveBeenCalledWith("au-2"));
+  });
+});
+
+// GAP-099 (BL158) — a Removed row's action set must come from hasAcceptedBefore, not
+// inviteExpiresAtUtc (Remove() always nulls that field regardless of prior acceptance).
+describe("TeamSection — removed-member action contract (GAP-099 / BL158)", () => {
+  it("offers Resend invite / Copy invite link for a Removed member who never accepted", async () => {
+    mockListMembers.mockResolvedValue({
+      members: [
+        {
+          accountUserId: "au-3",
+          email: "never-accepted@apex.example",
+          role: "operator",
+          status: "removed",
+          isCurrentUser: false,
+          isPrimaryOwner: false,
+          activatedAtUtc: null,
+          inviteExpiresAtUtc: null,
+          hasAcceptedBefore: false,
+        },
+      ],
+      seatUsage: { occupiedSeats: 0, maxSeats: 5, atLimit: false, limitApplies: true },
+    } satisfies ListMembersResponse);
+    renderSection();
+
+    await screen.findByText("never-accepted@apex.example");
+    expect(screen.getByRole("button", { name: /resend invite/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /copy invite link/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reactivate/i })).not.toBeInTheDocument();
+  });
+
+  it("offers Reactivate for a Removed member who accepted before", async () => {
+    mockListMembers.mockResolvedValue({
+      members: [
+        {
+          accountUserId: "au-4",
+          email: "accepted-before@apex.example",
+          role: "operator",
+          status: "removed",
+          isCurrentUser: false,
+          isPrimaryOwner: false,
+          activatedAtUtc: "2026-01-01T00:00:00Z",
+          inviteExpiresAtUtc: null,
+          hasAcceptedBefore: true,
+        },
+      ],
+      seatUsage: { occupiedSeats: 0, maxSeats: 5, atLimit: false, limitApplies: true },
+    } satisfies ListMembersResponse);
+    renderSection();
+
+    await screen.findByText("accepted-before@apex.example");
+    expect(screen.getByRole("button", { name: /reactivate/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /resend invite/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /copy invite link/i })).not.toBeInTheDocument();
   });
 });

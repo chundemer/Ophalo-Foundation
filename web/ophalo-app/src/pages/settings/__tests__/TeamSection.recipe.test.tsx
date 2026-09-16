@@ -38,6 +38,7 @@ const twoMembers: ListMembersResponse = {
       isPrimaryOwner: true,
       activatedAtUtc: "2026-01-01T00:00:00Z",
       inviteExpiresAtUtc: null,
+      hasAcceptedBefore: true,
     },
     {
       accountUserId: "au-2",
@@ -48,6 +49,7 @@ const twoMembers: ListMembersResponse = {
       isPrimaryOwner: false,
       activatedAtUtc: "2026-02-01T00:00:00Z",
       inviteExpiresAtUtc: null,
+      hasAcceptedBefore: true,
     },
   ],
   seatUsage: { occupiedSeats: 2, maxSeats: 5, atLimit: false, limitApplies: true },

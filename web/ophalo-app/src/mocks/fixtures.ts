@@ -114,6 +114,7 @@ export const mockMembers: ListMembersResponse = {
       isPrimaryOwner: true,
       activatedAtUtc: "2026-01-15T10:00:00Z",
       inviteExpiresAtUtc: null,
+      hasAcceptedBefore: true,
     },
     {
       accountUserId: "mock-user-2",
@@ -124,6 +125,7 @@ export const mockMembers: ListMembersResponse = {
       isPrimaryOwner: false,
       activatedAtUtc: "2026-02-01T09:00:00Z",
       inviteExpiresAtUtc: null,
+      hasAcceptedBefore: true,
     },
     {
       accountUserId: "mock-user-3",
@@ -134,6 +136,7 @@ export const mockMembers: ListMembersResponse = {
       isPrimaryOwner: false,
       activatedAtUtc: "2026-03-10T11:00:00Z",
       inviteExpiresAtUtc: null,
+      hasAcceptedBefore: true,
     },
     {
       accountUserId: "mock-user-4",
@@ -144,6 +147,7 @@ export const mockMembers: ListMembersResponse = {
       isPrimaryOwner: false,
       activatedAtUtc: null,
       inviteExpiresAtUtc: "2026-07-07T00:00:00Z",
+      hasAcceptedBefore: false,
     },
   ],
   seatUsage: {

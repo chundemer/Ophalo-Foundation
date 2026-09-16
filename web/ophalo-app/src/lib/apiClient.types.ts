@@ -56,6 +56,9 @@ export interface MemberItem {
   isPrimaryOwner: boolean;
   activatedAtUtc: string | null;
   inviteExpiresAtUtc: string | null;
+  // GAP-099/BL158: stable signal for a Removed member's action set. Never infer this from
+  // inviteExpiresAtUtc — it is always null after removal regardless of prior acceptance.
+  hasAcceptedBefore: boolean;
 }
 
 export interface ListMembersResponse {

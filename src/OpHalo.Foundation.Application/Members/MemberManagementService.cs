@@ -74,7 +74,8 @@ public sealed class MemberManagementService(
                 IsCurrentUser: m.AccountUserId == currentUser.UserId,
                 IsPrimaryOwner: m.AccountUserId == context.PrimaryOwnerAccountUserId,
                 ActivatedAtUtc: m.ActivatedAtUtc,
-                InviteExpiresAtUtc: m.InviteExpiresAtUtc))
+                InviteExpiresAtUtc: m.InviteExpiresAtUtc,
+                HasAcceptedBefore: m.HasAcceptedBefore))
             .ToList();
 
         var maxSeats = featurePolicy.ResolveLimit(context.Entitlements, FeatureLimitKeys.Account.UserLimit);
@@ -497,6 +498,12 @@ public sealed record SeatUsage(
     bool AtLimit,
     bool LimitApplies);
 
+/// <summary>
+/// <see cref="HasAcceptedBefore"/> (GAP-099/BL158) is the stable signal for a Removed member's UI
+/// action: <c>false</c> (never accepted) → Resend invite / Manual share; <c>true</c> (accepted
+/// before) → Reactivate. Do not infer this from <see cref="InviteExpiresAtUtc"/> — it is always
+/// null after removal regardless of prior acceptance.
+/// </summary>
 public sealed record MemberItem(
     Guid AccountUserId,
     string Email,
@@ -505,4 +512,5 @@ public sealed record MemberItem(
     bool IsCurrentUser,
     bool IsPrimaryOwner,
     DateTime? ActivatedAtUtc,
-    DateTime? InviteExpiresAtUtc);
+    DateTime? InviteExpiresAtUtc,
+    bool HasAcceptedBefore);

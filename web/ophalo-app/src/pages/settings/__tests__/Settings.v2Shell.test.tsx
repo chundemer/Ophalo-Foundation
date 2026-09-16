@@ -57,7 +57,7 @@ const emptyMembers: ListMembersResponse = {
 
 const soloMember: ListMembersResponse = {
   members: [
-    { accountUserId: "1", email: "owner@apex.test", role: "owner", status: "active", isCurrentUser: true, isPrimaryOwner: true, activatedAtUtc: "2026-07-01T00:00:00Z", inviteExpiresAtUtc: null },
+    { accountUserId: "1", email: "owner@apex.test", role: "owner", status: "active", isCurrentUser: true, isPrimaryOwner: true, activatedAtUtc: "2026-07-01T00:00:00Z", inviteExpiresAtUtc: null, hasAcceptedBefore: true },
   ],
   seatUsage: { occupiedSeats: 1, maxSeats: 5, atLimit: false, limitApplies: true },
 };
@@ -142,8 +142,8 @@ describe("Settings — V2 shell", () => {
   it("shows a factual team member count instead of Solo workspace for more than one member", async () => {
     mockListMembers.mockResolvedValue({
       members: [
-        { accountUserId: "1", email: "owner@apex.test", role: "owner", status: "active", isCurrentUser: true, isPrimaryOwner: true, activatedAtUtc: "2026-07-01T00:00:00Z", inviteExpiresAtUtc: null },
-        { accountUserId: "2", email: "helper@apex.test", role: "operator", status: "active", isCurrentUser: false, isPrimaryOwner: false, activatedAtUtc: "2026-07-02T00:00:00Z", inviteExpiresAtUtc: null },
+        { accountUserId: "1", email: "owner@apex.test", role: "owner", status: "active", isCurrentUser: true, isPrimaryOwner: true, activatedAtUtc: "2026-07-01T00:00:00Z", inviteExpiresAtUtc: null, hasAcceptedBefore: true },
+        { accountUserId: "2", email: "helper@apex.test", role: "operator", status: "active", isCurrentUser: false, isPrimaryOwner: false, activatedAtUtc: "2026-07-02T00:00:00Z", inviteExpiresAtUtc: null, hasAcceptedBefore: true },
       ],
       seatUsage: { occupiedSeats: 2, maxSeats: 5, atLimit: false, limitApplies: true },
     } satisfies ListMembersResponse);

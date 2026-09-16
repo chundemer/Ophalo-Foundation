@@ -106,6 +106,32 @@ public sealed class MemberManagementTests : IClassFixture<KeepApiWebFactory>, IA
     }
 
     // =========================================================================
+    // Test 3b — List: hasAcceptedBefore is derived from UserId, not InviteExpiresAtUtc
+    // (GAP-099/BL158) — Remove() always nulls InviteExpiresAtUtc regardless of prior acceptance,
+    // so the client must not infer the Removed-row action set from that field.
+    // =========================================================================
+
+    [Fact]
+    public async Task ListMembers_IncludeRemoved_HasAcceptedBeforeReflectsPriorUserId()
+    {
+        var (accountId, _, ownerCookie) = await SeedAccountAsync();
+        var (removedWithUserId, _) = await SeedRemovedMemberWithUserAsync(accountId, "removed@example.com");
+        var removedNeverAccepted = await SeedRemovedInviteAsync(accountId, "never-accepted@example.com");
+
+        var response = await AuthRequest(ownerCookie).GetAsync("/accounts/me/members?includeRemoved=true");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var members = body.GetProperty("members").EnumerateArray().ToList();
+
+        var withUser = members.Single(m => m.GetProperty("accountUserId").GetGuid() == removedWithUserId);
+        var neverAccepted = members.Single(m => m.GetProperty("accountUserId").GetGuid() == removedNeverAccepted);
+
+        Assert.True(withUser.GetProperty("hasAcceptedBefore").GetBoolean());
+        Assert.False(neverAccepted.GetProperty("hasAcceptedBefore").GetBoolean());
+    }
+
+    // =========================================================================
     // Test 4 — List: isCurrentUser marks exactly the caller's row
     // =========================================================================
 
