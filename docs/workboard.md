@@ -11,19 +11,14 @@
 
 ## Now
 
-GAP-073, GAP-094, GAP-099, and GAP-063 reviewed/verified and closed (Christian; 2026-09-15/16).
+GAP-073, GAP-094, GAP-099, GAP-063, and GAP-048 reviewed/verified and closed (Christian; 2026-09-15/16).
 
 ## Next
 
 The foundation-first closed-loop / pilot-risk order is:
 
-1. **GAP-048 — share intent.** Private-page email goes through informed share confirmation; `mailto:` is never delivery evidence. Required before staff share private pages.
-   - **Locked scope (2026-09-16):** Preserve the existing `POST /keep/requests/{id}/share-intent` policy and its shipped audit vocabulary; formally use `email` only for a confirmed tracker-email handoff. Do not add a backend delivery mechanism, receipt/proof-of-open semantics, a customer notification system, or a client-side authorization rule. The tracker-email action renders only when server-authored `availableActions.canRecordShareIntent` permits it.
-   - **UX:** Separate plain customer email from tracker sharing. Plain email opens a normal `mailto:` with no private tracker URL and creates no share record. A tracker-bearing email opens the prefilled `mailto:` draft, then keeps an accessible post-launch confirmation visible: the operator attests that they sent the tracker link. The launch itself makes no mutation; only the explicit confirmation posts `{ method: "email" }`. Copy must say the draft was requested, never that it opened, sent, delivered, or was received.
-   - **State and failure:** Do not optimistically clear `NeedsShare`. On a successful `204 No Content` share-intent response, refresh/invalidate Request Detail and request-list state so server truth controls the visible `NeedsShare` cue. On a transport/API failure, retain the confirmation and entered context, show accessible retry feedback, and leave `NeedsShare` unchanged. Existing ADR-451 prepared-update email confirmation, Quick Capture confirmation, and ShareLinkModal confirmation paths are already compliant and are out of scope; fix only the Request Detail tracker-email bypasses.
-   - **Acceptance criteria:** A permitted user can send a tracker-bearing email and explicitly confirm it, producing one `email` share-intent event and server-cleared `NeedsShare`; opening or cancelling `mailto:` alone creates no event or state change; plain email contains no tracker token and has no confirmation; unauthorized/read-only users see no tracker-email action; success, failure, and retry states are keyboard accessible and truthful.
-2. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up. Required before staff rely on closed-request follow-ups.
-3. **GAP-092 — business-timezone display.** Render absolute timestamps and follow-up day boundaries in the account's validated IANA business timezone, not each viewer's device timezone. Complete before any multi-timezone pilot use.
+1. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up. Required before staff rely on closed-request follow-ups.
+2. **GAP-092 — business-timezone display.** Render absolute timestamps and follow-up day boundaries in the account's validated IANA business timezone, not each viewer's device timezone. Complete before any multi-timezone pilot use.
 
 GAP-040 remains deliberately deferred until the application feature set stabilizes; reopen its existing
 marketing-copy findings before promoting the public intake link. GAP-072 and GAP-047 are non-gating
@@ -159,6 +154,7 @@ The frozen [pilot readiness tracker](pilot-readiness-bug-tracker.md) is the auth
 | GAP-016 / GAP-021 | ADR-444 phone path; native parity separately deferred. |
 | GAP-051 public web | Configured business-phone display; [BL147](build-log/147-gap-051-public-web-business-phone-display.md). |
 | GAP-063 | Spam/Test terminal classification from Request Detail — quiet Admin actions menu, accessible confirm dialog, optional ≤500-char reason, version-snapshotted submit, 409/403 preserves reason and refetches detail: `5872f135`. [ADR-296](decisions/decision-index.md), [ADR-435](decisions/ADR-435-request-list-action-cockpit-boundary.md). Manually verified live by Christian, 2026-09-16. |
+| GAP-048 | Tracker-bearing email in the Request Detail Contact customer drawer now requires an explicit post-launch confirmation before it posts `{ method: "email" }`; `mailto:` launch alone creates no event or state change; plain email (no `canRecordShareIntent`, or no tracker) carries no token and no confirmation; success invalidates both request-detail and request-list caches so `NeedsShare` reflects server truth: `115bb862`. [ADR-372](decisions/decision-index.md), [ADR-381](decisions/ADR-381-tracker-link-sharing-footprint.md). Manually verified live by Christian, 2026-09-16. |
 
 ## Pilot gate checklist
 
@@ -166,8 +162,9 @@ The current evaluative pilot may continue while its records are recoverable from
 backup and Keep is not the authoritative operating record. Before authoritative live use: GAP-069's
 Railway Pro backup/PITR and recovery proof, GAP-099 before staff access is managed, GAP-073 before
 staff send customer updates, GAP-091 before field techs rely on Quick Capture, GAP-063 (done
-2026-09-16) before staff rely on the active queue, GAP-048 before sharing private pages, and GAP-049
-before relying on closed-request follow-ups. GAP-092 is required before multi-timezone use. GAP-040 is separately
+2026-09-16) before staff rely on the active queue, GAP-048 (done 2026-09-16) before sharing private
+pages, and GAP-049 before relying on closed-request follow-ups. GAP-092 is required before
+multi-timezone use. GAP-040 is separately
 required before marketing/public-intake promotion, not before the present evaluative pilot. GAP-047
 was dropped as a gate on 2026-09-07 (staff do not triage by Internal priority). GAP-064 needs a
 written alert-policy decision; until then the founder deliberately watches the queue.
