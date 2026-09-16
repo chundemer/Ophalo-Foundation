@@ -33,18 +33,22 @@ public interface IInvitePersistence
 
     /// <summary>
     /// Atomically:
-    /// 1. Finds the pending invite by token hash.
-    /// 2. Validates MembershipStatus == Invited.
-    /// 3. Validates InviteExpiresAtUtc > nowUtc.
-    /// 4. Finds or creates User by the invite's NormalizedEmail.
-    /// 5. Activates the AccountUser (sets UserId, Active, clears token/expiry) via
-    ///    ExecuteUpdateAsync conditioned on still-Invited state — race guard.
-    /// 6. Saves all in one transaction.
+    /// 1. Finds the membership row by token hash.
+    /// 2. Validates MembershipStatus == Invited and InviteExpiresAtUtc > nowUtc.
+    /// 3. Finds or creates User by the invite's NormalizedEmail.
+    /// 4. Activates the AccountUser (sets UserId, Active) via ExecuteUpdateAsync conditioned
+    ///    on still-Invited state — race guard. InviteTokenHash/InviteExpiresAtUtc are retained
+    ///    (not cleared) through the original expiry so a re-click of an already-accepted link
+    ///    can be told apart from an unknown/removed/replaced one.
+    /// 5. Saves all in one transaction.
     ///
     /// Returns:
     /// - Success(AcceptedInvite) — invite accepted, AccountUser activated.
-    /// - Failure(InviteErrors.InvalidToken) — token not found, not Invited, or race loser.
-    /// - Failure(InviteErrors.Expired) — token found but expired.
+    /// - Failure(InviteErrors.AlreadyActive) — token belongs to an already-Active membership,
+    ///   within the original expiry window (includes the race loser of a concurrent accept).
+    /// - Failure(InviteErrors.InvalidToken) — token not found, replaced, Suspended/Removed, or
+    ///   Active past the original expiry window.
+    /// - Failure(InviteErrors.Expired) — still Invited but token found expired.
     /// </summary>
     Task<Result<AcceptedInvite>> CommitAcceptInviteAsync(
         string inviteTokenHash,

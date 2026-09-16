@@ -78,9 +78,10 @@ public class AccountUserMembershipTests
     // --- Activate ---
 
     [Fact]
-    public void Activate_links_user_clears_invite_and_stamps_activation()
+    public void Activate_links_user_retains_invite_token_and_stamps_activation()
     {
         var invite = PendingInvite();
+        var expiresAtUtc = invite.InviteExpiresAtUtc;
         var userId = Guid.CreateVersion7();
         var at = Now;
 
@@ -90,8 +91,8 @@ public class AccountUserMembershipTests
         Assert.Equal(MembershipStatus.Active, invite.MembershipStatus);
         Assert.True(invite.IsActive);
         Assert.Equal(userId, invite.UserId);
-        Assert.Null(invite.InviteTokenHash);
-        Assert.Null(invite.InviteExpiresAtUtc);
+        Assert.Equal("token-hash", invite.InviteTokenHash);
+        Assert.Equal(expiresAtUtc, invite.InviteExpiresAtUtc);
         Assert.Equal(at, invite.ActivatedAtUtc);
     }
 

@@ -61,8 +61,12 @@ public sealed class AccountUser : BaseEntity
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// Transitions this membership from Invited to Active. Links the UserId, clears invite
-    /// state, and records the activation timestamp.
+    /// Transitions this membership from Invited to Active. Links the UserId and records the
+    /// activation timestamp. InviteTokenHash and InviteExpiresAtUtc are retained (not cleared)
+    /// so a re-click of the now-consumed invite link can be recognized as
+    /// <see cref="InviteErrors.AlreadyActive"/> up to the original expiry, rather than a generic
+    /// invalid token. Suspend, Reactivate, RestoreInvite, and Remove clear or replace them as
+    /// appropriate for those transitions.
     ///
     /// Idempotent if already Active. Returns <see cref="AccountUserErrors.InvalidStatusTransition"/>
     /// for any non-invite state — prevents silent activation of suspended or removed memberships.
@@ -84,8 +88,6 @@ public sealed class AccountUser : BaseEntity
 
         UserId = userId;
         MembershipStatus = MembershipStatus.Active;
-        InviteTokenHash = null;
-        InviteExpiresAtUtc = null;
         ActivatedAtUtc = nowUtc;
 
         return Result.Success();

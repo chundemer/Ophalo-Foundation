@@ -106,6 +106,9 @@ public sealed class EfInvitePersistence(OpHaloDbContext db) : IInvitePersistence
             })
             .FirstOrDefaultAsync(cancellationToken);
 
+        if (IsAlreadyActive(invite?.MembershipStatus, invite?.InviteExpiresAtUtc, nowUtc))
+            return Result<AcceptedInvite>.Failure(InviteErrors.AlreadyActive);
+
         if (invite is null || invite.MembershipStatus != MembershipStatus.Invited)
             return Result<AcceptedInvite>.Failure(InviteErrors.InvalidToken);
 
@@ -142,7 +145,9 @@ public sealed class EfInvitePersistence(OpHaloDbContext db) : IInvitePersistence
 
         // Atomically activate conditioned on still-Invited state — handles the concurrent
         // accept race. ExecuteUpdateAsync bypasses SaveChangesAsync, so UpdatedAtUtc is set
-        // explicitly here.
+        // explicitly here. InviteTokenHash/InviteExpiresAtUtc are retained (not cleared) so a
+        // re-click of the now-consumed link can be recognized as AlreadyActive rather than a
+        // generic invalid token, up to the original expiry.
         var activated = await db.AccountUsers
             .Where(au =>
                 au.InviteTokenHash == inviteTokenHash &&
@@ -150,19 +155,33 @@ public sealed class EfInvitePersistence(OpHaloDbContext db) : IInvitePersistence
             .ExecuteUpdateAsync(s => s
                 .SetProperty(au => au.MembershipStatus, MembershipStatus.Active)
                 .SetProperty(au => au.UserId, user!.Id)
-                .SetProperty(au => au.InviteTokenHash, (string?)null)
-                .SetProperty(au => au.InviteExpiresAtUtc, (DateTime?)null)
                 .SetProperty(au => au.ActivatedAtUtc, nowUtc)
                 .SetProperty(au => au.UpdatedAtUtc, nowUtc),
                 cancellationToken);
 
         if (activated == 0)
-            return Result<AcceptedInvite>.Failure(InviteErrors.InvalidToken);
+        {
+            // Race loser: the winner may have just activated this token. Re-read to tell
+            // AlreadyActive apart from a genuinely invalid token.
+            var current = await db.AccountUsers
+                .AsNoTracking()
+                .Where(au => au.InviteTokenHash == inviteTokenHash)
+                .Select(au => new { au.MembershipStatus, au.InviteExpiresAtUtc })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            return IsAlreadyActive(current?.MembershipStatus, current?.InviteExpiresAtUtc, nowUtc)
+                ? Result<AcceptedInvite>.Failure(InviteErrors.AlreadyActive)
+                : Result<AcceptedInvite>.Failure(InviteErrors.InvalidToken);
+        }
 
         await tx.CommitAsync(cancellationToken);
         return Result<AcceptedInvite>.Success(
             new AcceptedInvite(invite.AccountId, invite.Id, user!.Id, string.IsNullOrWhiteSpace(user!.Name)));
     }
+
+    private static bool IsAlreadyActive(
+        MembershipStatus? status, DateTime? inviteExpiresAtUtc, DateTime nowUtc) =>
+        status == MembershipStatus.Active && inviteExpiresAtUtc > nowUtc;
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException pgEx && pgEx.SqlState == PostgresErrorCodes.UniqueViolation;

@@ -11,25 +11,16 @@
 
 ## Now
 
-GAP-073 and GAP-094 reviewed and merged 2026-09-15 (Christian; no findings on either).
+GAP-073, GAP-094, and GAP-099 reviewed/verified and closed (Christian; 2026-09-15/16).
 
 ## Next
 
 The foundation-first closed-loop / pilot-risk order is:
 
-1. **GAP-099 — team-member access clarity.** Close against an explicit behavior matrix, verified with both Owner and Admin accounts against the deployed Team list, rather than blocking on recovering the original Suspend/Reactivate discoverability report (2026-09-15 decision — if that original context later emerges, add it as an additional regression case, not a closure prerequisite):
-   - An eligible Owner/Admin sees Disable access for an active eligible member.
-   - An eligible Owner/Admin sees Enable access for a suspended member.
-   - Invited or Removed-never-accepted rows offer Resend invite email, Copy invite link, and destructive Remove — never Reactivate.
-   - Owner self-protection and role-management restrictions are unchanged.
-   - **Slice 1 — cancel a pending invite: delivered 2026-09-15.** [BL157](build-log/157-gap-099-invited-member-cancel-invite.md): a mistyped/suppressed invite had no way to be corrected or freed from a seat; Invited rows gain the existing confirmed Remove action (UI-only, no endpoint/domain change). Verified live and working. Committed.
-   - **Slice 2 — removed-member action contract fix + invite-action clarity: delivered, verified, and committed 2026-09-15.** [BL158](build-log/158-gap-099-removed-member-action-contract-fix.md): `hasAcceptedBefore` (derived from `UserId != null`) replaces the broken `inviteExpiresAtUtc` inference so a Removed row shows Resend invite (never accepted) vs. Reactivate (accepted before), never the wrong/dead-end one. Backend 35/35, frontend 43/43, `tsc`/`check:tokens`/`git diff --check` clean. Also: Resend invite is now the primary button, "Manual share" is relabeled "Copy invite link" with one-click clipboard copy, Remove stays a separated destructive action. Pushed to `origin/main` at `198423ca`.
-   - **Deferred, not a BL158 defect (2026-09-15):** see **Deferred / pilot learning** — invite-accept "already active" message honesty.
-   - **Resolved 2026-09-15 — no delete/purge for Removed rows.** [ADR-504](decisions/decision-index.md): `Removed` is the correct audit-preserving, seat-free terminal state; the "Show removed members" toggle keeps the default list clean. A typo'd invite is corrected by inviting the right address, not by purging the old row. Remaining GAP-099 work is the Disable/Enable access-clarity matrix above, verified live against the deployed Team list with Owner and Admin accounts.
-2. **GAP-063 — Spam/Test action.** Owner/Admin can make the existing authorized terminal classification from Request Detail, with accessible confirmation, optional ≤500-character reason, and truthful post-action state. [ADR-296](decisions/decision-index.md). Required before staff rely on the active queue.
-3. **GAP-048 — share intent.** Private-page email goes through informed share confirmation; `mailto:` is never delivery evidence. Required before staff share private pages.
-4. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up. Required before staff rely on closed-request follow-ups.
-5. **GAP-092 — business-timezone display.** Render absolute timestamps and follow-up day boundaries in the account's validated IANA business timezone, not each viewer's device timezone. Complete before any multi-timezone pilot use.
+1. **GAP-063 — Spam/Test action.** Owner/Admin can make the existing authorized terminal classification from Request Detail, with accessible confirmation, optional ≤500-character reason, and truthful post-action state. [ADR-296](decisions/decision-index.md). Required before staff rely on the active queue.
+2. **GAP-048 — share intent.** Private-page email goes through informed share confirmation; `mailto:` is never delivery evidence. Required before staff share private pages.
+3. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up. Required before staff rely on closed-request follow-ups.
+4. **GAP-092 — business-timezone display.** Render absolute timestamps and follow-up day boundaries in the account's validated IANA business timezone, not each viewer's device timezone. Complete before any multi-timezone pilot use.
 
 GAP-040 remains deliberately deferred until the application feature set stabilizes; reopen its existing
 marketing-copy findings before promoting the public intake link. GAP-072 and GAP-047 are non-gating
@@ -79,14 +70,6 @@ SKU terminology or behavior.
 
 ## Deferred / pilot learning
 
-- **Invite-accept "already active" message honesty (found verifying BL158/GAP-099, 2026-09-15).**
-  `CommitAcceptInviteAsync` (`EfInvitePersistence.cs:109-110`) returns the generic
-  `Invite.InvalidToken` message for a re-clicked, already-accepted invite link — same message as a
-  truly invalid one. `Invite.AlreadyActive` already exists with a more accurate message
-  ("You are already a member. Sign in...") but today only fires from `SendInviteService`, never
-  from accept. Low functional impact — the member can still recover via normal sign-in, which
-  re-prompts for name through the same continuation mechanism. Auth-message-honesty polish, not a
-  pilot gate.
 - **PWA bundle performance — post-pilot measurement slice.** Vite reports that the current
   authenticated PWA entry chunk exceeds its default 500 kB raw warning threshold (observed bundle:
   approximately 959 kB minified / 238 kB gzip). Do not raise `build.chunkSizeWarningLimit` merely
@@ -162,6 +145,7 @@ The frozen [pilot readiness tracker](pilot-readiness-bug-tracker.md) is the auth
 
 | Item | Evidence |
 | --- | --- |
+| GAP-099 | Team-member access clarity, closed 2026-09-16. Slice 1 — cancel a pending invite: `198423ca` (via `65d9d82e`), [BL157](build-log/157-gap-099-invited-member-cancel-invite.md). Slice 2 — removed-member action contract fix + invite-action clarity: `198423ca`, [BL158](build-log/158-gap-099-removed-member-action-contract-fix.md). Slice 3 — invite-accept `Invite.AlreadyActive` message honesty (retained `InviteTokenHash`/`InviteExpiresAtUtc` through the original expiry, no migration): unit 19/19, integration 31/31. [ADR-504](decisions/decision-index.md) — no delete/purge for Removed rows. Disable/Enable access-clarity matrix (items 1-4) verified live against the deployed Team list with Owner and Admin accounts. |
 | GAP-050 | Account-scoped related-work indicator for the same canonical customer: `924b808e` (backend read path), `bdf90c33` (panel + navigation); [BL096](build-log/096-phase-4-request-detail-preflight-handoff.md). Promoted from DEF-050; never appeared in the legacy tracker. |
 | GAP-033 | Public-intake trust/event allowlist: `11c19d3d`, `89a776d8`; [BL145](build-log/145-gap-033-public-intake-trust-and-event-feed-allowlist.md). |
 | GAP-038 | Feedback / Help & Updates production release: implementation ([BL149](build-log/149-gap-038-in-product-feedback-help-updates-implementation.md)) plus founder activation/verification **038-R0–R3, done 2026-09-14** — banner dismissal and a harmless feedback submission confirmed reaching the founder channel; founder accepted the single-webhook outage posture. GAP-098 (feedback follow-up identity) resolved first. A founder publisher/preview tool replacing manual JSON/R2 editing is deferred as **GAP-087** (publishing strategy to be revisited later). |

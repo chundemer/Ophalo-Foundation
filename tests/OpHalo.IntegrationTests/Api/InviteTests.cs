@@ -439,8 +439,8 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
         Assert.NotNull(member);
         Assert.Equal(MembershipStatus.Active, member.MembershipStatus);
         Assert.NotNull(member.UserId);
-        Assert.Null(member.InviteTokenHash);
-        Assert.Null(member.InviteExpiresAtUtc);
+        Assert.NotNull(member.InviteTokenHash);
+        Assert.NotNull(member.InviteExpiresAtUtc);
         Assert.NotNull(member.ActivatedAtUtc);
 
         // User row must exist linked to the invitee email.
@@ -560,7 +560,7 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
     }
 
     [Fact]
-    public async Task AcceptInvite_SameTokenTwice_SecondReturns422()
+    public async Task AcceptInvite_SameTokenTwice_SecondReturnsAlreadyActive()
     {
         const string inviteeEmail = "invitee@example.com";
         var (_, _, cookie) = await SeedAccountAsync();
@@ -574,6 +574,40 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
 
         var first = await _client.PostAsJsonAsync("/accounts/invite/accept", new { token = rawToken });
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var second = await _client.PostAsJsonAsync("/accounts/invite/accept", new { token = rawToken });
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        await AssertCode(second, "Invite.AlreadyActive");
+    }
+
+    [Fact]
+    public async Task AcceptInvite_SameTokenAfterOriginalExpiry_ReturnsGenericInvalidToken()
+    {
+        const string inviteeEmail = "invitee@example.com";
+        var (accountId, _, cookie) = await SeedAccountAsync();
+
+        await AuthRequest(cookie).PostAsJsonAsync("/accounts/me/invite",
+            new { email = inviteeEmail, role = "operator" });
+
+        var rawToken = _factory.EmailSender.SentEmails
+            .Single(e => e.To == inviteeEmail)
+            .ExtractInviteToken()!;
+
+        var first = await _client.PostAsJsonAsync("/accounts/invite/accept", new { token = rawToken });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        // Move the retained InviteExpiresAtUtc into the past to simulate a re-click after the
+        // original invite window has elapsed — must fall back to the generic invalid response.
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var accountUser = await db.AccountUsers.SingleAsync(au =>
+                au.AccountId == accountId && au.NormalizedEmail == inviteeEmail);
+            await db.AccountUsers
+                .Where(au => au.Id == accountUser.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(
+                    au => au.InviteExpiresAtUtc, DateTime.UtcNow.AddMinutes(-1)));
+        }
 
         var second = await _client.PostAsJsonAsync("/accounts/invite/accept", new { token = rawToken });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, second.StatusCode);
@@ -604,7 +638,10 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
 
         var statuses = new[] { r1.StatusCode, r2.StatusCode };
         Assert.Single(statuses, s => s == HttpStatusCode.OK);
-        Assert.Single(statuses, s => s == HttpStatusCode.UnprocessableEntity);
+        Assert.Single(statuses, s => s == HttpStatusCode.Conflict);
+
+        var loser = statuses[0] == HttpStatusCode.Conflict ? r1 : r2;
+        await AssertCode(loser, "Invite.AlreadyActive");
     }
 
     // =========================================================================
