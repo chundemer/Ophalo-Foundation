@@ -14,6 +14,7 @@ import {
 import { type RequestDetailLayoutProps } from "./DetailPanels";
 import { DetailHeroBadges, DetailHeroName } from "./DetailHero";
 import { PrimaryActionSlot } from "./PrimaryActionControl";
+import { ClassifyRequestCard } from "./ClassifyRequestCard";
 import { FOCUS_RING } from "./helpers";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 
@@ -27,6 +28,7 @@ interface RequestDetailAnchorProps extends RequestDetailLayoutProps {
   financialReviewShortcut?: { label: string; onClick: () => void; tone: "ready" | "blocked" };
   businessPageUrl?: string | null;
   demoteMarkWorkDone?: boolean;
+  onRefreshDetail: () => void;
 }
 
 const utilityLinkClass = `inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] ${FOCUS_RING}`;
@@ -46,6 +48,7 @@ export function RequestDetailAnchor({
   onOpenShareDrawer,
   businessPageUrl,
   demoteMarkWorkDone = false,
+  onRefreshDetail,
 }: RequestDetailAnchorProps) {
   const [needExpanded, setNeedExpanded] = useState(false);
   const hasActiveAttention = detail.effectiveAttention.level !== "none";
@@ -74,8 +77,8 @@ export function RequestDetailAnchor({
             <DetailHeroName detail={detail} />
           </div>
         </div>
-        {!hasActiveAttention && (
-          <div className="shrink-0">
+        <div className="flex shrink-0 items-start gap-1.5">
+          {!hasActiveAttention && (
             <PrimaryActionSlot
               requestId={requestId}
               detail={detail}
@@ -86,8 +89,16 @@ export function RequestDetailAnchor({
               onActivateCustomerUpdateComposer={onActivateCustomerUpdateComposer}
               demoteMarkWorkDone={demoteMarkWorkDone}
             />
-          </div>
-        )}
+          )}
+          {/* GAP-063: independent of attention state — CanClassify doesn't depend on it — so this
+              stays visible even when PrimaryActionSlot is suppressed for active attention. */}
+          <ClassifyRequestCard
+            requestId={requestId}
+            detail={detail}
+            onDetailUpdated={onDetailUpdated}
+            onRefreshDetail={onRefreshDetail}
+          />
+        </div>
       </div>
 
       {detail.description && (

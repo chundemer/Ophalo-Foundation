@@ -664,6 +664,16 @@ export const api = {
       headers: { "X-Keep-Request-Version": version },
       body: JSON.stringify(body),
     }),
+  classifyRequest: (
+    requestId: string,
+    body: { targetStatus: "spam" | "test"; reason?: string },
+    version: string,
+  ) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/classify`, {
+      method: "POST",
+      headers: { "X-Keep-Request-Version": version },
+      body: JSON.stringify(body),
+    }),
   logExternalContact: (requestId: string, body: LogExternalContactBody, version: string) =>
     apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/external-contact`, {
       method: "POST",

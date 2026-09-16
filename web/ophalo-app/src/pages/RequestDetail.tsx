@@ -821,6 +821,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         highlights={highlights}
         showProminentFeedbackCard={showProminentFeedbackCard}
         onDetailUpdated={handleDetailUpdated}
+        onRefreshDetail={() => void refetch()}
         onContactLaunched={handleContactLaunched}
         onEditLocation={handleOpenServiceLocation}
         onOpenReassignOwner={() => setReassignOwnerOpen(true)}

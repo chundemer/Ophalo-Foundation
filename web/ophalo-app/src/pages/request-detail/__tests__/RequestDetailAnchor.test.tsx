@@ -49,6 +49,7 @@ function renderAnchor(
         actualWorkShortcut={{ label: "Record Actual Work", onClick: callbacks.onActualWork }}
         financialReviewShortcut={{ label: "Review financials (1)", onClick: callbacks.onFinancialReview, tone: "ready" }}
         businessPageUrl="https://example.test/keep/s/demo"
+        onRefreshDetail={vi.fn()}
         {...overrides}
       />
     </QueryClientProvider>,

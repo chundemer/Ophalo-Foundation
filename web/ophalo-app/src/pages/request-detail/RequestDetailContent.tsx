@@ -44,6 +44,10 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
   focusPanel?: string;
   onActualWorkReviewSuccess?: () => void;
   businessPageUrl?: string | null;
+  // GAP-063: refetches Request Detail so ClassifyRequestCard can recover from a 409/403 with
+  // authoritative state. Optional so existing test call sites that don't exercise classification
+  // need no change; RequestDetail.tsx always supplies it.
+  onRefreshDetail?: () => void;
 }
 
 function requestContactPreferenceLabel(preference: string | null | undefined): string | null {
@@ -352,6 +356,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       financialReviewShortcut={financialReviewShortcut}
       businessPageUrl={props.businessPageUrl}
       demoteMarkWorkDone={hasOpenActualWork || hasPendingFinancialReview}
+      onRefreshDetail={props.onRefreshDetail ?? (() => {})}
     />
   );
 
