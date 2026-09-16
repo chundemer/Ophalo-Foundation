@@ -17,8 +17,7 @@ GAP-073, GAP-094, GAP-099, GAP-063, and GAP-048 reviewed/verified and closed (Ch
 
 The foundation-first closed-loop / pilot-risk order is:
 
-1. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up. Required before staff rely on closed-request follow-ups.
-2. **GAP-092 — business-timezone display.** Render absolute timestamps and follow-up day boundaries in the account's validated IANA business timezone, not each viewer's device timezone. Complete before any multi-timezone pilot use.
+1. **GAP-092 — business-timezone display.** Render absolute timestamps and follow-up day boundaries in the account's validated IANA business timezone, not each viewer's device timezone. Complete before any multi-timezone pilot use.
 
 GAP-040 remains deliberately deferred until the application feature set stabilizes; reopen its existing
 marketing-copy findings before promoting the public intake link. GAP-072 and GAP-047 are non-gating
@@ -155,6 +154,7 @@ The frozen [pilot readiness tracker](pilot-readiness-bug-tracker.md) is the auth
 | GAP-051 public web | Configured business-phone display; [BL147](build-log/147-gap-051-public-web-business-phone-display.md). |
 | GAP-063 | Spam/Test terminal classification from Request Detail — quiet Admin actions menu, accessible confirm dialog, optional ≤500-char reason, version-snapshotted submit, 409/403 preserves reason and refetches detail: `5872f135`. [ADR-296](decisions/decision-index.md), [ADR-435](decisions/ADR-435-request-list-action-cockpit-boundary.md). Manually verified live by Christian, 2026-09-16. |
 | GAP-048 | Tracker-bearing email in the Request Detail Contact customer drawer now requires an explicit post-launch confirmation before it posts `{ method: "email" }`; `mailto:` launch alone creates no event or state change; plain email (no `canRecordShareIntent`, or no tracker) carries no token and no confirmation; success invalidates both request-detail and request-list caches so `NeedsShare` reflects server truth: `115bb862`. [ADR-372](decisions/decision-index.md), [ADR-381](decisions/ADR-381-tracker-link-sharing-footprint.md). Manually verified live by Christian, 2026-09-16. |
+| GAP-049 | Closed-request follow-up prefill (`buildFollowUpDescription` in `request-detail/helpers.ts`) reserves the provenance-prefix length and truncates only the copied source text at the last whitespace boundary within the remaining room, appending an ellipsis and a `wasTruncated` flag; falls back to a hard cut when no whitespace boundary exists; never mutates the original closed-request record. Landed in `21baaab5` (bundled with GAP-047/048), never marked done on this board. 4/4 unit tests passing (`helpers.followUpDescription.test.ts`), confirmed 2026-09-16. |
 
 ## Pilot gate checklist
 
@@ -163,8 +163,8 @@ backup and Keep is not the authoritative operating record. Before authoritative 
 Railway Pro backup/PITR and recovery proof, GAP-099 before staff access is managed, GAP-073 before
 staff send customer updates, GAP-091 before field techs rely on Quick Capture, GAP-063 (done
 2026-09-16) before staff rely on the active queue, GAP-048 (done 2026-09-16) before sharing private
-pages, and GAP-049 before relying on closed-request follow-ups. GAP-092 is required before
-multi-timezone use. GAP-040 is separately
+pages, and GAP-049 (done 2026-09-16) before relying on closed-request follow-ups. GAP-092 is
+required before multi-timezone use. GAP-040 is separately
 required before marketing/public-intake promotion, not before the present evaluative pilot. GAP-047
 was dropped as a gate on 2026-09-07 (staff do not triage by Internal priority). GAP-064 needs a
 written alert-policy decision; until then the founder deliberately watches the queue.

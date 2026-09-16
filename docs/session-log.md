@@ -5,23 +5,24 @@ scope, sequencing, gates, and deferrals. Locked decisions are in
 [decision-index](decisions/decision-index.md); completed-work evidence is in `docs/build-log/`.
 
 **Updated 2026-09-16.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
-GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, and GAP-048 are complete. The
-canonical scope, order, gates, and deferrals are in the [workboard](workboard.md).
+GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, GAP-048, and GAP-049 are complete.
+The canonical scope, order, gates, and deferrals are in the [workboard](workboard.md).
 
-## Start here — GAP-049 (follow-up truncation)
+## Start here — GAP-092 (business-timezone display)
 
-GAP-048 is fully closed (2026-09-16): the Request Detail tracker-email bypass now requires an
-explicit post-launch confirmation before posting `{ method: "email" }`, plain email stays
-token-free, and success invalidates both request-detail and request-list caches (`115bb862`).
-Manually verified live. See the workboard's Done/evidence index for the full evidence trail.
+GAP-049 is fully closed (confirmed 2026-09-16): closed-request follow-up prefill already reserved
+provenance-prefix space and safely truncated the copied source text at a whitespace boundary
+(`buildFollowUpDescription` in `request-detail/helpers.ts`) — it had landed in `21baaab5` bundled
+with GAP-047/048 but was never marked done on the board. 4/4 unit tests passing, no code change
+needed. See the workboard's Done/evidence index for the full evidence trail.
 
-Take up GAP-049 next: reserve provenance-prefix space and safely truncate copied text so a
-max-length closed request always yields a valid follow-up. Full acceptance criteria on the
-workboard's GAP-049 entry.
+Take up GAP-092 next: render absolute timestamps and follow-up day boundaries in the account's
+validated IANA business timezone, not each viewer's device timezone. Full acceptance criteria on
+the workboard's GAP-092 entry.
 
 ## Next several sessions
 
-1. Continue the workboard's foundation-first order: GAP-049, then GAP-092.
+1. Continue the workboard's foundation-first order: GAP-092.
 2. Run the **Proposed Work & Commercial Quotes** decision session. Its first deliverable is a
    decision record, not code; use its workboard Decision Queue entry and the cited ADRs/build logs.
 3. Begin **GAP-069** only at the release-readiness trigger: about two weeks before Keep becomes the
