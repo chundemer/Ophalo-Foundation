@@ -11,18 +11,15 @@
 
 ## Now
 
-GAP-073, GAP-094, and GAP-099 reviewed/verified and closed (Christian; 2026-09-15/16).
+GAP-073, GAP-094, GAP-099, and GAP-063 reviewed/verified and closed (Christian; 2026-09-15/16).
 
 ## Next
 
 The foundation-first closed-loop / pilot-risk order is:
 
-1. **GAP-063 — Spam/Test action.** Owner/Admin can make the existing authorized terminal classification from Request Detail, with accessible confirmation, optional ≤500-character reason, and truthful post-action state. [ADR-296](decisions/decision-index.md). Required before staff rely on the active queue.
-   - **Locked scope (2026-09-16):** implement exactly as originally resolved — `Spam`/`Test` are terminal, same family as `Closed`/`Cancelled`; no client-side unclassify/reset; no dedicated Spam/Test list view (existing history `status=spam`/`status=test` filtering is sufficient; classification stays Request Detail–only per [ADR-435](decisions/ADR-435-request-list-action-cockpit-boundary.md)). A short-lived "undo" was considered and rejected — the domain doesn't retain pre-classification status/attention/expiry state, so any undo needs an explicit restoration model, not a status toggle. See ADR-296 for the full rationale.
-   - **UX (revised 2026-09-16 — placement correction):** In Request Detail only, a quiet "Admin actions" (···) menu trigger sits in the Anchor header row (next to the reference code/status badges), gated solely on `availableActions.canClassify` — never a permanent card, since the action is used well under 1% of the time and a card cost ~180px of vertical space that pushed Planning/Timing/Owner off-screen. It renders independent of attention state (`CanClassify` doesn't depend on it), so it stays visible even when `HeroAttentionBanner` is also showing. The menu offers **Mark as spam** / **Mark as test**; each opens an accessible modal stating the target and consequences, an optional internal reason (≤500 chars), and requires intentional confirmation. Submit with the current detail version; replace local detail with the server response. On 409/403, preserve the entered reason, keep the dialog open, show a clear error, and refetch Request Detail — the response carries no updated detail of its own. On success, show the terminal badge and existing timeline event; no customer notification.
-2. **GAP-048 — share intent.** Private-page email goes through informed share confirmation; `mailto:` is never delivery evidence. Required before staff share private pages.
-3. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up. Required before staff rely on closed-request follow-ups.
-4. **GAP-092 — business-timezone display.** Render absolute timestamps and follow-up day boundaries in the account's validated IANA business timezone, not each viewer's device timezone. Complete before any multi-timezone pilot use.
+1. **GAP-048 — share intent.** Private-page email goes through informed share confirmation; `mailto:` is never delivery evidence. Required before staff share private pages.
+2. **GAP-049 — follow-up truncation.** Reserve provenance-prefix space and safely truncate copied text so a max-length closed request always yields a valid follow-up. Required before staff rely on closed-request follow-ups.
+3. **GAP-092 — business-timezone display.** Render absolute timestamps and follow-up day boundaries in the account's validated IANA business timezone, not each viewer's device timezone. Complete before any multi-timezone pilot use.
 
 GAP-040 remains deliberately deferred until the application feature set stabilizes; reopen its existing
 marketing-copy findings before promoting the public intake link. GAP-072 and GAP-047 are non-gating
@@ -157,15 +154,16 @@ The frozen [pilot readiness tracker](pilot-readiness-bug-tracker.md) is the auth
 | GAP-068 | Multi-workspace sign-in/invited name: `755c7eaf`, verification `2cda916d`; [BL143](build-log/143-multi-workspace-signin-and-invited-name-handoff.md). |
 | GAP-016 / GAP-021 | ADR-444 phone path; native parity separately deferred. |
 | GAP-051 public web | Configured business-phone display; [BL147](build-log/147-gap-051-public-web-business-phone-display.md). |
+| GAP-063 | Spam/Test terminal classification from Request Detail — quiet Admin actions menu, accessible confirm dialog, optional ≤500-char reason, version-snapshotted submit, 409/403 preserves reason and refetches detail: `5872f135`. [ADR-296](decisions/decision-index.md), [ADR-435](decisions/ADR-435-request-list-action-cockpit-boundary.md). Manually verified live by Christian, 2026-09-16. |
 
 ## Pilot gate checklist
 
 The current evaluative pilot may continue while its records are recoverable from the founder's local
 backup and Keep is not the authoritative operating record. Before authoritative live use: GAP-069's
 Railway Pro backup/PITR and recovery proof, GAP-099 before staff access is managed, GAP-073 before
-staff send customer updates, GAP-091 before field techs rely on Quick Capture, GAP-063 before staff
-rely on the active queue, GAP-048 before sharing private pages, and GAP-049 before relying on
-closed-request follow-ups. GAP-092 is required before multi-timezone use. GAP-040 is separately
+staff send customer updates, GAP-091 before field techs rely on Quick Capture, GAP-063 (done
+2026-09-16) before staff rely on the active queue, GAP-048 before sharing private pages, and GAP-049
+before relying on closed-request follow-ups. GAP-092 is required before multi-timezone use. GAP-040 is separately
 required before marketing/public-intake promotion, not before the present evaluative pilot. GAP-047
 was dropped as a gate on 2026-09-07 (staff do not triage by Internal priority). GAP-064 needs a
 written alert-policy decision; until then the founder deliberately watches the queue.
