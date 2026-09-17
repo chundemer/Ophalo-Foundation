@@ -43,12 +43,13 @@ function event(
   };
 }
 
-function renderWorkspace(events: KeepRequestEventItem[]) {
+function renderWorkspace(events: KeepRequestEventItem[], timeZone?: string | null) {
   const base = mockRequestDetails["mock-req-001"];
   return render(
     <RequestCommunicationsWorkspace
       detail={{ ...base, events }}
       composer={<div data-testid="composer">Composer</div>}
+      timeZone={timeZone}
     />,
   );
 }
@@ -78,6 +79,23 @@ describe("RequestCommunicationsWorkspace", () => {
     expect(screen.getByText("Customer confirmed the appointment.")).toBeInTheDocument();
     expect(screen.getByText("Contact summary")).toBeInTheDocument();
     expect(screen.getAllByText(/Sep 3, 2026/)).toHaveLength(4);
+  });
+
+  it("GAP-092 2a: renders an explicit UTC-labeled timestamp while the business timezone is unresolved", () => {
+    renderWorkspace([event("business", "message_added", "We can return tomorrow at 9 AM.")]);
+
+    expect(screen.getByText("Sep 3, 2026, 11:30 AM UTC")).toBeInTheDocument();
+  });
+
+  it("GAP-092 2a: renders the timestamp in the resolved business zone, no UTC label", () => {
+    renderWorkspace(
+      [event("business", "message_added", "We can return tomorrow at 9 AM.")],
+      "America/Los_Angeles",
+    );
+
+    // 2026-09-03T11:30:00Z is 4:30 AM in America/Los_Angeles (PDT, UTC-7).
+    expect(screen.getByText("Sep 3, 2026, 4:30 AM")).toBeInTheDocument();
+    expect(screen.queryByText(/UTC/)).not.toBeInTheDocument();
   });
 
   it("includes customer-visible text recorded with a status change", () => {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, FileText, Mail, MessageSquare, PhoneCall, Share2 } from "lucide-react";
 import type { KeepRequestDetailResult, KeepRequestEventItem } from "../../lib/apiClient";
-import { FOCUS_RING, eventTypeLabel } from "./helpers";
+import { FOCUS_RING, eventTypeLabel, formatDate } from "./helpers";
 
 type CommunicationFilter = "all" | "customer" | "internal";
 
@@ -33,16 +33,6 @@ export function isRequestCommunication(event: KeepRequestEventItem): boolean {
 
 function isInternal(event: KeepRequestEventItem): boolean {
   return eventKind(event) === "internal_note_added" || event.visibility === "internal";
-}
-
-function formatDateTime(isoUtc: string): string {
-  return new Date(isoUtc).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 function sentenceCase(value: string | null | undefined): string | null {
@@ -113,7 +103,7 @@ function contentToggleLabel(event: KeepRequestEventItem, expanded: boolean): str
   return "Show full message";
 }
 
-function CommunicationEntry({ event, detail }: { event: KeepRequestEventItem; detail: KeepRequestDetailResult }) {
+function CommunicationEntry({ event, detail, timeZone }: { event: KeepRequestEventItem; detail: KeepRequestDetailResult; timeZone: string | null }) {
   const [expanded, setExpanded] = useState(false);
   const content = event.content ?? fallbackContent(event);
   const isLong = !!content && (content.length > 320 || content.split("\n").length > 4);
@@ -154,7 +144,7 @@ function CommunicationEntry({ event, detail }: { event: KeepRequestEventItem; de
             </div>
             <div className="text-right">
               <p className={`text-[11px] font-bold uppercase tracking-wide ${internal ? "text-amber-800" : "text-[var(--keep-accent)]"}`}>{contextLabel(event)}</p>
-              <time dateTime={event.occurredAtUtc} className="mt-0.5 block text-xs text-[var(--ophalo-muted)]">{formatDateTime(event.occurredAtUtc)}</time>
+              <time dateTime={event.occurredAtUtc} className="mt-0.5 block text-xs text-[var(--ophalo-muted)]">{formatDate(event.occurredAtUtc, timeZone)}</time>
             </div>
           </div>
 
@@ -191,9 +181,13 @@ function CommunicationEntry({ event, detail }: { event: KeepRequestEventItem; de
 interface RequestCommunicationsWorkspaceProps {
   detail: KeepRequestDetailResult;
   composer: React.ReactNode;
+  // GAP-092 1b/2a: account business IANA zone, owned by the page (`RequestDetail.tsx`). Absent/
+  // loading/error (null) renders an explicit UTC-labeled timestamp, never a silent device-local
+  // guess.
+  timeZone?: string | null;
 }
 
-export function RequestCommunicationsWorkspace({ detail, composer }: RequestCommunicationsWorkspaceProps) {
+export function RequestCommunicationsWorkspace({ detail, composer, timeZone = null }: RequestCommunicationsWorkspaceProps) {
   const [filter, setFilter] = useState<CommunicationFilter>("all");
   const events = useMemo(() => {
     const communication = detail.events
@@ -235,7 +229,7 @@ export function RequestCommunicationsWorkspace({ detail, composer }: RequestComm
           </p>
         ) : (
           <div className="mt-4 space-y-3">
-            {events.map((event) => <CommunicationEntry key={event.id} event={event} detail={detail} />)}
+            {events.map((event) => <CommunicationEntry key={event.id} event={event} detail={detail} timeZone={timeZone} />)}
           </div>
         )}
       </section>

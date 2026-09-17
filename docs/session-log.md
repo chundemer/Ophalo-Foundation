@@ -23,8 +23,16 @@ day-boundary comparisons, and both `RequestRow` and `DetailHero`'s `TodayPromise
 presentational via an optional `timeZone` prop threaded from the page (`Requests.tsx` /
 `RequestDetail.tsx`).
 
-Take up GAP-092 slice **2 — Request Detail/communications timestamp consumers** next (workboard
-delivery-slice order); reuse the same hook/helper contract unchanged.
+GAP-092 slice **2a — shared formatters** is complete: `businessTime.ts`'s `formatInstant`/
+`formatRelativeOrInstant` render absolute instants business-zone-aware, with an explicit
+UTC-labeled fallback while unresolved; `helpers.ts`'s `formatDate`/`formatEventTime` gained an
+optional `timeZone` (`undefined` = not yet migrated, temporary GAP-092 debt; `null` = migrated,
+unresolved); `RequestCommunicationsWorkspace.tsx` is migrated end-to-end as the observable
+corrected surface.
+
+Take up GAP-092 slice **2b — identity row** next (`DetailHero.tsx`'s `DetailHeroName`,
+`RequestDetailAnchor.tsx`, `MobileRequestAnchor.tsx`); see the workboard's slice 2 breakdown
+(2b/2c/2d) for the remaining consumer groups.
 
 ## Next several sessions
 

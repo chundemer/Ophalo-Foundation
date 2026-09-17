@@ -197,7 +197,7 @@ export function RequestDetailWorkCanvas({
             aria-labelledby="request-workspace-tab-communications"
             hidden={activeWorkspaceTab !== "communications"}
           >
-            <RequestCommunicationsWorkspace detail={detail} composer={composer} />
+            <RequestCommunicationsWorkspace detail={detail} composer={composer} timeZone={timeZone} />
           </div>
         </>
       ) : (

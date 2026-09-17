@@ -1,7 +1,12 @@
 import { type KeepRequestDetailResult, type KeepRequestEventItem } from "../../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../../lib/requestStatus";
 import { DESCRIPTION_MAX_LENGTH } from "../../components/quick-capture/utils";
-import { isDateOnlyToday as businessIsDateOnlyToday, isDateOnlyPast as businessIsDateOnlyPast } from "../../lib/businessTime";
+import {
+  isDateOnlyToday as businessIsDateOnlyToday,
+  isDateOnlyPast as businessIsDateOnlyPast,
+  formatInstant,
+  formatRelativeOrInstant,
+} from "../../lib/businessTime";
 
 export { statusLabel, statusBadgeVariant };
 
@@ -31,31 +36,44 @@ export function eventTypeLabel(type: string): string {
   return EVENT_TYPE_LABELS[type] ?? type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function formatEventTime(isoUtc: string): string {
-  const d = new Date(isoUtc);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMins = Math.floor(diffMs / 60_000);
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: sameYear ? undefined : "numeric",
-  });
+// GAP-092: `timeZone` distinguishes two states callers must not conflate. `undefined` (the
+// parameter omitted) means "not yet migrated to this slice" — Actual Work/history consumers
+// (slice 3) still call these with one argument and get the exact original device-local behavior
+// below, unchanged. `null` means "migrated, but the business zone is genuinely unresolved right
+// now" — that renders an explicit UTC-labeled fallback (businessTime.ts), never a silent
+// device-local guess. TODO(GAP-092 slice 3): once every consumer threads a real `timeZone`, delete
+// the `undefined` branch and drop the legacy device-local implementation entirely.
+export function formatEventTime(isoUtc: string, timeZone?: string | null): string {
+  if (timeZone === undefined) {
+    const d = new Date(isoUtc);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60_000);
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const sameYear = d.getFullYear() === now.getFullYear();
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: sameYear ? undefined : "numeric",
+    });
+  }
+  return formatRelativeOrInstant(isoUtc, timeZone);
 }
 
-export function formatDate(isoUtc: string): string {
-  return new Date(isoUtc).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+export function formatDate(isoUtc: string, timeZone?: string | null): string {
+  if (timeZone === undefined) {
+    return new Date(isoUtc).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+  return formatInstant(isoUtc, timeZone);
 }
 
 export function formatDateOnly(isoDate: string): string {

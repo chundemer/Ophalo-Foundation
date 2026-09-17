@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { businessTodayDateOnly, isDateOnlyToday, isDateOnlyPast } from "../businessTime";
+import { businessTodayDateOnly, isDateOnlyToday, isDateOnlyPast, formatInstant, formatRelativeOrInstant } from "../businessTime";
 
 // GAP-092 1a: every assertion uses an injected reference date — never the real clock — so these
 // stay deterministic regardless of when or where the suite runs.
@@ -41,5 +41,40 @@ describe("isDateOnlyPast", () => {
 
   it("is neutral (false) when the timezone is unresolved", () => {
     expect(isDateOnlyPast("2026-07-01", null, reference)).toBe(false);
+  });
+});
+
+describe("formatInstant", () => {
+  it("renders the instant in the resolved business zone, no UTC label", () => {
+    // 2026-09-03T11:30:00Z is 4:30 AM in America/Los_Angeles (PDT, UTC-7).
+    expect(formatInstant("2026-09-03T11:30:00Z", "America/Los_Angeles")).toBe("Sep 3, 2026, 4:30 AM");
+  });
+
+  it("renders an explicit UTC-labeled fallback when the zone is unresolved", () => {
+    expect(formatInstant("2026-09-03T11:30:00Z", null)).toBe("Sep 3, 2026, 11:30 AM UTC");
+  });
+});
+
+describe("formatRelativeOrInstant", () => {
+  const reference = new Date("2026-09-03T12:00:00Z");
+
+  it("stays a timezone-invariant relative label under an hour old", () => {
+    const thirtyMinAgo = new Date("2026-09-03T11:30:00Z").toISOString();
+    expect(formatRelativeOrInstant(thirtyMinAgo, "America/Los_Angeles", reference)).toBe("30m ago");
+    expect(formatRelativeOrInstant(thirtyMinAgo, null, reference)).toBe("30m ago");
+  });
+
+  it("falls back to an absolute, business-zone-aware date past 24h, UTC-labeled while unresolved", () => {
+    const twoDaysAgo = new Date("2026-09-01T11:30:00Z").toISOString();
+    expect(formatRelativeOrInstant(twoDaysAgo, "America/Los_Angeles", reference)).toBe("Sep 1");
+    expect(formatRelativeOrInstant(twoDaysAgo, null, reference)).toBe("Sep 1 UTC");
+  });
+
+  it("includes the year across a business-zone year boundary, not just a UTC one", () => {
+    // 2027-01-01T03:00:00Z is 2026-12-31 19:00 in America/Los_Angeles (PST, UTC-8) — still last
+    // year in the business zone even though UTC has already rolled to the new year.
+    const reference2 = new Date("2027-01-01T03:00:00Z");
+    const twoDaysBefore = new Date("2026-12-30T12:00:00Z").toISOString();
+    expect(formatRelativeOrInstant(twoDaysBefore, "America/Los_Angeles", reference2)).toBe("Dec 30");
   });
 });
