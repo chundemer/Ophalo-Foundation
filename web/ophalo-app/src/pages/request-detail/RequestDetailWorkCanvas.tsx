@@ -114,7 +114,7 @@ export function RequestDetailWorkCanvas({
       )}
 
       <div className="space-y-3">
-        {showProminentFeedbackCard && <ProminentFeedbackCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} onReviewSuccess={onReviewSuccess} />}
+        {showProminentFeedbackCard && <ProminentFeedbackCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} onReviewSuccess={onReviewSuccess} timeZone={timeZone} />}
         {reviewSuccessMsg && <div role="status" aria-live="polite" className="rounded-xl border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-4 py-3 text-sm font-medium text-[var(--ophalo-success)]">{reviewSuccessMsg}</div>}
       </div>
 

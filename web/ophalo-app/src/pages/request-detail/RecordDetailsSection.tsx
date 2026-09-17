@@ -17,6 +17,10 @@ interface RecordDetailsSectionProps {
   showProminentFeedbackCard: boolean;
   onDetailUpdated: (detail: KeepRequestDetailResult) => void;
   onNavigate?: (id: string) => void;
+  // GAP-092 2d: threaded through to RelatedWorkPanel/FeedbackSummaryCard/SourceMetaPanel;
+  // optional so existing test call sites that don't exercise business-timezone cues need no
+  // change. RequestDetailContent.tsx always supplies it.
+  timeZone?: string | null;
 }
 
 export function RecordDetailsSection({
@@ -25,6 +29,7 @@ export function RecordDetailsSection({
   showProminentFeedbackCard,
   onDetailUpdated,
   onNavigate,
+  timeZone = null,
 }: RecordDetailsSectionProps) {
   return (
     <details className="group rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3">
@@ -39,10 +44,10 @@ export function RecordDetailsSection({
           panel never leaves a divider/empty gap. */}
       <div className="mt-3 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
         <CustomerSignalPanel detail={detail} bare />
-        <RelatedWorkPanel requestId={requestId} onNavigate={onNavigate} bare />
+        <RelatedWorkPanel requestId={requestId} onNavigate={onNavigate} bare timeZone={timeZone} />
         <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} bare />
-        {!showProminentFeedbackCard && <FeedbackSummaryCard detail={detail} bare />}
-        <SourceMetaPanel detail={detail} bare />
+        {!showProminentFeedbackCard && <FeedbackSummaryCard detail={detail} bare timeZone={timeZone} />}
+        <SourceMetaPanel detail={detail} bare timeZone={timeZone} />
       </div>
     </details>
   );

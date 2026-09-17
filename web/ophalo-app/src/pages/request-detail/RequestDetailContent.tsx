@@ -226,6 +226,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       showProminentFeedbackCard={showProminentFeedbackCard}
       onDetailUpdated={onDetailUpdated}
       onNavigate={props.onNavigate}
+      timeZone={props.timeZone}
     />
   );
 

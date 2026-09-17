@@ -390,7 +390,7 @@ function FeedbackReviewSection({
 // Feedback summary card — quiet completed state for positive feedback
 // ---------------------------------------------------------------------------
 
-export function FeedbackSummaryCard({ detail, bare = false }: { detail: KeepRequestDetailResult; bare?: boolean }) {
+export function FeedbackSummaryCard({ detail, bare = false, timeZone = null }: { detail: KeepRequestDetailResult; bare?: boolean; timeZone?: string | null }) {
   if (detail.feedbackWasResolved !== true || !detail.feedbackSubmittedAtUtc) return null;
 
   return (
@@ -398,7 +398,7 @@ export function FeedbackSummaryCard({ detail, bare = false }: { detail: KeepRequ
       <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Customer feedback</p>
       <p className="mt-1 text-xs text-[var(--ophalo-muted)]">
         Customer confirmed their request was resolved
-        {detail.feedbackSubmittedAtUtc ? ` on ${formatDate(detail.feedbackSubmittedAtUtc)}` : ""}.
+        {detail.feedbackSubmittedAtUtc ? ` on ${formatDate(detail.feedbackSubmittedAtUtc, timeZone)}` : ""}.
       </p>
       {detail.feedbackCommentVisible && detail.feedbackComment && (
         <p className="mt-1.5 text-xs text-[var(--ophalo-muted)] italic">
@@ -457,9 +457,10 @@ interface ProminentFeedbackCardProps {
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
   onReviewSuccess: () => void;
+  timeZone?: string | null;
 }
 
-export function ProminentFeedbackCard({ requestId, detail, onDetailUpdated, onReviewSuccess }: ProminentFeedbackCardProps) {
+export function ProminentFeedbackCard({ requestId, detail, onDetailUpdated, onReviewSuccess, timeZone = null }: ProminentFeedbackCardProps) {
   const isUnreviewedNegative =
     detail.availableActions.canMarkFeedbackReviewed &&
     detail.feedbackWasResolved === false &&
@@ -478,7 +479,7 @@ export function ProminentFeedbackCard({ requestId, detail, onDetailUpdated, onRe
       </div>
       <p className="text-xs text-[var(--ophalo-muted)]">
         Customer reported their request was <strong>not resolved</strong>
-        {detail.feedbackSubmittedAtUtc ? ` on ${formatDate(detail.feedbackSubmittedAtUtc)}` : ""}.
+        {detail.feedbackSubmittedAtUtc ? ` on ${formatDate(detail.feedbackSubmittedAtUtc, timeZone)}` : ""}.
       </p>
       {detail.feedbackCommentVisible && detail.feedbackComment && (
         <p className="text-sm text-[var(--ophalo-ink)] italic">&ldquo;{detail.feedbackComment}&rdquo;</p>
@@ -520,9 +521,10 @@ interface RelatedWorkPanelProps {
   requestId: string;
   onNavigate?: (id: string) => void;
   bare?: boolean;
+  timeZone?: string | null;
 }
 
-export function RelatedWorkPanel({ requestId, onNavigate, bare = false }: RelatedWorkPanelProps) {
+export function RelatedWorkPanel({ requestId, onNavigate, bare = false, timeZone = null }: RelatedWorkPanelProps) {
   const { data } = useQuery({
     queryKey: ["request-related-work", requestId],
     queryFn: () => api.getRelatedWork(requestId),
@@ -547,7 +549,7 @@ export function RelatedWorkPanel({ requestId, onNavigate, bare = false }: Relate
               <span className="text-[var(--ophalo-ink)]">{item.referenceCode}</span>
               <span className="flex items-center gap-2 text-xs text-[var(--ophalo-muted)]">
                 <KeepBadge variant={statusBadgeVariant(item.status)}>{statusLabel(item.status)}</KeepBadge>
-                {formatDate(item.lastActivityAtUtc)}
+                {formatDate(item.lastActivityAtUtc, timeZone)}
               </span>
             </button>
           </li>
@@ -943,14 +945,14 @@ export function TriagePanel({ detail, onDetailUpdated, bare = false, strip = fal
 // Source metadata panel
 // ---------------------------------------------------------------------------
 
-export function SourceMetaPanel({ detail, bare = false }: { detail: KeepRequestDetailResult; bare?: boolean }) {
+export function SourceMetaPanel({ detail, bare = false, timeZone = null }: { detail: KeepRequestDetailResult; bare?: boolean; timeZone?: string | null }) {
   return (
     <div className={bare ? "px-4 py-3 space-y-0.5" : "px-1 space-y-0.5"}>
       <p className="text-xs text-[var(--ophalo-muted)]">
         Source: {detail.source === "public_intake" ? "Customer intake form" : "Team added"}
       </p>
       <p className="text-xs text-[var(--ophalo-muted)]">
-        Submitted {formatDate(detail.createdAtUtc)}
+        Submitted {formatDate(detail.createdAtUtc, timeZone)}
       </p>
     </div>
   );

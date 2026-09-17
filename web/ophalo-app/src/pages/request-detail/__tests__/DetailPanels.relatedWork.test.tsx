@@ -109,3 +109,27 @@ describe("RelatedWorkPanel (GAP-050)", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });
+
+// GAP-092 2d: the row's date previously rendered in the viewer's device-local zone.
+describe("RelatedWorkPanel — GAP-092 business-timezone-aware last-activity date", () => {
+  it("renders an explicit UTC-labeled date while the business timezone is unresolved", async () => {
+    mockGetRelatedWork.mockResolvedValue({
+      totalCount: 1,
+      // 2026-07-02T02:00:00Z is 2026-07-01 19:00 in America/Los_Angeles (PDT, UTC-7).
+      items: [{ requestId: "req-2", referenceCode: "R-002", status: "received", lastActivityAtUtc: "2026-07-02T02:00:00Z" }],
+    });
+    renderWithClient(<RelatedWorkPanel requestId="req-1" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("Jul 2, 2026, 2:00 AM UTC")).toBeInTheDocument();
+  });
+
+  it("renders the date in the resolved business zone, a real conversion not a coincidence", async () => {
+    mockGetRelatedWork.mockResolvedValue({
+      totalCount: 1,
+      items: [{ requestId: "req-2", referenceCode: "R-002", status: "received", lastActivityAtUtc: "2026-07-02T02:00:00Z" }],
+    });
+    renderWithClient(<RelatedWorkPanel requestId="req-1" onNavigate={vi.fn()} timeZone="America/Los_Angeles" />);
+
+    expect(await screen.findByText("Jul 1, 2026, 7:00 PM")).toBeInTheDocument();
+  });
+});

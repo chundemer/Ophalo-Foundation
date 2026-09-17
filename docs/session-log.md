@@ -39,9 +39,16 @@ takes `timeZone` (threaded from `RequestDetailContent.tsx` through `RequestDetai
 `RequestMemoryRail.tsx`, and from `RequestDetailWorkCanvas.tsx` through `UnifiedComposer.tsx` →
 `BusinessSection.tsx` → `NotifyCustomerPanel.tsx`). Exactly 8 production files, landed as one slice.
 
-Take up GAP-092 slice **2d — detail panels** next (`DetailPanels.tsx`'s `FeedbackSummaryCard`/
-`ProminentFeedbackCard`/`RelatedWorkPanel`/`SourceMetaPanel`, `RecordDetailsSection.tsx`); this is
-the last of slice 2 before slice (3) Actual Work/history.
+GAP-092 slice **2d — detail panels** is complete: `DetailPanels.tsx`'s `FeedbackSummaryCard`/
+`ProminentFeedbackCard`/`RelatedWorkPanel`/`SourceMetaPanel` take `timeZone`, threaded through
+`RecordDetailsSection.tsx` from `RequestDetailContent.tsx`, and directly from
+`RequestDetailWorkCanvas.tsx` for `ProminentFeedbackCard`. **Slice (2) is now fully complete.**
+
+Take up GAP-092 slice **(3) — Actual Work/history timestamp consumers** next: `ActualWorkReviewQueueList.tsx`,
+`ActualWorkReviewCard.tsx`, `ActualWorkPendingReviewsCard.tsx`, `ActualWorkFinancialReviewWorkspace.tsx`
+are the remaining `formatDate`/`formatEventTime` call sites still on the legacy (`undefined`)
+compatibility path; migrating them all removes that compatibility branch from `helpers.ts` entirely.
+Re-check file count against the batch gate before committing to one slice.
 
 ## Next several sessions
 
