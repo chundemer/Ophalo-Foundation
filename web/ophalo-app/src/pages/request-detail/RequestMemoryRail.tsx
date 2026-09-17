@@ -42,9 +42,13 @@ function sortEvents(events: KeepRequestEventItem[]): KeepRequestEventItem[] {
 interface RequestMemoryRailProps {
   events: KeepRequestEventItem[];
   details: React.ReactNode;
+  // GAP-092 2c: threaded through to TimelineEvent; optional so existing test call sites that
+  // don't exercise business-timezone cues need no change. RequestDetailContent.tsx always
+  // supplies it.
+  timeZone?: string | null;
 }
 
-export function RequestMemoryRail({ events, details }: RequestMemoryRailProps) {
+export function RequestMemoryRail({ events, details, timeZone = null }: RequestMemoryRailProps) {
   const [activeTab, setActiveTab] = useState<RequestMemoryTab>(initialTab);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const historyEvents = useMemo(
@@ -132,7 +136,7 @@ export function RequestMemoryRail({ events, details }: RequestMemoryRailProps) {
           ) : (
             <div className="space-y-3">
               {historyEvents.map((event) => (
-                <TimelineEvent key={event.id} event={event} isFirst={false} compact />
+                <TimelineEvent key={event.id} event={event} isFirst={false} compact timeZone={timeZone} />
               ))}
             </div>
           )}

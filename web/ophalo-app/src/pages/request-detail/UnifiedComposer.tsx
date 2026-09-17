@@ -22,6 +22,10 @@ interface UnifiedComposerProps {
   // with TimingPanel in one shared Communication & Planning surface (locked correction,
   // 2026-08-22). Padding is preserved either way.
   bare?: boolean;
+  // GAP-092 2c: threaded through to BusinessUpdateSection/NotifyCustomerPanel; optional so
+  // existing test call sites that don't exercise business-timezone cues need no change.
+  // RequestDetailWorkCanvas.tsx always supplies it.
+  timeZone?: string | null;
 }
 
 type ActiveTab = "customerUpdate" | "internalNote";
@@ -43,6 +47,7 @@ export const UnifiedComposer = forwardRef<UnifiedComposerHandle, UnifiedComposer
   onDetailUpdated,
   highlight,
   bare = false,
+  timeZone = null,
 }, ref) {
   const { canSendBusinessUpdate, canAddInternalNote } = detail.availableActions;
   const defaultTab: ActiveTab = canSendBusinessUpdate ? "customerUpdate" : "internalNote";
@@ -192,6 +197,7 @@ export const UnifiedComposer = forwardRef<UnifiedComposerHandle, UnifiedComposer
             detail={detail}
             onDetailUpdated={onDetailUpdated}
             composerMode
+            timeZone={timeZone}
           />
         </div>
       )}

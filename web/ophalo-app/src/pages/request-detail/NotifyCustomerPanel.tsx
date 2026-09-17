@@ -21,6 +21,9 @@ interface NotifyCustomerPanelProps {
   // posting — surfaces the failure here instead of dropping it, and lets the operator retry
   // the prepare step manually from the selection phase below.
   initialError?: string | null;
+  // GAP-092 2c: account business IANA zone, owned by the page. Absent/loading/error (null)
+  // renders an explicit UTC-labeled timestamp, never a silent device-local guess.
+  timeZone?: string | null;
 }
 
 // GAP-052b / ADR-451: post → prepare → confirm is three distinct, separately attested actions.
@@ -36,6 +39,7 @@ export function NotifyCustomerPanel({
   onDetailUpdated,
   onDone,
   initialError = null,
+  timeZone = null,
 }: NotifyCustomerPanelProps) {
   const pending =
     detail.pendingNotification?.relatedUpdateEventId === relatedUpdateEventId
@@ -149,7 +153,7 @@ export function NotifyCustomerPanel({
           <p className="text-sm font-semibold text-[var(--ophalo-ink)]">
             {pending.channel === "sms" ? "Text notification prepared" : "Email notification prepared"}
           </p>
-          <KeepBadge variant="attention">Prepared {formatEventTime(pending.preparedAtUtc)}</KeepBadge>
+          <KeepBadge variant="attention">Prepared {formatEventTime(pending.preparedAtUtc, timeZone)}</KeepBadge>
         </div>
         {errorBlock}
         {!preparedByCurrentUser ? (

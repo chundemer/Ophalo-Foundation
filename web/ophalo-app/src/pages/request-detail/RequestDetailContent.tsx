@@ -216,7 +216,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const handleFocusReviewVisitHandled = useCallback(() => setPendingFocusVisitId(null), []);
 
   const activityBlock = (
-    <RequestDetailActivity timelineFilter={props.timelineFilter} onTimelineFilterChange={props.onTimelineFilterChange} displayedEvents={props.displayedEvents} />
+    <RequestDetailActivity timelineFilter={props.timelineFilter} onTimelineFilterChange={props.onTimelineFilterChange} displayedEvents={props.displayedEvents} timeZone={props.timeZone} />
   );
 
   const recordDetailsBlock = (
@@ -344,6 +344,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
     <RequestMemoryRail
       events={visibleEvents}
       details={requestMemoryDetails}
+      timeZone={props.timeZone}
     />
   );
 

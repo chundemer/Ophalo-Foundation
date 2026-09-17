@@ -154,9 +154,12 @@ interface TimelineEventProps {
   event: KeepRequestEventItem;
   isFirst: boolean;
   compact?: boolean;
+  // GAP-092 2c: account business IANA zone, owned by the page. Absent/loading/error (null)
+  // renders an explicit UTC-labeled timestamp, never a silent device-local guess.
+  timeZone?: string | null;
 }
 
-export function TimelineEvent({ event, isFirst, compact = false }: TimelineEventProps) {
+export function TimelineEvent({ event, isFirst, compact = false, timeZone = null }: TimelineEventProps) {
   const { label, iconConfig, badgeVariant } = resolveEventDisplay(event);
   const { Icon, bgClass, iconClass } = iconConfig;
   const summary = timelineEventSummary(event);
@@ -239,7 +242,7 @@ export function TimelineEvent({ event, isFirst, compact = false }: TimelineEvent
             {event.content}
           </p>
         )}
-        <p className="mt-1.5 text-xs text-[var(--ophalo-muted)]">{formatEventTime(event.occurredAtUtc)}</p>
+        <p className="mt-1.5 text-xs text-[var(--ophalo-muted)]">{formatEventTime(event.occurredAtUtc, timeZone)}</p>
       </div>
     </div>
   );

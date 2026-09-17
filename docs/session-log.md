@@ -34,10 +34,14 @@ GAP-092 slice **2b — identity row** is complete: `DetailHero.tsx`'s `DetailHer
 (customer-page-viewed timestamp) takes `timeZone`, threaded through `RequestDetailAnchor.tsx` and
 `MobileRequestAnchor.tsx` from `RequestDetailContent.tsx`'s existing `props.timeZone`.
 
-Take up GAP-092 slice **2c — remaining timeline/communications consumers** next (`TimelineEvent.tsx`,
-`RequestDetailActivity.tsx`, `RequestMemoryRail.tsx`, `NotifyCustomerPanel.tsx`, `BusinessSection.tsx`,
-`UnifiedComposer.tsx`); re-check against the batch gate and split further (see workboard) if still
-too large.
+GAP-092 slice **2c — remaining timeline/communications consumers** is complete: `TimelineEvent.tsx`
+takes `timeZone` (threaded from `RequestDetailContent.tsx` through `RequestDetailActivity.tsx`/
+`RequestMemoryRail.tsx`, and from `RequestDetailWorkCanvas.tsx` through `UnifiedComposer.tsx` →
+`BusinessSection.tsx` → `NotifyCustomerPanel.tsx`). Exactly 8 production files, landed as one slice.
+
+Take up GAP-092 slice **2d — detail panels** next (`DetailPanels.tsx`'s `FeedbackSummaryCard`/
+`ProminentFeedbackCard`/`RelatedWorkPanel`/`SourceMetaPanel`, `RecordDetailsSection.tsx`); this is
+the last of slice 2 before slice (3) Actual Work/history.
 
 ## Next several sessions
 

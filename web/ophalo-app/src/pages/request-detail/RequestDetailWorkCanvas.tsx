@@ -79,7 +79,7 @@ export function RequestDetailWorkCanvas({
       tabIndex={-1}
       className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)]"
     >
-      <UnifiedComposer ref={composerRef} requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} highlight={highlights.sendUpdate} bare />
+      <UnifiedComposer ref={composerRef} requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} highlight={highlights.sendUpdate} bare timeZone={timeZone} />
     </div>
   );
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NotifyCustomerPanel } from "../NotifyCustomerPanel";
@@ -286,6 +286,65 @@ describe("NotifyCustomerPanel — prepared phase (mine)", () => {
         detail.version,
       ),
     );
+  });
+});
+
+// GAP-092 2c: the "Prepared" badge timestamp previously rendered in the viewer's device-local
+// zone. Proves the corrected surface end-to-end through NotifyCustomerPanel's real timeZone prop.
+// Pinned system clock (>24h past preparedAtUtc, so formatEventTime's business-zone-aware absolute
+// fallback branch is exercised deterministically regardless of when the suite runs).
+describe("NotifyCustomerPanel — GAP-092 business-timezone-aware 'Prepared' timestamp", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function preparedDetail(channel: "sms" | "email") {
+    return baseDetail({
+      customerEmail: "marcus@example.com",
+      pendingNotification: {
+        relatedUpdateEventId: "event-1",
+        channel,
+        // 2026-07-26T03:00:00Z is 2026-07-25 20:00 in America/Los_Angeles (PDT, UTC-7) — a real
+        // conversion proof, not a coincidental match with the UTC calendar day.
+        preparedAtUtc: "2026-07-26T03:00:00Z",
+        canConfirmAsCurrentUser: true,
+      },
+    });
+  }
+
+  it("renders an explicit UTC-labeled fallback while the business timezone is unresolved", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-29T00:00:00Z"));
+
+    render(
+      <NotifyCustomerPanel
+        requestId="req-77"
+        detail={preparedDetail("sms")}
+        relatedUpdateEventId="event-1"
+        onDetailUpdated={() => {}}
+        onDone={() => {}}
+      />
+    );
+
+    expect(screen.getByText("Prepared Jul 26 UTC")).toBeInTheDocument();
+  });
+
+  it("renders the fallback date in the resolved business zone, no UTC label", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-29T00:00:00Z"));
+
+    render(
+      <NotifyCustomerPanel
+        requestId="req-77"
+        detail={preparedDetail("sms")}
+        relatedUpdateEventId="event-1"
+        onDetailUpdated={() => {}}
+        onDone={() => {}}
+        timeZone="America/Los_Angeles"
+      />
+    );
+
+    expect(screen.getByText("Prepared Jul 25")).toBeInTheDocument();
   });
 });
 

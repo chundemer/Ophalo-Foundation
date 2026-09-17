@@ -349,6 +349,10 @@ interface BusinessUpdateSectionProps {
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
   highlight?: HighlightLevel;
   composerMode?: boolean;
+  // GAP-092 2c: threaded through to NotifyCustomerPanel; optional so existing test call sites
+  // that don't exercise business-timezone cues need no change. UnifiedComposer.tsx (via
+  // RequestDetailWorkCanvas.tsx) always supplies it.
+  timeZone?: string | null;
 }
 
 export function BusinessUpdateSection({
@@ -357,6 +361,7 @@ export function BusinessUpdateSection({
   onDetailUpdated,
   highlight,
   composerMode = false,
+  timeZone = null,
 }: BusinessUpdateSectionProps) {
   const { canSendBusinessUpdate, canChangeStatus, allowedStatuses } = detail.availableActions;
   const maxLength = detail.validation.businessUpdateMaxLength;
@@ -641,6 +646,7 @@ export function BusinessUpdateSection({
         onDetailUpdated={onDetailUpdated}
         onDone={() => setJustPostedEventId(null)}
         initialError={autoPrepareError}
+        timeZone={timeZone}
       />
     </div>
   );

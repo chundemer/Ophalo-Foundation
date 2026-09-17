@@ -8,9 +8,13 @@ interface RequestDetailActivityProps {
   timelineFilter: TimelineFilter;
   onTimelineFilterChange: (filter: TimelineFilter) => void;
   displayedEvents: KeepRequestEventItem[];
+  // GAP-092 2c: threaded through to TimelineEvent; optional so existing test call sites that
+  // don't exercise business-timezone cues need no change. RequestDetailContent.tsx always
+  // supplies it.
+  timeZone?: string | null;
 }
 
-export function RequestDetailActivity({ timelineFilter, onTimelineFilterChange, displayedEvents }: RequestDetailActivityProps) {
+export function RequestDetailActivity({ timelineFilter, onTimelineFilterChange, displayedEvents, timeZone = null }: RequestDetailActivityProps) {
   const [fullHistoryOpen, setFullHistoryOpen] = useState(false);
   const filterBtnCls = (active: boolean) => `flex-1 px-3 py-1.5 text-xs font-semibold transition-colors ${FOCUS_RING} ${active ? "bg-[var(--ophalo-navy)] text-white" : "bg-[var(--ophalo-card)] text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"}`;
   const entryCount = displayedEvents.length;
@@ -36,7 +40,7 @@ export function RequestDetailActivity({ timelineFilter, onTimelineFilterChange, 
           <p className="mt-3 text-sm text-[var(--ophalo-muted)]">{timelineFilter === "communication" ? "No customer updates or internal notes yet." : "No activity yet."}</p>
         ) : (
           <div className="mt-4 space-y-3">
-            {previewEvents.map((event) => <TimelineEvent key={event.id} event={event} isFirst={false} compact />)}
+            {previewEvents.map((event) => <TimelineEvent key={event.id} event={event} isFirst={false} compact timeZone={timeZone} />)}
             {entryCount > previewEvents.length && (
               <button type="button" onClick={() => setFullHistoryOpen(true)} className={`w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm font-semibold text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}>
                 View all {entryCount} activity entries
@@ -58,7 +62,7 @@ export function RequestDetailActivity({ timelineFilter, onTimelineFilterChange, 
               <button type="button" aria-pressed={timelineFilter === "all"} onClick={() => onTimelineFilterChange("all")} className={`border-l border-[var(--ophalo-border)] ${filterBtnCls(timelineFilter === "all")}`}>All activity</button>
             </div>
           </div>
-          {displayedEvents.length === 0 ? <p className="text-sm text-[var(--ophalo-muted)]">{timelineFilter === "communication" ? "No customer updates or internal notes yet." : "No activity yet."}</p> : <div className="relative space-y-2 border-l border-[var(--ophalo-border)] pl-3 ml-4">{displayedEvents.map((event, idx) => <TimelineEvent key={event.id} event={event} isFirst={idx === 0} />)}</div>}
+          {displayedEvents.length === 0 ? <p className="text-sm text-[var(--ophalo-muted)]">{timelineFilter === "communication" ? "No customer updates or internal notes yet." : "No activity yet."}</p> : <div className="relative space-y-2 border-l border-[var(--ophalo-border)] pl-3 ml-4">{displayedEvents.map((event, idx) => <TimelineEvent key={event.id} event={event} isFirst={idx === 0} timeZone={timeZone} />)}</div>}
         </ResponsiveSheet>
       )}
     </>
