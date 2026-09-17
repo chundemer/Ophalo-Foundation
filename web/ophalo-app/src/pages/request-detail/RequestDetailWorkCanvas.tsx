@@ -93,6 +93,7 @@ export function RequestDetailWorkCanvas({
         onRecordFollowUp={onRecordFollowUp}
         onContactLaunched={onContactLaunched}
         onActivateCustomerUpdateComposer={onActivateCustomerUpdateComposer}
+        timeZone={timeZone}
       />
       <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} timeZone={timeZone} />
     </div>

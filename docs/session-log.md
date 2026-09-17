@@ -5,62 +5,25 @@ scope, sequencing, gates, and deferrals. Locked decisions are in
 [decision-index](decisions/decision-index.md); completed-work evidence is in `docs/build-log/`.
 
 **Updated 2026-09-17.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
-GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, GAP-048, and GAP-049 are complete.
-The canonical scope, order, gates, and deferrals are in the [workboard](workboard.md).
+GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, GAP-048, GAP-049, and GAP-092 are
+complete. The canonical scope, order, gates, and deferrals are in the [workboard](workboard.md).
 
-## Start here — GAP-092 (business-timezone display)
+## Start here — GAP-100
 
-GAP-049 is fully closed (confirmed 2026-09-16): closed-request follow-up prefill already reserved
-provenance-prefix space and safely truncated the copied source text at a whitespace boundary
-(`buildFollowUpDescription` in `request-detail/helpers.ts`) — it had landed in `21baaab5` bundled
-with GAP-047/048 but was never marked done on the board. 4/4 unit tests passing, no code change
-needed. See the workboard's Done/evidence index for the full evidence trail.
+GAP-092 (business-timezone display) is fully complete, including slice (3) cleanup: `helpers.ts`'s
+`formatDate`/`formatEventTime` now take a required `timeZone: string | null` (the `undefined`
+compatibility branch is gone), and `buildAttentionGuidance` (called from `DetailPanels.tsx`'s
+`HeroAttentionBanner`, threaded through `RequestDetailWorkCanvas.tsx`) was folded into the same
+migration — it was still calling the old formatters with one argument. Repo-wide grep confirmed no
+remaining one-argument call sites. See the workboard's Done/evidence index for the full trail.
 
-GAP-092 slices **1a — Request Row** and **1b — Detail Hero** are both complete: `useBusinessTimeZone()`
-reads the account IANA zone from the role-agnostic `['me']` query (not `['setup']` — see the
-ADR-073/workboard correction), `businessTime.ts` provides the pure, reference-date-injectable
-day-boundary comparisons, and both `RequestRow` and `DetailHero`'s `TodayPromiseBanner` stay
-presentational via an optional `timeZone` prop threaded from the page (`Requests.tsx` /
-`RequestDetail.tsx`).
-
-GAP-092 slice **2a — shared formatters** is complete: `businessTime.ts`'s `formatInstant`/
-`formatRelativeOrInstant` render absolute instants business-zone-aware, with an explicit
-UTC-labeled fallback while unresolved; `helpers.ts`'s `formatDate`/`formatEventTime` gained an
-optional `timeZone` (`undefined` = not yet migrated, temporary GAP-092 debt; `null` = migrated,
-unresolved); `RequestCommunicationsWorkspace.tsx` is migrated end-to-end as the observable
-corrected surface.
-
-GAP-092 slice **2b — identity row** is complete: `DetailHero.tsx`'s `DetailHeroName`
-(customer-page-viewed timestamp) takes `timeZone`, threaded through `RequestDetailAnchor.tsx` and
-`MobileRequestAnchor.tsx` from `RequestDetailContent.tsx`'s existing `props.timeZone`.
-
-GAP-092 slice **2c — remaining timeline/communications consumers** is complete: `TimelineEvent.tsx`
-takes `timeZone` (threaded from `RequestDetailContent.tsx` through `RequestDetailActivity.tsx`/
-`RequestMemoryRail.tsx`, and from `RequestDetailWorkCanvas.tsx` through `UnifiedComposer.tsx` →
-`BusinessSection.tsx` → `NotifyCustomerPanel.tsx`). Exactly 8 production files, landed as one slice.
-
-GAP-092 slice **2d — detail panels** is complete: `DetailPanels.tsx`'s `FeedbackSummaryCard`/
-`ProminentFeedbackCard`/`RelatedWorkPanel`/`SourceMetaPanel` take `timeZone`, threaded through
-`RecordDetailsSection.tsx` from `RequestDetailContent.tsx`, and directly from
-`RequestDetailWorkCanvas.tsx` for `ProminentFeedbackCard`. **Slice (2) is now fully complete.**
-
-GAP-092 slice **(3) consumer migration** is complete: `ActualWorkReviewQueueList.tsx`,
-`ActualWorkPendingReviewsCard.tsx`, `ActualWorkReviewCard.tsx` (both render sites), and
-`ActualWorkFinancialReviewWorkspace.tsx` all take `timeZone`, sourced from `Requests.tsx` (1a),
-`RequestDetailContent.tsx` (existing `props.timeZone`), and `ActualWorkWorkspacePage.tsx`'s new
-`useBusinessTimeZone()` call. Exactly 8 production files — `helpers.ts`'s compatibility branch was
-deliberately left untouched so this stayed independently shippable.
-
-Take up GAP-092 slice **(3) cleanup** next (1 file): delete the `undefined` compatibility branch
-from `helpers.ts`'s `formatDate`/`formatEventTime` and simplify the signature to
-`(isoUtc, timeZone: string | null)`, now that every call site supplies a real value. Verify with a
-repo-wide grep that nothing still calls either function with one argument before removing it.
+Take up **GAP-100** next (promoted from DEF-025 — office-hours-aware signals the current pilot
+requires).
 
 ## Next several sessions
 
-1. Continue the workboard's foundation-first order: GAP-092, GAP-100, then DEF-037
-   needs-status-check resurfacing and DEF-063's Request Detail closeout warning. GAP-100 is
-   promoted from DEF-025 because the current pilot requires office-hours-aware signals.
+1. Continue the workboard's foundation-first order: GAP-100, then DEF-037
+   needs-status-check resurfacing and DEF-063's Request Detail closeout warning.
 2. Run the **Proposed Work & Commercial Quotes** decision session. Its first deliverable is a
    decision record, not code; use its workboard Decision Queue entry and the cited ADRs/build logs.
 3. Begin **GAP-069** only at the release-readiness trigger: about two weeks before Keep becomes the

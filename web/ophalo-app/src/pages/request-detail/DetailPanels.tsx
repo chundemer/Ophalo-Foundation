@@ -990,6 +990,7 @@ interface HeroAttentionBannerProps {
   // Only customer-message attention supplies this. Keeping the composer inside the attention
   // surface lets an office user read the message and respond in one visual context.
   inlineComposer?: ReactNode;
+  timeZone?: string | null;
 }
 
 // Controlled disclosure (RD-058B-2): `HeroAttentionBanner` owns the open state so the
@@ -1100,8 +1101,9 @@ export function HeroAttentionBanner({
   onContactLaunched,
   onActivateCustomerUpdateComposer,
   inlineComposer,
+  timeZone = null,
 }: HeroAttentionBannerProps) {
-  const guidance = buildAttentionGuidance(detail);
+  const guidance = buildAttentionGuidance(detail, timeZone);
   const [guidanceOpen, setGuidanceOpen] = useState(false);
   if (!guidance) return null;
 

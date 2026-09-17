@@ -70,7 +70,7 @@ describe("Needs Attention row matches detail guidance", () => {
 
   it.each(cases)("guides the detail for a Needs Attention row: $name", ({ detail, expectedLabel, expectedResolveBy }) => {
     const row = { ...mockRequestSummaries[0], rowContext: "needs_attention" };
-    const guidance = buildAttentionGuidance(detail);
+    const guidance = buildAttentionGuidance(detail, null);
 
     expect(row.rowContext).toBe("needs_attention");
     expect(guidance).not.toBeNull();

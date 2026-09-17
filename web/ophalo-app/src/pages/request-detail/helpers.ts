@@ -36,43 +36,11 @@ export function eventTypeLabel(type: string): string {
   return EVENT_TYPE_LABELS[type] ?? type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// GAP-092: `timeZone` distinguishes two states callers must not conflate. `undefined` (the
-// parameter omitted) means "not yet migrated to this slice" — Actual Work/history consumers
-// (slice 3) still call these with one argument and get the exact original device-local behavior
-// below, unchanged. `null` means "migrated, but the business zone is genuinely unresolved right
-// now" — that renders an explicit UTC-labeled fallback (businessTime.ts), never a silent
-// device-local guess. TODO(GAP-092 slice 3): once every consumer threads a real `timeZone`, delete
-// the `undefined` branch and drop the legacy device-local implementation entirely.
-export function formatEventTime(isoUtc: string, timeZone?: string | null): string {
-  if (timeZone === undefined) {
-    const d = new Date(isoUtc);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffMins = Math.floor(diffMs / 60_000);
-    if (diffMins < 1) return "just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    const sameYear = d.getFullYear() === now.getFullYear();
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: sameYear ? undefined : "numeric",
-    });
-  }
+export function formatEventTime(isoUtc: string, timeZone: string | null): string {
   return formatRelativeOrInstant(isoUtc, timeZone);
 }
 
-export function formatDate(isoUtc: string, timeZone?: string | null): string {
-  if (timeZone === undefined) {
-    return new Date(isoUtc).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  }
+export function formatDate(isoUtc: string, timeZone: string | null): string {
   return formatInstant(isoUtc, timeZone);
 }
 
@@ -203,7 +171,10 @@ export interface AttentionGuidance {
   afterHandled: string | null;
 }
 
-export function buildAttentionGuidance(detail: KeepRequestDetailResult): AttentionGuidance | null {
+export function buildAttentionGuidance(
+  detail: KeepRequestDetailResult,
+  timeZone: string | null,
+): AttentionGuidance | null {
   const attention = detail.effectiveAttention;
   if (attention.level === "none" || !attention.reason) return null;
 
@@ -214,11 +185,11 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
   const sourceText = source?.content?.trim() || null;
   const sourceLabel =
     sourceText && source?.actorType === "customer"
-      ? `${source.actorDisplayName ?? "Customer"} said ${formatEventTime(source.occurredAtUtc)}`
+      ? `${source.actorDisplayName ?? "Customer"} said ${formatEventTime(source.occurredAtUtc, timeZone)}`
       : sourceText
-        ? `Latest related note ${formatEventTime(source!.occurredAtUtc)}`
+        ? `Latest related note ${formatEventTime(source!.occurredAtUtc, timeZone)}`
         : detail.attentionSinceUtc
-          ? `Needs attention since ${formatEventTime(detail.attentionSinceUtc)}`
+          ? `Needs attention since ${formatEventTime(detail.attentionSinceUtc, timeZone)}`
           : null;
 
   const contactOrUpdate =
