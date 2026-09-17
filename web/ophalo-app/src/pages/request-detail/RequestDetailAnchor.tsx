@@ -29,6 +29,10 @@ interface RequestDetailAnchorProps extends RequestDetailLayoutProps {
   businessPageUrl?: string | null;
   demoteMarkWorkDone?: boolean;
   onRefreshDetail: () => void;
+  // GAP-092 2b: threaded through to DetailHeroName; optional so existing test call sites that
+  // don't exercise business-timezone cues need no change. RequestDetailContent.tsx always
+  // supplies it.
+  timeZone?: string | null;
 }
 
 const utilityLinkClass = `inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] ${FOCUS_RING}`;
@@ -49,6 +53,7 @@ export function RequestDetailAnchor({
   businessPageUrl,
   demoteMarkWorkDone = false,
   onRefreshDetail,
+  timeZone = null,
 }: RequestDetailAnchorProps) {
   const [needExpanded, setNeedExpanded] = useState(false);
   const hasActiveAttention = detail.effectiveAttention.level !== "none";
@@ -74,7 +79,7 @@ export function RequestDetailAnchor({
         <div className="min-w-0 flex-1">
           <DetailHeroBadges detail={detail} />
           <div className="mt-1.5">
-            <DetailHeroName detail={detail} />
+            <DetailHeroName detail={detail} timeZone={timeZone} />
           </div>
         </div>
         <div className="flex shrink-0 items-start gap-1.5">

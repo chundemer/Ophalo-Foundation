@@ -360,12 +360,13 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       businessPageUrl={props.businessPageUrl}
       demoteMarkWorkDone={hasOpenActualWork || hasPendingFinancialReview}
       onRefreshDetail={props.onRefreshDetail ?? (() => {})}
+      timeZone={props.timeZone}
     />
   );
 
   return (
     <div ref={rootRef} onFocus={handleCanvasFocus} onBlur={handleCanvasBlur} className="flex flex-1 min-h-0 min-w-0 flex-col">
-      {!isWide && <MobileRequestAnchor detail={detail} />}
+      {!isWide && <MobileRequestAnchor detail={detail} timeZone={props.timeZone} />}
       <RequestDetailWorkCanvas
         isWide={isWide}
         requestId={requestId}

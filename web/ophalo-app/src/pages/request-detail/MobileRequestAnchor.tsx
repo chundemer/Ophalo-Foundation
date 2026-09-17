@@ -13,14 +13,19 @@ import { PrimaryActionSlot } from "./PrimaryActionControl";
 // (active attention, rendered in the scroll canvas) mounts `PrimaryActionSlot` for a given
 // request — never both.
 
-interface MobileRequestAnchorProps extends Pick<RequestDetailLayoutProps, "detail"> {}
+interface MobileRequestAnchorProps extends Pick<RequestDetailLayoutProps, "detail"> {
+  // GAP-092 2b: threaded through to DetailHeroName; optional so existing test call sites that
+  // don't exercise business-timezone cues need no change. RequestDetailContent.tsx always
+  // supplies it.
+  timeZone?: string | null;
+}
 
-export function MobileRequestAnchor({ detail }: MobileRequestAnchorProps) {
+export function MobileRequestAnchor({ detail, timeZone = null }: MobileRequestAnchorProps) {
   return (
     <div className="shrink-0 sticky top-0 z-10 border-b border-[var(--ophalo-border)] bg-[var(--keep-request-canvas)] px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
       <DetailHeroBadges detail={detail} />
       <div className="mt-1">
-        <DetailHeroName detail={detail} />
+        <DetailHeroName detail={detail} timeZone={timeZone} />
       </div>
     </div>
   );

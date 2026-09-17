@@ -150,6 +150,10 @@ export function TodayPromiseBanner({ detail, onRecordFollowUp, timeZone = null }
 
 interface DetailHeroProps {
   detail: KeepRequestDetailResult;
+  // GAP-092 2b: account business IANA zone, owned by the page. Only DetailHeroName reads it
+  // (customer-page-viewed timestamp); DetailHeroBadges ignores it. Absent/loading/error (null)
+  // renders an explicit UTC-labeled timestamp, never a silent device-local guess.
+  timeZone?: string | null;
 }
 
 // Anchor row 1, left side (three-row correction, 2026-08-22): reference/status/attention only —
@@ -178,13 +182,13 @@ export function DetailHeroBadges({ detail }: DetailHeroProps) {
 
 // Anchor row 2 (three-row correction, 2026-08-22): customer identity as its own full-width row,
 // beneath the reference/status/attention row and above the contact/location/owner row.
-export function DetailHeroName({ detail }: DetailHeroProps) {
+export function DetailHeroName({ detail, timeZone = null }: DetailHeroProps) {
   const pageToken = detail.pageToken;
   // ADR-150: customer page viewed info shown alongside identity
   const pageViewedInfo = useMemo(() => {
     if (detail.customerPageLastViewedAtUtc) {
       return {
-        text: `Viewed ${formatEventTime(detail.customerPageLastViewedAtUtc)}`,
+        text: `Viewed ${formatEventTime(detail.customerPageLastViewedAtUtc, timeZone)}`,
         isAmber: detail.customerPageViewedAfterLatestUpdate === false,
       };
     }
@@ -192,7 +196,7 @@ export function DetailHeroName({ detail }: DetailHeroProps) {
       return { text: "Not yet viewed", isAmber: true };
     }
     return null;
-  }, [detail.customerPageLastViewedAtUtc, detail.customerPageViewedAfterLatestUpdate, detail.needsShare]);
+  }, [detail.customerPageLastViewedAtUtc, detail.customerPageViewedAfterLatestUpdate, detail.needsShare, timeZone]);
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">

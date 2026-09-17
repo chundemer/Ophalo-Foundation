@@ -30,9 +30,14 @@ optional `timeZone` (`undefined` = not yet migrated, temporary GAP-092 debt; `nu
 unresolved); `RequestCommunicationsWorkspace.tsx` is migrated end-to-end as the observable
 corrected surface.
 
-Take up GAP-092 slice **2b — identity row** next (`DetailHero.tsx`'s `DetailHeroName`,
-`RequestDetailAnchor.tsx`, `MobileRequestAnchor.tsx`); see the workboard's slice 2 breakdown
-(2b/2c/2d) for the remaining consumer groups.
+GAP-092 slice **2b — identity row** is complete: `DetailHero.tsx`'s `DetailHeroName`
+(customer-page-viewed timestamp) takes `timeZone`, threaded through `RequestDetailAnchor.tsx` and
+`MobileRequestAnchor.tsx` from `RequestDetailContent.tsx`'s existing `props.timeZone`.
+
+Take up GAP-092 slice **2c — remaining timeline/communications consumers** next (`TimelineEvent.tsx`,
+`RequestDetailActivity.tsx`, `RequestMemoryRail.tsx`, `NotifyCustomerPanel.tsx`, `BusinessSection.tsx`,
+`UnifiedComposer.tsx`); re-check against the batch gate and split further (see workboard) if still
+too large.
 
 ## Next several sessions
 
