@@ -193,6 +193,21 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
     }
 
     [Fact]
+    public async Task Me_OperatorSession_ReturnsAccountTimeZone()
+    {
+        // GAP-092: the Operator role cannot read /keep/setup (Owner/Admin-only), so day-boundary
+        // urgency cues must source the business timezone from here instead.
+        var rawToken = await _factory.SeedSessionAsync(_operatorAccountUserId, _accountId);
+
+        using var request = WithCookie(HttpMethod.Get, "/auth/me", rawToken);
+        var response = await _client.SendAsync(request);
+
+        var body = await response.Content.ReadFromJsonAsync<MeBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.Equal("Australia/Sydney", body!.TimeZone);
+    }
+
+    [Fact]
     public async Task Me_ValidBearerSession_Returns200()
     {
         var rawToken = await _factory.SeedSessionAsync(_ownerAccountUserId, _accountId,
@@ -506,5 +521,6 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
         bool IsVerified,
         string AccountRole,
         string? BusinessName,
-        string? UserName);
+        string? UserName,
+        string? TimeZone);
 }

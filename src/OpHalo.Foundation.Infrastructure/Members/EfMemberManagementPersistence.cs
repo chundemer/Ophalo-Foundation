@@ -161,10 +161,11 @@ public sealed class EfMemberManagementPersistence(OpHaloDbContext db) : IMemberM
             {
                 au.Role,
                 au.Account.BusinessName,
+                au.Account.TimeZone,
                 UserName = au.User != null ? au.User.Name : null,
             })
             .FirstOrDefaultAsync(ct);
 
-        return row is null ? null : new AuthenticatedWorkspaceIdentity(row.Role, row.BusinessName, row.UserName);
+        return row is null ? null : new AuthenticatedWorkspaceIdentity(row.Role, row.BusinessName, row.UserName, row.TimeZone);
     }
 }

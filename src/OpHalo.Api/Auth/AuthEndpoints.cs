@@ -215,7 +215,8 @@ public static class AuthEndpoints
             isVerified = currentUser.IsVerified,
             accountRole,
             businessName = identity?.BusinessName,
-            userName = string.IsNullOrWhiteSpace(identity?.UserName) ? null : identity!.UserName
+            userName = string.IsNullOrWhiteSpace(identity?.UserName) ? null : identity!.UserName,
+            timeZone = identity?.TimeZone
         });
     }
 

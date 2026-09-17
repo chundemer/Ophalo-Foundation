@@ -52,8 +52,13 @@ public interface IMemberManagementPersistence
         Guid accountUserId, Guid accountId, CancellationToken ct);
 }
 
-/// <summary>Role, business name, and user name for GET /auth/me's workspace-shell context (GAP-042).</summary>
-public sealed record AuthenticatedWorkspaceIdentity(AccountUserRole Role, string? BusinessName, string? UserName);
+/// <summary>
+/// Role, business name, user name, and account IANA timezone for GET /auth/me's workspace-shell
+/// context (GAP-042). TimeZone is exposed here — role-agnostic, already joined on this same
+/// query — rather than through the Owner/Admin-gated Keep setup endpoint (GAP-092), so every
+/// authenticated role can render business-timezone-correct day-boundary cues.
+/// </summary>
+public sealed record AuthenticatedWorkspaceIdentity(AccountUserRole Role, string? BusinessName, string? UserName, string TimeZone);
 
 /// <summary>Context for member list operations.</summary>
 public sealed record MemberListContext(
