@@ -42,6 +42,9 @@ interface RequestDetailWorkCanvasProps
   requestMemoryRail?: ReactNode;
   activeWorkspaceTab: RequestWorkspaceTab;
   onWorkspaceTabChange: (tab: RequestWorkspaceTab) => void;
+  // GAP-092 1b: threaded through to TodayPromiseBanner; optional so existing test call sites that
+  // don't exercise business-timezone cues need no change. RequestDetail.tsx always supplies it.
+  timeZone?: string | null;
 }
 
 export function RequestDetailWorkCanvas({
@@ -68,6 +71,7 @@ export function RequestDetailWorkCanvas({
   requestMemoryRail,
   activeWorkspaceTab,
   onWorkspaceTabChange,
+  timeZone = null,
 }: RequestDetailWorkCanvasProps) {
   const composer = (
     <div
@@ -90,7 +94,7 @@ export function RequestDetailWorkCanvas({
         onContactLaunched={onContactLaunched}
         onActivateCustomerUpdateComposer={onActivateCustomerUpdateComposer}
       />
-      <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} />
+      <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} timeZone={timeZone} />
     </div>
   );
 

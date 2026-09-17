@@ -36,6 +36,7 @@ import { useHandoffMint } from "./request-detail/useHandoffMint";
 import { RequestDetailHeader } from "./request-detail/RequestDetailHeader";
 import { RequestDetailStates } from "./request-detail/RequestDetailStates";
 import { RequestDetailContent } from "./request-detail/RequestDetailContent";
+import { useBusinessTimeZone } from "../hooks/useBusinessTimeZone";
 
 // ---------------------------------------------------------------------------
 // Log external contact modal — controller-owned overlay
@@ -697,6 +698,8 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   // shared ["me"] cache — every role that can reach Detail (Viewer included, via direct link).
   const meQuery = useQuery({ queryKey: ["me"], queryFn: api.getMe });
   const canReadBusinessPage = meQuery.data?.accountRole === "owner" || meQuery.data?.accountRole === "admin";
+  // GAP-092 1b: joins the same ["me"] cache above; RequestDetailContent stays presentational.
+  const { timeZone: businessTimeZone } = useBusinessTimeZone();
   const intakeQuery = useQuery({
     queryKey: ["intake"],
     queryFn: api.getIntake,
@@ -914,6 +917,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         needsShare={needsShareEffective}
         onOpenShareDrawer={() => setShareModalOpen(true)}
         reviewSuccessMsg={reviewSuccessMsg}
+        timeZone={businessTimeZone}
         timelineFilter={timelineFilter}
         onTimelineFilterChange={setTimelineFilter}
         displayedEvents={displayedEvents}

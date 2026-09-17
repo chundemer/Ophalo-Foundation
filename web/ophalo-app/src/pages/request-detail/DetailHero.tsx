@@ -75,17 +75,21 @@ export function ShareLinkAction({ canRecordShareIntent, needsShare, onOpenShareD
 interface TodayPromiseBannerProps {
   detail: KeepRequestDetailResult;
   onRecordFollowUp?: () => void;
+  // GAP-092 1b: account business IANA zone, owned by the page (`RequestDetail.tsx`). Absent/
+  // loading/error (null) must never fall back to device-local "today" — both day-boundary checks
+  // below are neutral (false) while unresolved.
+  timeZone?: string | null;
 }
 
-export function TodayPromiseBanner({ detail, onRecordFollowUp }: TodayPromiseBannerProps) {
+export function TodayPromiseBanner({ detail, onRecordFollowUp, timeZone = null }: TodayPromiseBannerProps) {
   // `follow_up_due` already owns the attention guidance and its Resolve follow-up CTA. Rendering
   // this legacy timing banner as well repeats the same alarm and presents two routes to the same
   // resolution sheet.
   if (detail.effectiveAttention.reason === "follow_up_due") return null;
 
-  const followUpToday = isDateOnlyToday(detail.followUpOnDate);
-  const followUpOverdue = isDateOnlyPast(detail.followUpOnDate);
-  const plannedToday = isDateOnlyToday(detail.plannedForDate);
+  const followUpToday = isDateOnlyToday(detail.followUpOnDate, timeZone);
+  const followUpOverdue = isDateOnlyPast(detail.followUpOnDate, timeZone);
+  const plannedToday = isDateOnlyToday(detail.plannedForDate, timeZone);
   const canRecordFollowUp = !!onRecordFollowUp && detail.availableActions.canSetFollowUpOn;
 
   const hasFollowUpSignal = followUpToday || followUpOverdue;

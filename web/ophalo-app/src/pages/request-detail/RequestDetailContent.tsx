@@ -48,6 +48,9 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
   // authoritative state. Optional so existing test call sites that don't exercise classification
   // need no change; RequestDetail.tsx always supplies it.
   onRefreshDetail?: () => void;
+  // GAP-092 1b: threaded through to TodayPromiseBanner; optional so existing test call sites that
+  // don't exercise business-timezone cues need no change. RequestDetail.tsx always supplies it.
+  timeZone?: string | null;
 }
 
 function requestContactPreferenceLabel(preference: string | null | undefined): string | null {
@@ -379,6 +382,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         onActivateCustomerUpdateComposer={activateCustomerUpdateComposer}
         composerRef={composerRef}
         reviewSuccessMsg={props.reviewSuccessMsg}
+        timeZone={props.timeZone}
         actualWorkSection={actualWorkSection}
         activityBlock={activityBlock}
         recordDetailsBlock={recordDetailsBlock}

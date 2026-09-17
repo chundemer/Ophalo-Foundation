@@ -1,6 +1,7 @@
 import { type KeepRequestDetailResult, type KeepRequestEventItem } from "../../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../../lib/requestStatus";
 import { DESCRIPTION_MAX_LENGTH } from "../../components/quick-capture/utils";
+import { isDateOnlyToday as businessIsDateOnlyToday, isDateOnlyPast as businessIsDateOnlyPast } from "../../lib/businessTime";
 
 export { statusLabel, statusBadgeVariant };
 
@@ -66,22 +67,19 @@ export function formatDateOnly(isoDate: string): string {
   });
 }
 
-export function isDateOnlyToday(isoDate: string | null): boolean {
-  if (!isoDate) return false;
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  return isoDate === todayStr;
+// GAP-092 1b: business-timezone-aware day-boundary comparisons, delegating to the same pure
+// helpers RequestRow (1a) uses. `timeZone: string | null` — while unresolved, both return false
+// (neutral), never a device-local guess.
+export function isDateOnlyToday(isoDate: string | null, timeZone: string | null): boolean {
+  return businessIsDateOnlyToday(isoDate, timeZone);
 }
 
-export function isDateOnlyPast(isoDate: string | null): boolean {
-  if (!isoDate) return false;
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  return isoDate < todayStr;
+export function isDateOnlyPast(isoDate: string | null, timeZone: string | null): boolean {
+  return businessIsDateOnlyPast(isoDate, timeZone);
 }
 
-export function isDueOrOverdueFollowUp(isoDate: string | null): boolean {
-  return isDateOnlyToday(isoDate) || isDateOnlyPast(isoDate);
+export function isDueOrOverdueFollowUp(isoDate: string | null, timeZone: string | null): boolean {
+  return isDateOnlyToday(isoDate, timeZone) || isDateOnlyPast(isoDate, timeZone);
 }
 
 export const COMPLETION_REASON_LABELS: Record<string, string> = {

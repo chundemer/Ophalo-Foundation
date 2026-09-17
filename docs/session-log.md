@@ -16,14 +16,15 @@ provenance-prefix space and safely truncated the copied source text at a whitesp
 with GAP-047/048 but was never marked done on the board. 4/4 unit tests passing, no code change
 needed. See the workboard's Done/evidence index for the full evidence trail.
 
-GAP-092 slice **1a — Request Row** is complete: `useBusinessTimeZone()` reads the account IANA
-zone from the role-agnostic `['me']` query (not `['setup']` — see the ADR-073/workboard correction),
-`Requests.tsx` owns the fetch, `RequestRow` stays presentational via an optional `timeZone` prop,
-and `businessTime.ts` provides the pure, reference-date-injectable day-boundary comparisons.
+GAP-092 slices **1a — Request Row** and **1b — Detail Hero** are both complete: `useBusinessTimeZone()`
+reads the account IANA zone from the role-agnostic `['me']` query (not `['setup']` — see the
+ADR-073/workboard correction), `businessTime.ts` provides the pure, reference-date-injectable
+day-boundary comparisons, and both `RequestRow` and `DetailHero`'s `TodayPromiseBanner` stay
+presentational via an optional `timeZone` prop threaded from the page (`Requests.tsx` /
+`RequestDetail.tsx`).
 
-Take up GAP-092 slice **1b — Detail Hero** next: reuse 1a's `useBusinessTimeZone()`/`businessTime.ts`
-contract unchanged, threading the same optional `timeZone` prop through `RequestDetail.tsx` →
-`RequestDetailContent` → `RequestDetailWorkCanvas` → `DetailHero`'s `TodayPromiseBanner`.
+Take up GAP-092 slice **2 — Request Detail/communications timestamp consumers** next (workboard
+delivery-slice order); reuse the same hook/helper contract unchanged.
 
 ## Next several sessions
 
