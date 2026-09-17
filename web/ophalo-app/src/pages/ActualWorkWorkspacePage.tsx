@@ -18,6 +18,7 @@ import { ActualWorkFinancialReviewWorkspace } from "./request-detail/ActualWorkF
 import { ActualWorkReviewCard } from "./request-detail/ActualWorkReviewCard";
 import { useActualWorkWorkspace } from "./request-detail/useActualWorkWorkspace";
 import { useActualWorkPendingReviews } from "./request-detail/useActualWorkPendingReviews";
+import { useBusinessTimeZone } from "../hooks/useBusinessTimeZone";
 // The one Contact customer drawer (QR handoff, direction/channel/outcome, "Log contact") — the
 // same overlay Request Detail owns; the workspace route reuses it, never a workspace-specific UI.
 import { LogContactModal } from "./RequestDetail";
@@ -87,6 +88,8 @@ export function ActualWorkWorkspacePage({
   }, [isWide, onExit]);
 
   const meQuery = useQuery({ queryKey: ["me"], queryFn: api.getMe });
+  // GAP-092 3: joins the same ["me"] cache above; children stay presentational.
+  const { timeZone: businessTimeZone } = useBusinessTimeZone();
   // BL136 4f-ii: on a wide viewport the Owner/Admin office financial-review region lives here
   // (moved off Request Detail, which keeps it only below 1001px). Same role check RequestDetail
   // applies. A 403 on the financial-detail read still degrades the region to nothing.
@@ -236,6 +239,7 @@ export function ActualWorkWorkspacePage({
             pendingItems={pendingItems}
             onSwitchVisit={onSwitchVisit}
             nextPendingVisitId={nextPendingVisitId}
+            timeZone={businessTimeZone}
           />
         </div>
         {contactModal && (
@@ -341,6 +345,7 @@ export function ActualWorkWorkspacePage({
                   onReplace={handleReplace}
                   isVisitMutating={financialReview.isVisitMutating}
                   onReviewSuccess={handleReviewSuccess}
+                  timeZone={businessTimeZone}
                 />
               ) : null
             }

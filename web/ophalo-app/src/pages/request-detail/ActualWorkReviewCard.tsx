@@ -43,6 +43,9 @@ interface ActualWorkReviewCardProps {
   focusVisitId?: string | null;
   onFocusVisitHandled?: () => void;
   focusOnMount?: boolean;
+  // GAP-092 3: account business IANA zone, owned by the page. Absent/loading/error (null)
+  // renders an explicit UTC-labeled timestamp, never a silent device-local guess.
+  timeZone?: string | null;
 }
 
 const OUTCOME_LABELS: Record<string, string> = {
@@ -64,7 +67,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return <div><p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--ophalo-muted)]">{label}</p><p className="mt-1 text-sm font-semibold text-[var(--ophalo-ink)]">{value}</p></div>;
 }
 
-function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposition, onReplace, busy, onReviewSuccess, onFinancialReviewChanged }: {
+function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposition, onReplace, busy, onReviewSuccess, onFinancialReviewChanged, timeZone }: {
   visit: ActualWorkFinancialDetailResult;
   index: number;
   onReview: ActualWorkReviewCardProps["onReview"];
@@ -74,6 +77,7 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
   busy: boolean;
   onReviewSuccess: () => void;
   onFinancialReviewChanged: () => void;
+  timeZone: string | null;
 }) {
   const [note, setNote] = useState(visit.reviewNote ?? "");
   const [notice, setNotice] = useState<string | null>(null);
@@ -134,11 +138,11 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Financial review · Visit #{index + 1}</p>
-          <p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">Submitted {formatDate(visit.submittedAtUtc)}</p>
+          <p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">Submitted {formatDate(visit.submittedAtUtc, timeZone)}</p>
         </div>
         {reviewed ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--ophalo-success)]"><Check className="h-3.5 w-3.5" /> Financial review completed</span> : <span className="text-xs font-semibold text-[var(--ophalo-attention)]">Financial review pending</span>}
       </div>
-      {reviewed && <p className="mt-1 text-xs text-[var(--ophalo-muted)]">Reviewed {formatDate(visit.reviewedAtUtc!)} by {visit.reviewedByDisplayName ?? "an authorized reviewer"}{visit.reviewNote ? ` · “${visit.reviewNote}”` : ""}</p>}
+      {reviewed && <p className="mt-1 text-xs text-[var(--ophalo-muted)]">Reviewed {formatDate(visit.reviewedAtUtc!, timeZone)} by {visit.reviewedByDisplayName ?? "an authorized reviewer"}{visit.reviewNote ? ` · “${visit.reviewNote}”` : ""}</p>}
       </summary>
 
       {notice && <p role="alert" className="mt-3 text-xs text-[var(--ophalo-danger)]">{notice}</p>}
@@ -189,7 +193,7 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
   );
 }
 
-export function ActualWorkReviewCard({ state, onRetry, onReview, onResolveLine, onRecordNoChargeDisposition, onReplace, isVisitMutating, onReviewSuccess, onFinancialReviewChanged, focusVisitId, onFocusVisitHandled, focusOnMount = false }: ActualWorkReviewCardProps) {
+export function ActualWorkReviewCard({ state, onRetry, onReview, onResolveLine, onRecordNoChargeDisposition, onReplace, isVisitMutating, onReviewSuccess, onFinancialReviewChanged, focusVisitId, onFocusVisitHandled, focusOnMount = false, timeZone = null }: ActualWorkReviewCardProps) {
   const notifyChanged = onFinancialReviewChanged ?? (() => {});
   useEffect(() => {
     if (focusOnMount && state.status === "loaded" && state.visits.length) document.getElementById("focus-panel-actual-work-review")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -210,5 +214,5 @@ export function ActualWorkReviewCard({ state, onRetry, onReview, onResolveLine, 
   }, [focusVisitId, state, onFocusVisitHandled]);
   if (state.status === "loading" || state.status === "hidden" || (state.status === "loaded" && !state.visits.length)) return null;
   if (state.status === "error") return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-4"><p className="text-sm text-[var(--ophalo-muted)]">Unable to load financial review.</p><KeepButton variant="secondary" className="mt-3" onClick={onRetry}>Retry</KeepButton></div>;
-  return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]"><div className="px-4 py-3"><p className="text-sm font-semibold text-[var(--ophalo-ink)]">Internal financial review</p><p className="text-xs text-[var(--ophalo-muted)]">Reviews the submitted visit's financial details. Does not change the customer request.</p></div>{state.visits.map((visit, index) => <Visit key={visit.id} visit={visit} index={index} onReview={onReview} onResolveLine={onResolveLine} onRecordNoChargeDisposition={onRecordNoChargeDisposition} onReplace={onReplace} busy={isVisitMutating(visit.id)} onReviewSuccess={onReviewSuccess} onFinancialReviewChanged={notifyChanged} />)}</div>;
+  return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]"><div className="px-4 py-3"><p className="text-sm font-semibold text-[var(--ophalo-ink)]">Internal financial review</p><p className="text-xs text-[var(--ophalo-muted)]">Reviews the submitted visit's financial details. Does not change the customer request.</p></div>{state.visits.map((visit, index) => <Visit key={visit.id} visit={visit} index={index} onReview={onReview} onResolveLine={onResolveLine} onRecordNoChargeDisposition={onRecordNoChargeDisposition} onReplace={onReplace} busy={isVisitMutating(visit.id)} onReviewSuccess={onReviewSuccess} onFinancialReviewChanged={notifyChanged} timeZone={timeZone} />)}</div>;
 }

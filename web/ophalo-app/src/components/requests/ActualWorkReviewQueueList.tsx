@@ -8,6 +8,9 @@ interface ActualWorkReviewQueueListProps {
   isError: boolean;
   onRetry: () => void;
   onSelectRequest: (requestId: string, focus?: string) => void;
+  // GAP-092 3: account business IANA zone, owned by the page. Absent/loading/error (null)
+  // renders an explicit UTC-labeled timestamp, never a silent device-local guess.
+  timeZone?: string | null;
 }
 
 function formatCurrency(value: number | null): string {
@@ -23,6 +26,7 @@ export function ActualWorkReviewQueueList({
   isError,
   onRetry,
   onSelectRequest,
+  timeZone = null,
 }: ActualWorkReviewQueueListProps) {
   if (isLoading) {
     return (
@@ -71,7 +75,7 @@ export function ActualWorkReviewQueueList({
             <div className="min-w-0">
               <p className="text-sm font-semibold text-[var(--ophalo-ink)] truncate">{entry.customerName}</p>
               <p className="text-xs text-[var(--ophalo-muted)]">
-                {entry.referenceCode} · Submitted {formatDate(entry.submittedAtUtc)}
+                {entry.referenceCode} · Submitted {formatDate(entry.submittedAtUtc, timeZone)}
               </p>
               {/* RD-058A: the review queue is truthful about both facts — the linked request's
                   lifecycle status and the submitted-visit review state — and never collapses one

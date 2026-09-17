@@ -651,6 +651,7 @@ export function Requests({
           isError={reviewQueueQuery.isError}
           onRetry={() => void reviewQueueQuery.refetch()}
           onSelectRequest={(requestId, focus) => onSelectRequest(requestId, undefined, focus)}
+          timeZone={businessTimeZone}
         />
       ) : (
         <RequestListContent

@@ -91,6 +91,7 @@ function renderWorkspace(props: Partial<React.ComponentProps<typeof ActualWorkFi
       pendingItems={props.pendingItems ?? []}
       onSwitchVisit={onSwitchVisit}
       nextPendingVisitId={props.nextPendingVisitId ?? null}
+      timeZone={props.timeZone}
     />,
   );
   return { onSwitchVisit, onExit };
@@ -173,5 +174,34 @@ describe("ActualWorkFinancialReviewWorkspace — BL138 Slice 2", () => {
     });
     expect(screen.queryByRole("button", { name: /Review next pending visit/i })).toBeNull();
     expect(screen.getByRole("button", { name: "Back to request" })).toBeTruthy();
+  });
+});
+
+// GAP-092 3: "Submitted"/the switcher's per-visit date previously rendered in the viewer's
+// device-local zone. This is the ActualWorkWorkspacePage page-entry path.
+describe("ActualWorkFinancialReviewWorkspace — GAP-092 business-timezone-aware timestamps", () => {
+  // 2026-08-20T02:00:00Z is 2026-08-19 19:00 in America/Los_Angeles (PDT, UTC-7).
+  const zoneVisit = visitDetail({ submittedAtUtc: "2026-08-20T02:00:00Z" });
+
+  it("renders an explicit UTC-labeled 'Submitted' date while the business timezone is unresolved", () => {
+    renderWorkspace({ visit: zoneVisit });
+    expect(screen.getByText(/Submitted Aug 20, 2026, 2:00 AM UTC/)).toBeInTheDocument();
+  });
+
+  it("renders the 'Submitted' date in the resolved business zone (as passed down from ActualWorkWorkspacePage), a real conversion not a coincidence", () => {
+    renderWorkspace({ visit: zoneVisit, timeZone: "America/Los_Angeles" });
+    expect(screen.getByText(/Submitted Aug 19, 2026, 7:00 PM/)).toBeInTheDocument();
+  });
+
+  it("threads timeZone into the pending-visit switcher's per-visit date", () => {
+    renderWorkspace({
+      visit: zoneVisit,
+      pendingItems: [
+        { actualWorkId: "aw-42", submittedAtUtc: "2026-08-20T02:00:00Z", lineCount: 1, recorderDisplayName: "Dana Tech", reviewStatus: "ReadyToReview" },
+        pending("aw-77", "NeedsCostPriceResolution"),
+      ],
+      timeZone: "America/Los_Angeles",
+    });
+    expect(screen.getByText(/Visit #1 · Aug 19, 2026, 7:00 PM/)).toBeInTheDocument();
   });
 });

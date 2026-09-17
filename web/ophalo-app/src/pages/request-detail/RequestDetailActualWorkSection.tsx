@@ -57,6 +57,10 @@ interface RequestDetailActualWorkSectionProps {
   // On desktop, visit history moves to the supporting context stream. Narrow keeps the compact
   // combined Actual Work card so the single-column reading flow remains intact.
   showHistory?: boolean;
+  // GAP-092 3: threaded through to ActualWorkPendingReviewsCard/ActualWorkReviewCard; optional so
+  // existing test call sites that don't exercise business-timezone cues need no change.
+  // RequestDetailContent.tsx always supplies it.
+  timeZone?: string | null;
 }
 
 export function RequestDetailActualWorkSection({
@@ -88,6 +92,7 @@ export function RequestDetailActualWorkSection({
   focusReviewVisitId,
   onFocusReviewVisitHandled,
   showHistory = true,
+  timeZone = null,
 }: RequestDetailActualWorkSectionProps) {
   // Editable capture states — the recorder's own resume/start affordance.
   const actualWorkCaptureEditable =
@@ -113,6 +118,7 @@ export function RequestDetailActualWorkSection({
           state={pendingReviewsState}
           onRetry={onRetryPendingReviews}
           onReviewVisit={onReviewPendingVisit}
+          timeZone={timeZone}
         />
       )}
 
@@ -164,6 +170,7 @@ export function RequestDetailActualWorkSection({
           onFinancialReviewChanged={onFinancialReviewChanged}
           focusVisitId={focusReviewVisitId}
           onFocusVisitHandled={onFocusReviewVisitHandled}
+          timeZone={timeZone}
         />
       )}
 

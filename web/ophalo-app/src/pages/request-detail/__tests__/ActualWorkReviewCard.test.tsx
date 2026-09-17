@@ -188,3 +188,34 @@ describe("ActualWorkReviewCard", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/Another visit draft is already open/);
   });
 });
+
+// GAP-092 3: "Submitted"/"Reviewed" previously rendered in the viewer's device-local zone. This
+// single shared component renders at both entry points (Request Detail's
+// RequestDetailActualWorkSection and the dedicated ActualWorkWorkspacePage), so proving its own
+// timeZone prop behavior here covers both render sites identically.
+describe("ActualWorkReviewCard — GAP-092 business-timezone-aware timestamps", () => {
+  // 2026-08-27T02:00:00Z is 2026-08-26 19:00 in America/Los_Angeles (PDT, UTC-7).
+  const zoneVisit = { ...visit, blockers: [], submittedAtUtc: "2026-08-27T02:00:00Z" };
+
+  it("renders an explicit UTC-labeled 'Submitted' date while the business timezone is unresolved", () => {
+    render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [zoneVisit] }} />);
+    expect(screen.getByText(/Submitted Aug 27, 2026, 2:00 AM UTC/)).toBeInTheDocument();
+  });
+
+  it("renders the 'Submitted' date in the resolved business zone, a real conversion not a coincidence", () => {
+    render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [zoneVisit] }} timeZone="America/Los_Angeles" />);
+    expect(screen.getByText(/Submitted Aug 26, 2026, 7:00 PM/)).toBeInTheDocument();
+  });
+
+  it("renders an explicit UTC-labeled 'Reviewed' date while the business timezone is unresolved", () => {
+    const reviewedVisit = { ...zoneVisit, reviewedAtUtc: "2026-08-27T02:00:00Z", reviewedByDisplayName: "Christian Hundemer" };
+    render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [reviewedVisit] }} />);
+    expect(screen.getByText(/Reviewed Aug 27, 2026, 2:00 AM UTC by Christian Hundemer/)).toBeInTheDocument();
+  });
+
+  it("renders the 'Reviewed' date in the resolved business zone, a real conversion not a coincidence", () => {
+    const reviewedVisit = { ...zoneVisit, reviewedAtUtc: "2026-08-27T02:00:00Z", reviewedByDisplayName: "Christian Hundemer" };
+    render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [reviewedVisit] }} timeZone="America/Los_Angeles" />);
+    expect(screen.getByText(/Reviewed Aug 26, 2026, 7:00 PM by Christian Hundemer/)).toBeInTheDocument();
+  });
+});

@@ -60,3 +60,37 @@ describe("ActualWorkReviewQueueList — RD-058A lifecycle facts", () => {
     expect(screen.getByText("Request: Pending Customer")).toBeInTheDocument();
   });
 });
+
+// GAP-092 3: the "Submitted" date previously rendered in the viewer's device-local zone. This is
+// the Requests.tsx page-entry path — proves it receives and renders a resolved business zone.
+describe("ActualWorkReviewQueueList — GAP-092 business-timezone-aware submitted date", () => {
+  it("renders an explicit UTC-labeled date while the business timezone is unresolved", () => {
+    // 2026-08-20T02:00:00Z is 2026-08-19 19:00 in America/Los_Angeles (PDT, UTC-7).
+    render(
+      <ActualWorkReviewQueueList
+        entries={[entry({ submittedAtUtc: "2026-08-20T02:00:00Z" })]}
+        isLoading={false}
+        isError={false}
+        onRetry={noop}
+        onSelectRequest={noop}
+      />,
+    );
+
+    expect(screen.getByText(/Submitted Aug 20, 2026, 2:00 AM UTC/)).toBeInTheDocument();
+  });
+
+  it("renders the date in the resolved business zone (as passed down from Requests.tsx), no UTC label", () => {
+    render(
+      <ActualWorkReviewQueueList
+        entries={[entry({ submittedAtUtc: "2026-08-20T02:00:00Z" })]}
+        isLoading={false}
+        isError={false}
+        onRetry={noop}
+        onSelectRequest={noop}
+        timeZone="America/Los_Angeles"
+      />,
+    );
+
+    expect(screen.getByText(/Submitted Aug 19, 2026, 7:00 PM/)).toBeInTheDocument();
+  });
+});

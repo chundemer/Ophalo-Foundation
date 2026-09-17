@@ -15,6 +15,9 @@ interface ActualWorkPendingReviewsCardProps {
   state: ActualWorkPendingReviewsState;
   onRetry: () => void;
   onReviewVisit: (actualWorkId: string) => void;
+  // GAP-092 3: account business IANA zone, owned by the page. Absent/loading/error (null)
+  // renders an explicit UTC-labeled timestamp, never a silent device-local guess.
+  timeZone?: string | null;
 }
 
 const STATUS_LABELS: Record<ActualWorkPendingReviewStatus, string> = {
@@ -34,7 +37,7 @@ function lineCountLabel(count: number): string {
   return `${count} work ${count === 1 ? "line" : "lines"}`;
 }
 
-export function ActualWorkPendingReviewsCard({ state, onRetry, onReviewVisit }: ActualWorkPendingReviewsCardProps) {
+export function ActualWorkPendingReviewsCard({ state, onRetry, onReviewVisit, timeZone = null }: ActualWorkPendingReviewsCardProps) {
   if (state.status === "loading" || state.status === "hidden") return null;
   if (state.status === "loaded" && state.count === 0) return null;
 
@@ -65,7 +68,7 @@ export function ActualWorkPendingReviewsCard({ state, onRetry, onReviewVisit }: 
               <div className="min-w-0">
                 <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--ophalo-ink)]">
                   <Clock className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
-                  Submitted {formatDate(item.submittedAtUtc)}
+                  Submitted {formatDate(item.submittedAtUtc, timeZone)}
                 </p>
                 <p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">
                   {lineCountLabel(item.lineCount)}

@@ -131,6 +131,9 @@ interface ActualWorkFinancialReviewWorkspaceProps {
   onSwitchVisit: (actualWorkId: string) => void;
   /** First remaining server-ordered pending visit other than this one, or null. No wraparound. */
   nextPendingVisitId: string | null;
+  // GAP-092 3: account business IANA zone, owned by the page. Absent/loading/error (null)
+  // renders an explicit UTC-labeled timestamp, never a silent device-local guess.
+  timeZone?: string | null;
 }
 
 export function ActualWorkFinancialReviewWorkspace({
@@ -148,6 +151,7 @@ export function ActualWorkFinancialReviewWorkspace({
   pendingItems,
   onSwitchVisit,
   nextPendingVisitId,
+  timeZone = null,
 }: ActualWorkFinancialReviewWorkspaceProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -283,7 +287,7 @@ export function ActualWorkFinancialReviewWorkspace({
               )}
             </div>
             <div className="text-right text-xs text-[var(--ophalo-muted)]">
-              <p>Submitted {formatDate(visit.submittedAtUtc)}</p>
+              <p>Submitted {formatDate(visit.submittedAtUtc, timeZone)}</p>
               {recorderName && <p className="mt-0.5">by {recorderName}</p>}
             </div>
           </div>
@@ -295,6 +299,7 @@ export function ActualWorkFinancialReviewWorkspace({
           items={pendingItems}
           currentVisitId={visit.id}
           onSelect={(id) => attemptNav({ kind: "switch", visitId: id })}
+          timeZone={timeZone}
         />
       )}
 
@@ -439,7 +444,7 @@ export function ActualWorkFinancialReviewWorkspace({
                       <span className="font-semibold text-[var(--ophalo-success)]">
                         Financial review completed
                       </span>{" "}
-                      · reviewed {formatDate(visit.reviewedAtUtc!)} by{" "}
+                      · reviewed {formatDate(visit.reviewedAtUtc!, timeZone)} by{" "}
                       {visit.reviewedByDisplayName ?? "an authorized reviewer"}
                       {visit.reviewNote ? ` · “${visit.reviewNote}”` : ""}
                     </span>
@@ -570,10 +575,12 @@ function PendingVisitSwitcher({
   items,
   currentVisitId,
   onSelect,
+  timeZone,
 }: {
   items: ActualWorkRequestPendingReviewEntry[];
   currentVisitId: string;
   onSelect: (actualWorkId: string) => void;
+  timeZone: string | null;
 }) {
   return (
     <nav
@@ -605,7 +612,7 @@ function PendingVisitSwitcher({
                   ) : (
                     <Check className="h-3.5 w-3.5 shrink-0" />
                   )}
-                  Visit #{index + 1} · {formatDate(item.submittedAtUtc)}
+                  Visit #{index + 1} · {formatDate(item.submittedAtUtc, timeZone)}
                 </button>
               </li>
             );

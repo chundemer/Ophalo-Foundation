@@ -44,11 +44,17 @@ GAP-092 slice **2d — detail panels** is complete: `DetailPanels.tsx`'s `Feedba
 `RecordDetailsSection.tsx` from `RequestDetailContent.tsx`, and directly from
 `RequestDetailWorkCanvas.tsx` for `ProminentFeedbackCard`. **Slice (2) is now fully complete.**
 
-Take up GAP-092 slice **(3) — Actual Work/history timestamp consumers** next: `ActualWorkReviewQueueList.tsx`,
-`ActualWorkReviewCard.tsx`, `ActualWorkPendingReviewsCard.tsx`, `ActualWorkFinancialReviewWorkspace.tsx`
-are the remaining `formatDate`/`formatEventTime` call sites still on the legacy (`undefined`)
-compatibility path; migrating them all removes that compatibility branch from `helpers.ts` entirely.
-Re-check file count against the batch gate before committing to one slice.
+GAP-092 slice **(3) consumer migration** is complete: `ActualWorkReviewQueueList.tsx`,
+`ActualWorkPendingReviewsCard.tsx`, `ActualWorkReviewCard.tsx` (both render sites), and
+`ActualWorkFinancialReviewWorkspace.tsx` all take `timeZone`, sourced from `Requests.tsx` (1a),
+`RequestDetailContent.tsx` (existing `props.timeZone`), and `ActualWorkWorkspacePage.tsx`'s new
+`useBusinessTimeZone()` call. Exactly 8 production files — `helpers.ts`'s compatibility branch was
+deliberately left untouched so this stayed independently shippable.
+
+Take up GAP-092 slice **(3) cleanup** next (1 file): delete the `undefined` compatibility branch
+from `helpers.ts`'s `formatDate`/`formatEventTime` and simplify the signature to
+`(isoUtc, timeZone: string | null)`, now that every call site supplies a real value. Verify with a
+repo-wide grep that nothing still calls either function with one argument before removing it.
 
 ## Next several sessions
 

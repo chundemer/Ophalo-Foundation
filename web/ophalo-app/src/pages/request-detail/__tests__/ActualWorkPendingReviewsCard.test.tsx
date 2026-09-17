@@ -79,3 +79,22 @@ describe("ActualWorkPendingReviewsCard", () => {
     expect(onRetry).toHaveBeenCalled();
   });
 });
+
+// GAP-092 3: the "Submitted" timestamp previously rendered in the viewer's device-local zone.
+describe("ActualWorkPendingReviewsCard — GAP-092 business-timezone-aware submitted date", () => {
+  const zoneItem: ActualWorkRequestPendingReviewEntry = {
+    ...item,
+    // 2026-08-27T02:00:00Z is 2026-08-26 19:00 in America/Los_Angeles (PDT, UTC-7).
+    submittedAtUtc: "2026-08-27T02:00:00Z",
+  };
+
+  it("renders an explicit UTC-labeled date while the business timezone is unresolved", () => {
+    render(<ActualWorkPendingReviewsCard {...baseProps} state={loaded(zoneItem)} />);
+    expect(screen.getByText(/Submitted Aug 27, 2026, 2:00 AM UTC/)).toBeInTheDocument();
+  });
+
+  it("renders the date in the resolved business zone, a real conversion not a coincidence", () => {
+    render(<ActualWorkPendingReviewsCard {...baseProps} state={loaded(zoneItem)} timeZone="America/Los_Angeles" />);
+    expect(screen.getByText(/Submitted Aug 26, 2026, 7:00 PM/)).toBeInTheDocument();
+  });
+});

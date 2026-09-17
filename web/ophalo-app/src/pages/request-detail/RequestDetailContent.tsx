@@ -269,6 +269,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       focusReviewVisitId={pendingFocusVisitId}
       onFocusReviewVisitHandled={handleFocusReviewVisitHandled}
       showHistory={!isWide}
+      timeZone={props.timeZone}
     />
   );
 
