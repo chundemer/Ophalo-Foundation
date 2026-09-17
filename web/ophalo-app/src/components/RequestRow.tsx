@@ -3,6 +3,7 @@ import { AlertTriangle, Clock, MessageSquare, ChevronRight, UserRound, CheckCirc
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
 import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../lib/requestStatus";
+import { isDateOnlyToday } from "../lib/businessTime";
 
 // Build 087 §4 action labels/dispatch — server-authoritative codes only.
 const ACTION_FOCUS_MAP: Record<string, string> = {
@@ -100,12 +101,6 @@ function withDeadline(label: string, isOverdue: boolean, dueAtUtc: string | null
   return dateLabel ? `${label} · ${dateLabel}` : label;
 }
 
-function isDateOnlyToday(isoDate: string): boolean {
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  return isoDate === todayStr;
-}
-
 // GAP-027 / Q-027A: red is reserved for genuine overdue/high-risk work. The server severity
 // scale already separates "danger" (overdue, post-close feedback, complaint/schedule-change/
 // change-or-cancel, overdue follow-up) from "priority" (priority-band business-waiting that is
@@ -128,7 +123,7 @@ function severityToTone(severity: string): Tone | null {
  * dates are not cleared server-side on terminal transition and would otherwise read as zombie
  * alarms.
  */
-function resolveException(row: KeepRequestSummary, isCalmCloseout: boolean): Exception | null {
+function resolveException(row: KeepRequestSummary, isCalmCloseout: boolean, timeZone: string | null): Exception | null {
   if (row.isPostCloseFollowUp) {
     return { key: "feedback_pending", label: "Feedback pending", tone: "danger", icon: AlertTriangle };
   }
@@ -163,7 +158,7 @@ function resolveException(row: KeepRequestSummary, isCalmCloseout: boolean): Exc
       }
       case "due_follow_up_on": {
         const date = row.timing?.followUpOnDate ?? null;
-        const dueToday = !!(date && isDateOnlyToday(date));
+        const dueToday = !!(date && isDateOnlyToday(date, timeZone));
         // One phrase, not "Follow-up due today · Follow up today" — the server label already
         // reads naturally (e.g. "Follow up today"), so just append the date once.
         const label = dueToday
@@ -369,16 +364,20 @@ interface RequestRowProps {
   // Backlog item 2 (2026-08-21): marks the row currently open in Pane 2. Distinct from the
   // exception rail (borderAccent) — layered alongside it, never replacing it.
   selected?: boolean;
+  // GAP-092 1a: account business IANA zone, owned by the page (`Requests.tsx`). RequestRow stays
+  // presentational — no QueryClient dependency here. Absent/loading/error (null) must never fall
+  // back to device-local "today"; callers render the calm/overdue wording instead of guessing.
+  timeZone?: string | null;
 }
 
-export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onShareClick, showCloseoutCue, paneMode = false, selected = false }: RequestRowProps) {
+export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onShareClick, showCloseoutCue, paneMode = false, selected = false, timeZone = null }: RequestRowProps) {
   const [expanded, setExpanded] = useState(false);
   const { collapsed: collapsedSummary, showToggle: summaryTruncated } = buildCollapsedSummary(row.originalSummary.fullText);
   const lastTouch = relativeTime(row.lastBusinessActivityAtUtc ?? row.updatedAtUtc);
   const isClosedOrCancelled = row.status === "closed" || row.status === "cancelled";
   const isCalmCloseout = showCloseoutCue === true && row.status === "resolved" && !row.attention.attentionReason;
 
-  const exception = resolveException(row, isCalmCloseout);
+  const exception = resolveException(row, isCalmCloseout, timeZone);
   const promoted = selectPromotedAction(row, isCalmCloseout);
   const secondary = secondaryAction(row, promoted);
   const fallbackRoutineActions = promoted ? [] : routineActions(row);

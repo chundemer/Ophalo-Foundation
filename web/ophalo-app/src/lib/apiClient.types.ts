@@ -8,6 +8,9 @@ export interface MeResponse {
   accountRole: AccountRole;
   businessName: string | null;
   userName: string | null;
+  // GAP-092: role-agnostic account IANA timezone — every authenticated role can read this,
+  // unlike `KeepSetupResult.timeZone` from the Owner/Admin-only `/keep/setup` endpoint.
+  timeZone: string | null;
 }
 
 export interface OnboardingChecklist {

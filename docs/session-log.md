@@ -16,9 +16,14 @@ provenance-prefix space and safely truncated the copied source text at a whitesp
 with GAP-047/048 but was never marked done on the board. 4/4 unit tests passing, no code change
 needed. See the workboard's Done/evidence index for the full evidence trail.
 
-Take up GAP-092 next: its scope is locked in the workboard and ADR-073 — use the cached business
-timezone with neutral unresolved urgency, and treat date-only promises as calendar strings rather
-than device-local timestamps.
+GAP-092 slice **1a — Request Row** is complete: `useBusinessTimeZone()` reads the account IANA
+zone from the role-agnostic `['me']` query (not `['setup']` — see the ADR-073/workboard correction),
+`Requests.tsx` owns the fetch, `RequestRow` stays presentational via an optional `timeZone` prop,
+and `businessTime.ts` provides the pure, reference-date-injectable day-boundary comparisons.
+
+Take up GAP-092 slice **1b — Detail Hero** next: reuse 1a's `useBusinessTimeZone()`/`businessTime.ts`
+contract unchanged, threading the same optional `timeZone` prop through `RequestDetail.tsx` →
+`RequestDetailContent` → `RequestDetailWorkCanvas` → `DetailHero`'s `TodayPromiseBanner`.
 
 ## Next several sessions
 

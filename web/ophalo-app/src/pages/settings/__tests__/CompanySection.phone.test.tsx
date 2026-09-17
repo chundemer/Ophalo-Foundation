@@ -59,6 +59,7 @@ const baseMe: MeResponse = {
   accountRole: "owner",
   businessName: "Apex Home Services",
   userName: "Riley Owner",
+  timeZone: "America/Chicago",
 };
 
 function renderSettings() {

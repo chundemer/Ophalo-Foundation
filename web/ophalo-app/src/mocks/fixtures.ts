@@ -32,6 +32,7 @@ export const mockMeByRole: Record<AccountRole, MeResponse> = {
     accountRole: "owner",
     businessName: "Apex Home Services",
     userName: "Riley Owner",
+    timeZone: "America/Chicago",
   },
   admin: {
     accountUserId: MOCK_USER_ID,
@@ -41,6 +42,7 @@ export const mockMeByRole: Record<AccountRole, MeResponse> = {
     accountRole: "admin",
     businessName: "Apex Home Services",
     userName: "Avery Admin",
+    timeZone: "America/Chicago",
   },
   operator: {
     accountUserId: MOCK_USER_ID,
@@ -50,6 +52,7 @@ export const mockMeByRole: Record<AccountRole, MeResponse> = {
     accountRole: "operator",
     businessName: "Apex Home Services",
     userName: "Quinn Operator",
+    timeZone: "America/Chicago",
   },
   viewer: {
     accountUserId: MOCK_USER_ID,
@@ -59,6 +62,7 @@ export const mockMeByRole: Record<AccountRole, MeResponse> = {
     accountRole: "viewer",
     businessName: "Apex Home Services",
     userName: "Sam Viewer",
+    timeZone: "America/Chicago",
   },
   unknown: {
     accountUserId: MOCK_USER_ID,
@@ -68,6 +72,7 @@ export const mockMeByRole: Record<AccountRole, MeResponse> = {
     accountRole: "unknown",
     businessName: null,
     userName: null,
+    timeZone: null,
   },
 };
 

@@ -299,8 +299,12 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
   });
 
   it("shows a single Follow up today phrase (no duplicated copy) and promotes Review request over Share Link — 'customer test3'", () => {
-    const now = new Date();
-    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    // GAP-092 1a: pinned system clock + explicit business timeZone, not the real device clock at
+    // whatever moment the suite happens to run — "today" is a business-zone concept, and this
+    // fixture must not depend on when the test runs.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-15T12:00:00Z"));
+    const todayIso = "2026-07-15";
     const row = buildRow({
       status: "received",
       needsShare: true,
@@ -310,16 +314,31 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     });
     const onSelect = vi.fn();
 
-    render(<RequestRow row={row} onSelect={onSelect} />);
+    render(<RequestRow row={row} onSelect={onSelect} timeZone="America/New_York" />);
 
-    const dateLabel = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      .toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    expect(screen.getByText(`Follow up today · ${dateLabel}`)).toBeInTheDocument();
+    expect(screen.getByText("Follow up today · Jul 15")).toBeInTheDocument();
     expect(screen.queryByText(/Follow-up due today/)).not.toBeInTheDocument();
     expect(screen.queryByText("Customer page not shared")).not.toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Review request" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share Link" })).not.toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
+  it("never shows the due-today wording while the business timezone is unresolved (GAP-092 1a)", () => {
+    const row = buildRow({
+      status: "received",
+      needsShare: true,
+      ranking: { rankingGroup: "due_follow_up_on", rankingOrder: 5, rankingReason: "due_follow_up_on", severity: "attention", isOverdue: false, elapsedSinceUtc: null, dueAtUtc: null, isPostClose: false },
+      timing: { followUpOnDate: "2026-07-15", followUpOnReason: "check_in", followUpOnNote: null, followUpOnLabel: "Follow up today", hasFutureFollowUpOn: false, plannedForDate: null, plannedForLabel: null, hasFuturePlannedFor: false },
+      actions: { quickActions: [quickAction("open_detail", "detail")] },
+    });
+
+    render(<RequestRow row={row} onSelect={vi.fn()} />);
+
+    expect(screen.queryByText(/Follow up today/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Follow-up due today/)).not.toBeInTheDocument();
   });
 
   it("GAP-007b: labels a customer message with source and relative time", () => {

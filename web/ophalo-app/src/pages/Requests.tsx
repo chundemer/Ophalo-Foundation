@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type AccountRole, type RequestView, type KeepRequestViewCounts, type KeepRequestSummary, type KeepQuickAction } from "../lib/apiClient";
 import { RequestRow } from "../components/RequestRow";
+import { useBusinessTimeZone } from "../hooks/useBusinessTimeZone";
 import { RequestRowActionModal } from "../components/RequestRowActionModal";
 import { ShareLinkModal } from "../components/ShareLinkModal";
 import { RequestsWorkspaceHeader } from "../components/requests/RequestsWorkspaceHeader";
@@ -228,6 +229,9 @@ export function Requests({
   // one can silently drop the user back into an active queue.
   const effectiveView: RequestView = historyMode ? historyScope : (activeTab.view as RequestView);
   const historyDateParams = historyMode ? resolveHistoryDateParams(historyDateScope) : {};
+
+  // GAP-092 1a: Requests.tsx owns the business-timezone query; RequestRow stays presentational.
+  const { timeZone: businessTimeZone } = useBusinessTimeZone();
 
   const listQuery = useQuery({
     queryKey: ["requests", effectiveView, historyMode ? undefined : statusFilter, q, cursor, historyMode ? historyDateScope : null],
@@ -575,6 +579,7 @@ export function Requests({
         showCloseoutCue={!presentAsHistory && activeTab.id === "ready_to_close"}
         paneMode={paneMode}
         selected={row.id === selectedRequestId}
+        timeZone={businessTimeZone}
       />
     );
   }
