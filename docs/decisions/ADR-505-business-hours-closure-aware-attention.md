@@ -47,6 +47,10 @@ The existing account IANA timezone is the sole timezone for its calendar. V1 sup
 The interval is half-open: `[opensAt, closesAt)`. `opensAt` is included and `closesAt` is excluded.
 An interval must begin before it ends on the same local date.
 
+Closures are persisted and evaluated as account-local `DateOnly` values, never as UTC-midnight
+instants. The clock converts an obligation timestamp to the account's IANA local date before it
+tests whether that date is closed.
+
 V1 explicitly excludes split shifts, multiple intervals per day, overnight/cross-midnight or
 24-hour windows, partial-day closures, recurring/floating holiday rules, target-specific schedules,
 on-call rotations, escalation/routing rules, and public "open now" behavior.
@@ -66,6 +70,13 @@ The calendar is evaluated using IANA timezone rules and real elapsed time:
 The calculator must resolve invalid/ambiguous local boundary times deterministically and must be
 bounded: invalid or pathological configuration must produce a controlled configuration failure,
 never an unbounded forward search or CPU starvation.
+
+For V1, a staffed-hours calculation may advance no more than five local calendar years from its
+obligation timestamp. A Settings mutation that selects staffed timing preflights every staffed
+target against the proposed calendar using this same bound. If the target cannot be fulfilled,
+the server returns a controlled business-calendar configuration failure; it never falls back to
+continuous timing or invents a deadline. The write-time calculator retains the same guard for
+legacy, concurrent, or subsequently pathological data.
 
 A target may use staffed-hours timing only when the account has at least one valid weekly open
 interval. Conversely, a calendar mutation may not remove the final weekly interval while any target
@@ -97,6 +108,11 @@ message calculates its priority deadline from the newer message but stores the e
 and the existing deadline; escalation can never make an active commitment less urgent. A customer
 message after the business was waiting on the customer is a new response obligation and gets a new
 deadline.
+
+V1 persistence is relational: one response-policy row per account; at most seven weekly interval
+rows, unique by account and weekday; closure rows unique by account and local date; and append-only
+account-scoped settings audit rows. The account's existing IANA timezone remains authoritative and
+is not duplicated in calendar storage.
 
 ### Scope and authority
 
@@ -131,7 +147,8 @@ persisted provenance data.
 - `NextAttentionAtUtc` remains SQL-filterable, sortable, deterministic, and audit-stable.
 - Server tests must cover opening/closing boundaries, closed arrivals, cross-close carry-over,
   weekend/closure skips, repeat-message escalation, policy snapshot behavior, timezone changes,
-  both DST transitions, and identical state for viewers in different device timezones.
+  both DST transitions, the five-year configuration bound, both priority-escalation `min` outcomes,
+  and identical state for viewers in different device timezones.
 
 ## Deferred
 
@@ -143,5 +160,5 @@ persisted provenance data.
   snapshots.
 - Split/overnight/24-hour schedules, partial-day or recurring closures, multi-location calendars,
   on-call/routing/escalation, and public availability display.
-- Storage shape, API composition, migration sequencing, Settings UX design, and the implementation
-  build plan; these follow in a separate solution-planning discussion.
+- API composition, migration sequencing, Settings UX design, and the implementation build plan;
+  these follow in a separate solution-planning discussion.

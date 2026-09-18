@@ -18,7 +18,19 @@ migration — it was still calling the old formatters with one argument. Repo-wi
 remaining one-argument call sites. See the workboard's Done/evidence index for the full trail.
 
 Take up **GAP-100** next (promoted from DEF-025 — office-hours-aware signals the current pilot
-requires).
+requires). ADR-505 is locked and indexed. Its implementation plan was code-validated before
+starting: no live or development `KeepResponsePolicy` row has the obsolete 15-minute first-response
+target, so the first 15→60 default reconciliation changes only the unsaved-policy path. The
+calculator must be a pure function of one writer-loaded policy/calendar snapshot; it must not issue
+a second persistence read. The ADR's DST wording fixes the calculator test behavior, rather than
+leaving a further design choice.
+
+Start with the small default-reconciliation slice. Then use the workboard's re-sliced sequence:
+shared timezone validation; policy/calendar schema; audit-backed atomic settings persistence;
+settings backend and UI separately; pure business clock; and one writer family at a time. Public
+intake is its own fork-worthy writer slice because `CreateFromCustomerIntake` has 37 positional
+test call sites across 12 files. Keep ADR-451 voicemail promises out of GAP-100; its calendar-aware
+replacement is recorded as DEF-097.
 
 ## Next several sessions
 
