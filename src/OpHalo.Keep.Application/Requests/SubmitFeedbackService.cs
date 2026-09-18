@@ -1,5 +1,6 @@
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Notifications;
+using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
@@ -36,7 +37,7 @@ public sealed class SubmitFeedbackService(
             return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.RequestChanged);
 
         var policy = await persistence.GetResponsePolicyAsync(context.AccountId, ct);
-        var priority = policy?.PriorityResponseTargetMinutes ?? 60;
+        var priority = policy?.PriorityResponseTargetMinutes ?? KeepResponsePolicyDefaults.PriorityResponseTargetMinutes;
 
         var domainResult = request.SubmitFeedback(command.WasResolved, command.Comment, priority, clock.UtcNow);
         if (!domainResult.IsSuccess)

@@ -155,7 +155,7 @@ public sealed class CreateKeepPublicIntakeService(
             return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
 
         var policy = await persistence.GetResponsePolicyAsync(accountId, ct);
-        var firstResponseTargetMinutes = policy?.FirstResponseTargetMinutes ?? 60;
+        var firstResponseTargetMinutes = policy?.FirstResponseTargetMinutes ?? KeepResponsePolicyDefaults.FirstResponseTargetMinutes;
 
         var customer = await persistence.FindCustomerByCanonicalPhoneAsync(accountId, v.CanonicalPhone, ct);
         if (customer is null)

@@ -21,10 +21,10 @@ public sealed class KeepSetupService(
     private static readonly Error Forbidden =
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
-    // V1 defaults — returned when no policy row exists yet.
-    private const int DefaultFirstResponseTargetMinutes = 15;
-    private const int DefaultStandardResponseTargetMinutes = 240;
-    private const int DefaultPriorityResponseTargetMinutes = 60;
+    // Canonical unsaved-policy defaults (ADR-505) — returned when no policy row exists yet.
+    private const int DefaultFirstResponseTargetMinutes = KeepResponsePolicyDefaults.FirstResponseTargetMinutes;
+    private const int DefaultStandardResponseTargetMinutes = KeepResponsePolicyDefaults.StandardResponseTargetMinutes;
+    private const int DefaultPriorityResponseTargetMinutes = KeepResponsePolicyDefaults.PriorityResponseTargetMinutes;
     private const int DefaultStatusCheckThresholdDays = 5;
 
     public async Task<Result<KeepSetupResult>> GetSetupAsync(CancellationToken ct = default)

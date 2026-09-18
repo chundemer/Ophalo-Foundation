@@ -1,5 +1,6 @@
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Notifications;
+using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
@@ -39,9 +40,9 @@ public sealed class AddCustomerMessageService(
             return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.RequestChanged);
 
         var policy = await persistence.GetResponsePolicyAsync(context.AccountId, ct);
-        var firstResponse = policy?.FirstResponseTargetMinutes ?? 60;
-        var standard     = policy?.StandardResponseTargetMinutes ?? 240;
-        var priority     = policy?.PriorityResponseTargetMinutes ?? 60;
+        var firstResponse = policy?.FirstResponseTargetMinutes ?? KeepResponsePolicyDefaults.FirstResponseTargetMinutes;
+        var standard     = policy?.StandardResponseTargetMinutes ?? KeepResponsePolicyDefaults.StandardResponseTargetMinutes;
+        var priority     = policy?.PriorityResponseTargetMinutes ?? KeepResponsePolicyDefaults.PriorityResponseTargetMinutes;
 
         var domainResult = request.AddCustomerMessage(
             command.Intent, command.Message, firstResponse, standard, priority, clock.UtcNow);

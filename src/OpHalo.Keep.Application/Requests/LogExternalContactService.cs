@@ -3,6 +3,7 @@ using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
+using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
@@ -165,7 +166,7 @@ public sealed class LogExternalContactService(
         else
         {
             var policy = await operatePersistence.GetResponsePolicyAsync(currentUser.AccountId, ct);
-            var standardMinutes = policy?.StandardResponseTargetMinutes ?? 240;
+            var standardMinutes = policy?.StandardResponseTargetMinutes ?? KeepResponsePolicyDefaults.StandardResponseTargetMinutes;
 
             domainResult = request.LogInboundExternalContact(
                 channel.Value,
