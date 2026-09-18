@@ -29,8 +29,16 @@ Batches 1-3 are done (defaults reconciliation, shared timezone validation, polic
 — see the workboard's evidence index). Next: audit-backed atomic settings persistence — this is
 where the cross-aggregate validation (staffed-hours target needs ≥1 weekly interval; can't remove
 the last interval while any target is staffed-hours) gets built, in a new app-layer
-`KeepResponsePolicyService`. Then settings backend and UI separately; pure business clock; and one
-writer family at a time. Public intake is its own fork-worthy writer slice because
+`KeepResponsePolicyService`. Its audit entity design is pre-locked (2026-09-18, not yet
+implemented): `KeepSettingsAuditEvent` mirrors `KeepRequestEvent`'s pattern (immutable, actor
+triple, composite nullable FK to `AccountUser`, `Content` free text) but scoped to `AccountId`
+only, indexed `(AccountId, OccurredAtUtc)`; five event-type factories —
+`ResponseTargetDurationChanged`, `ResponseTimingBasisChanged`, `WeeklyIntervalChanged`,
+`ClosureChanged`, `TimeZoneChanged` (the last is a deliberate batch-4 requirement, not literal
+ADR-505 text — see ADR-505's audit sentence vs. its "applies only to new obligations" sentence).
+One-row-per-field-vs-per-save granularity and `Content` string format are deferred to the settings
+request-shape design. Then settings backend and UI separately; pure business clock; and one writer
+family at a time. Public intake is its own fork-worthy writer slice because
 `CreateFromCustomerIntake` has 37 positional test call sites across 12 files. Keep ADR-451
 voicemail promises out of GAP-100; its calendar-aware replacement is recorded as DEF-097.
 
