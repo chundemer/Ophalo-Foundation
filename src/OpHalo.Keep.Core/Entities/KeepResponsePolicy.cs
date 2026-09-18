@@ -1,4 +1,5 @@
 using OpHalo.Foundation.Core.Entities.Shared;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.Keep.Core.Entities;
 
@@ -13,15 +14,16 @@ public sealed class KeepResponsePolicy : BaseEntity
     public int StandardResponseTargetMinutes { get; private set; }
     public int PriorityResponseTargetMinutes { get; private set; }
     public int StatusCheckThresholdDays { get; private set; }
-    public bool? BusinessHoursOnly { get; private set; }
+    public ResponseTimingBasis FirstResponseTimingBasis { get; private set; } = ResponseTimingBasis.Continuous;
+    public ResponseTimingBasis StandardResponseTimingBasis { get; private set; } = ResponseTimingBasis.Continuous;
+    public ResponseTimingBasis PriorityResponseTimingBasis { get; private set; } = ResponseTimingBasis.Continuous;
 
     public static KeepResponsePolicy Create(
         Guid accountId,
         int firstResponseTargetMinutes,
         int standardResponseTargetMinutes,
         int priorityResponseTargetMinutes,
-        int statusCheckThresholdDays,
-        bool? businessHoursOnly = null)
+        int statusCheckThresholdDays)
     {
         if (accountId == Guid.Empty)
             throw new ArgumentException("Account ID is required.", nameof(accountId));
@@ -40,8 +42,7 @@ public sealed class KeepResponsePolicy : BaseEntity
             FirstResponseTargetMinutes = firstResponseTargetMinutes,
             StandardResponseTargetMinutes = standardResponseTargetMinutes,
             PriorityResponseTargetMinutes = priorityResponseTargetMinutes,
-            StatusCheckThresholdDays = statusCheckThresholdDays,
-            BusinessHoursOnly = businessHoursOnly
+            StatusCheckThresholdDays = statusCheckThresholdDays
         };
     }
 

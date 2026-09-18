@@ -27,7 +27,20 @@ internal sealed class KeepResponsePolicyConfiguration : BaseEntityConfiguration<
         builder.Property(x => x.StatusCheckThresholdDays)
             .IsRequired();
 
-        builder.Property(x => x.BusinessHoursOnly);
+        builder.Property(x => x.FirstResponseTimingBasis)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(x => x.StandardResponseTimingBasis)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(x => x.PriorityResponseTimingBasis)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
 
         // ADR-097: one policy per account.
         builder.HasIndex(x => x.AccountId)

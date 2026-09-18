@@ -25,12 +25,14 @@ calculator must be a pure function of one writer-loaded policy/calendar snapshot
 a second persistence read. The ADR's DST wording fixes the calculator test behavior, rather than
 leaving a further design choice.
 
-Start with the small default-reconciliation slice. Then use the workboard's re-sliced sequence:
-shared timezone validation; policy/calendar schema; audit-backed atomic settings persistence;
-settings backend and UI separately; pure business clock; and one writer family at a time. Public
-intake is its own fork-worthy writer slice because `CreateFromCustomerIntake` has 37 positional
-test call sites across 12 files. Keep ADR-451 voicemail promises out of GAP-100; its calendar-aware
-replacement is recorded as DEF-097.
+Batches 1-3 are done (defaults reconciliation, shared timezone validation, policy/calendar schema
+— see the workboard's evidence index). Next: audit-backed atomic settings persistence — this is
+where the cross-aggregate validation (staffed-hours target needs ≥1 weekly interval; can't remove
+the last interval while any target is staffed-hours) gets built, in a new app-layer
+`KeepResponsePolicyService`. Then settings backend and UI separately; pure business clock; and one
+writer family at a time. Public intake is its own fork-worthy writer slice because
+`CreateFromCustomerIntake` has 37 positional test call sites across 12 files. Keep ADR-451
+voicemail promises out of GAP-100; its calendar-aware replacement is recorded as DEF-097.
 
 ## Next several sessions
 
