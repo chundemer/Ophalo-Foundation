@@ -26,18 +26,30 @@ a second persistence read. The ADR's DST wording fixes the calculator test behav
 leaving a further design choice.
 
 Batches 1-3 are done (defaults reconciliation, shared timezone validation, policy/calendar schema
-— see the workboard's evidence index). Next: audit-backed atomic settings persistence — this is
-where the cross-aggregate validation (staffed-hours target needs ≥1 weekly interval; can't remove
-the last interval while any target is staffed-hours) gets built, in a new app-layer
-`KeepResponsePolicyService`. Its audit entity design is pre-locked (2026-09-18, not yet
-implemented): `KeepSettingsAuditEvent` mirrors `KeepRequestEvent`'s pattern (immutable, actor
-triple, composite nullable FK to `AccountUser`, `Content` free text) but scoped to `AccountId`
-only, indexed `(AccountId, OccurredAtUtc)`; five event-type factories —
-`ResponseTargetDurationChanged`, `ResponseTimingBasisChanged`, `WeeklyIntervalChanged`,
-`ClosureChanged`, `TimeZoneChanged` (the last is a deliberate batch-4 requirement, not literal
-ADR-505 text — see ADR-505's audit sentence vs. its "applies only to new obligations" sentence).
-One-row-per-field-vs-per-save granularity and `Content` string format are deferred to the settings
-request-shape design. Then settings backend and UI separately; pure business clock; and one writer
+— see the workboard's evidence index). Next: audit-backed atomic settings persistence, re-sliced
+into 4a/4b to stay under the eight-production-file gate.
+
+**Batch 4a — audit schema only** (mirrors batch 3): `KeepSettingsAuditEvent` mirrors
+`KeepRequestEvent`'s pattern (immutable, actor triple, composite nullable FK to `AccountUser`,
+`Content` free text) but scoped to `AccountId` only, indexed `(AccountId, OccurredAtUtc)`; five
+event-type factories — `ResponseTargetDurationChanged`, `ResponseTimingBasisChanged`,
+`WeeklyIntervalChanged`, `ClosureChanged`, `TimeZoneChanged` (the last is a deliberate batch-4
+requirement, not literal ADR-505 text — see ADR-505's audit sentence vs. its "applies only to new
+obligations" sentence). No behavior yet.
+
+**Batch 4b — service, validation, persistence**: new app-layer `KeepResponsePolicyService` with
+two narrow operations, `UpdatePolicyTargets`/`UpdateCalendar` (each loads both the policy and the
+calendar, validates the complete prospective state, commits its own mutation plus its audit rows
+in one save) — not one combined settings DTO. Cross-aggregate invariant (staffed-hours target
+needs ≥1 weekly interval; can't remove the last interval while any target is staffed-hours) plus a
+bounded five-year staffed-hours reachability preflight (day-by-day loop, ~1826 iterations max, not
+a closed-form estimate) both live here. Concurrent policy/calendar writes are guarded with a
+literal `IsolationLevel.Serializable` transaction per operation, matching
+`EfCatalogItemCreateAndActivatePersistence`/`EfPriceBookPublishPersistence`'s established pattern;
+a Postgres serialization failure or unique-violation race maps to a new stable
+`KeepResponsePolicyErrors.ConcurrentSettingsChange`, not a crash. One-row-per-field-vs-per-save
+granularity and `Content` string format are deferred to the settings request-shape design (the
+following slice). Then settings backend and UI separately; pure business clock; and one writer
 family at a time. Public intake is its own fork-worthy writer slice because
 `CreateFromCustomerIntake` has 37 positional test call sites across 12 files. Keep ADR-451
 voicemail promises out of GAP-100; its calendar-aware replacement is recorded as DEF-097.
