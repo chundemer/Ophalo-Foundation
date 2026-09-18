@@ -8,6 +8,7 @@ using OpHalo.Keep.Application.Setup;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
+using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.UnitTests.Keep;
 
@@ -87,6 +88,25 @@ public class KeepSetupServiceTests
         Assert.Null(persistence.SavedProfile);
     }
 
+    [Fact]
+    public async Task UpdateProfile_rejected_timezone_governance_fails_the_whole_save()
+    {
+        // ADR-505 batch 4c: a rejected governed timezone change (e.g. an unreachable
+        // staffed-hours target under the new zone) must fail the entire profile save — the
+        // business-name change staged earlier in the same call must never be persisted either.
+        var error = OpHalo.Keep.Core.Errors.KeepResponsePolicyErrors.StaffedHoursTargetUnreachable;
+        var persistence = HappyPersistence();
+        persistence.TimeZoneGovernanceFailure = error;
+        var sut = BuildSut(persistence);
+
+        var result = await sut.UpdateProfileAsync(
+            "New Business Name", "America/New_York", null, null, null, null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(error, result.Error);
+        Assert.Null(persistence.SavedProfile);
+    }
+
     // --- GetSetupAsync ---
 
     [Fact]
@@ -132,6 +152,15 @@ public class KeepSetupServiceTests
         public Account?                Account         { get; set; }
         public KeepBusinessProfile?    Profile         { get; set; }
         public KeepBusinessProfile?    SavedProfile    { get; private set; }
+        public string?                 ActorDisplayName { get; set; } = "Owner";
+
+        /// <summary>
+        /// When set, <see cref="SaveProfileWithTimeZoneAsync"/> fails with this error instead of
+        /// saving — simulates a rejected governed timezone change, to prove the whole profile
+        /// save (including the already-staged business-name change) is discarded, not partially
+        /// applied.
+        /// </summary>
+        public Error? TimeZoneGovernanceFailure { get; set; }
 
         public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid id, CancellationToken ct) =>
             Task.FromResult(UserSnapshot);
@@ -139,16 +168,24 @@ public class KeepSetupServiceTests
         public Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(Guid id, CancellationToken ct) =>
             Task.FromResult(AccountSnapshot);
 
+        public Task<string?> GetActorDisplayNameAsync(Guid accountUserId, CancellationToken ct) =>
+            Task.FromResult(ActorDisplayName);
+
         public Task<(Account account, KeepBusinessProfile? profile)> GetProfileDataAsync(Guid accountId, CancellationToken ct) =>
             Task.FromResult((Account!, Profile));
 
         public Task<KeepResponsePolicy?> GetPolicyAsync(Guid accountId, CancellationToken ct) =>
             Task.FromResult<KeepResponsePolicy?>(null);
 
-        public Task SaveProfileAsync(Account account, KeepBusinessProfile profile, KeepProductOpsEvent? opsEvent, CancellationToken ct)
+        public Task<Result> SaveProfileWithTimeZoneAsync(
+            Account account, KeepBusinessProfile profile, KeepProductOpsEvent? opsEvent,
+            Guid actorAccountUserId, string actorDisplayName, string timeZone, DateTime occurredAtUtc, CancellationToken ct)
         {
+            if (TimeZoneGovernanceFailure is { } error)
+                return Task.FromResult(Result.Failure(error));
+
             SavedProfile = profile;
-            return Task.CompletedTask;
+            return Task.FromResult(Result.Success());
         }
 
         public Task SavePolicyAsync(KeepResponsePolicy policy, bool isNew, KeepProductOpsEvent? opsEvent, CancellationToken ct) =>

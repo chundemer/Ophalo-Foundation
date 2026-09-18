@@ -59,7 +59,14 @@ public sealed class KeepSetupService(
 
         var (account, existingProfile) = await persistence.GetProfileDataAsync(currentUser.AccountId, ct);
 
-        var updateResult = account.UpdateProfile(businessName, timeZone);
+        // Validate and stage every profile field EXCEPT timezone first: UpdateProfile is
+        // re-supplied the account's current, unchanged timezone so it validates/applies only
+        // BusinessName here. The requested timezone value is applied later, inside
+        // SaveProfileWithTimeZoneAsync's single transaction, only once its own governance
+        // (IANA validation, staffed-hours reachability re-preflight) has approved it — so a
+        // rejected timezone change can never leave BusinessName/profile saved without it, or
+        // vice versa (ADR-505 batch 4c).
+        var updateResult = account.UpdateProfile(businessName, account.TimeZone);
         if (updateResult.IsFailure) return Result<KeepSetupResult>.Failure(updateResult.Error);
 
         var profile = existingProfile ?? KeepBusinessProfile.Create(currentUser.AccountId);
@@ -68,9 +75,14 @@ public sealed class KeepSetupService(
         var identityResult = profile.UpdatePublicIdentity(logoUrl, websiteUrl);
         if (identityResult.IsFailure) return Result<KeepSetupResult>.Failure(identityResult.Error);
 
+        var actorDisplayName = await persistence.GetActorDisplayNameAsync(currentUser.UserId, ct);
+        if (actorDisplayName is null) return Result<KeepSetupResult>.Failure(Forbidden);
+
         var profileEvent = KeepProductOpsEvent.Record(
             currentUser.AccountId, KeepProductOpsEventType.ProfileAndContactSaved, clock.UtcNow);
-        await persistence.SaveProfileAsync(account, profile, profileEvent, ct);
+        var saveResult = await persistence.SaveProfileWithTimeZoneAsync(
+            account, profile, profileEvent, currentUser.UserId, actorDisplayName, timeZone, clock.UtcNow, ct);
+        if (saveResult.IsFailure) return Result<KeepSetupResult>.Failure(saveResult.Error);
 
         var policy = await persistence.GetPolicyAsync(currentUser.AccountId, ct);
 

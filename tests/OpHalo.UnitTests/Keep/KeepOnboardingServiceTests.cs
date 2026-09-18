@@ -221,13 +221,18 @@ public class KeepOnboardingServiceTests
         public Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(Guid id, CancellationToken ct) =>
             Task.FromResult(AccountSnapshot);
 
+        public Task<string?> GetActorDisplayNameAsync(Guid accountUserId, CancellationToken ct) =>
+            throw new NotImplementedException();
+
         public Task<(Account account, OpHalo.Keep.Core.Entities.KeepBusinessProfile? profile)> GetProfileDataAsync(Guid accountId, CancellationToken ct) =>
             throw new NotImplementedException();
 
         public Task<OpHalo.Keep.Core.Entities.KeepResponsePolicy?> GetPolicyAsync(Guid accountId, CancellationToken ct) =>
             throw new NotImplementedException();
 
-        public Task SaveProfileAsync(Account account, OpHalo.Keep.Core.Entities.KeepBusinessProfile profile, OpHalo.Keep.Core.Entities.KeepProductOpsEvent? opsEvent, CancellationToken ct) =>
+        public Task<OpHalo.SharedKernel.Results.Result> SaveProfileWithTimeZoneAsync(
+            Account account, OpHalo.Keep.Core.Entities.KeepBusinessProfile profile, OpHalo.Keep.Core.Entities.KeepProductOpsEvent? opsEvent,
+            Guid actorAccountUserId, string actorDisplayName, string timeZone, DateTime occurredAtUtc, CancellationToken ct) =>
             throw new NotImplementedException();
 
         public Task SavePolicyAsync(OpHalo.Keep.Core.Entities.KeepResponsePolicy policy, bool isNew, OpHalo.Keep.Core.Entities.KeepProductOpsEvent? opsEvent, CancellationToken ct) =>

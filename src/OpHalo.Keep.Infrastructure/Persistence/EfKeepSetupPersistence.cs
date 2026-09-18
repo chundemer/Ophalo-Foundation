@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Infrastructure.Persistence;
@@ -5,6 +6,8 @@ using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.Setup;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
+using OpHalo.Keep.Core.Errors;
+using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Keep.Infrastructure.Persistence;
 
@@ -50,6 +53,18 @@ public sealed class EfKeepSetupPersistence(OpHaloDbContext dbContext) : IKeepSet
             entitlements.PastDueGraceEndsAtUtc);
     }
 
+    public async Task<string?> GetActorDisplayNameAsync(Guid accountUserId, CancellationToken ct)
+    {
+        var row = await dbContext.AccountUsers
+            .AsNoTracking()
+            .Where(u => u.Id == accountUserId)
+            .Select(u => new { u.Email, UserName = u.UserId != null ? u.User!.Name : null })
+            .FirstOrDefaultAsync(ct);
+
+        if (row is null) return null;
+        return !string.IsNullOrWhiteSpace(row.UserName) ? row.UserName.Trim() : row.Email.Trim();
+    }
+
     public async Task<(Account account, KeepBusinessProfile? profile)> GetProfileDataAsync(
         Guid accountId, CancellationToken ct)
     {
@@ -68,13 +83,39 @@ public sealed class EfKeepSetupPersistence(OpHaloDbContext dbContext) : IKeepSet
         dbContext.Set<KeepResponsePolicy>()
             .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
 
-    public async Task SaveProfileAsync(Account account, KeepBusinessProfile profile, KeepProductOpsEvent? opsEvent, CancellationToken ct)
+    public async Task<Result> SaveProfileWithTimeZoneAsync(
+        Account account,
+        KeepBusinessProfile profile,
+        KeepProductOpsEvent? opsEvent,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        string timeZone,
+        DateTime occurredAtUtc,
+        CancellationToken ct)
     {
+        await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
+        var stageResult = await KeepSettingsPersistenceSupport.StageTimeZoneChangeAsync(
+            dbContext, account, actorAccountUserId, actorDisplayName, timeZone, occurredAtUtc, ct);
+        if (stageResult.IsFailure)
+            return stageResult;
+
         if (dbContext.Entry(profile).State == EntityState.Detached)
             dbContext.Set<KeepBusinessProfile>().Add(profile);
 
         await StageEventIfFirstAsync(opsEvent, ct);
-        await dbContext.SaveChangesAsync(ct);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        catch (Exception ex) when (KeepSettingsPersistenceSupport.IsConcurrencyConflict(ex))
+        {
+            return Result.Failure(KeepResponsePolicyErrors.ConcurrentSettingsChange);
+        }
+
+        return Result.Success();
     }
 
     public async Task SavePolicyAsync(KeepResponsePolicy policy, bool isNew, KeepProductOpsEvent? opsEvent, CancellationToken ct)

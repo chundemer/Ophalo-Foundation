@@ -1,6 +1,5 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.Setup;
@@ -169,7 +168,7 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             await dbContext.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         }
-        catch (Exception ex) when (IsConcurrencyConflict(ex))
+        catch (Exception ex) when (KeepSettingsPersistenceSupport.IsConcurrencyConflict(ex))
         {
             return Result.Failure(KeepResponsePolicyErrors.ConcurrentSettingsChange);
         }
@@ -249,7 +248,7 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             await dbContext.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         }
-        catch (Exception ex) when (IsConcurrencyConflict(ex))
+        catch (Exception ex) when (KeepSettingsPersistenceSupport.IsConcurrencyConflict(ex))
         {
             return Result.Failure(KeepResponsePolicyErrors.ConcurrentSettingsChange);
         }
@@ -265,71 +264,21 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         DateTime occurredAtUtc,
         CancellationToken ct)
     {
-        if (!TimeZoneId.TryResolve(timeZoneId, out var newTimeZone))
-            return Result.Failure(KeepResponsePolicyErrors.InvalidTimeZone);
-
-        var normalizedTimeZoneId = timeZoneId.Trim();
-
         await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
 
         var account = await dbContext.Accounts.FirstAsync(a => a.Id == accountId, ct);
-        var oldTimeZoneId = account.TimeZone;
 
-        if (string.Equals(oldTimeZoneId, normalizedTimeZoneId, StringComparison.Ordinal))
-        {
-            await tx.CommitAsync(ct);
-            return Result.Success();
-        }
-
-        var policy = await dbContext.Set<KeepResponsePolicy>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
-
-        var staffedTargets = new List<int>();
-        if (policy is not null)
-        {
-            if (policy.FirstResponseTimingBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(policy.FirstResponseTargetMinutes);
-            if (policy.StandardResponseTimingBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(policy.StandardResponseTargetMinutes);
-            if (policy.PriorityResponseTimingBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(policy.PriorityResponseTargetMinutes);
-        }
-
-        if (staffedTargets.Count > 0)
-        {
-            var weeklyIntervals = await dbContext.Set<KeepCalendarWeeklyInterval>()
-                .AsNoTracking()
-                .Where(i => i.AccountId == accountId)
-                .Select(i => new { i.Weekday, i.OpensAt, i.ClosesAt })
-                .ToListAsync(ct);
-            var closureDates = await dbContext.Set<KeepCalendarClosure>()
-                .AsNoTracking()
-                .Where(c => c.AccountId == accountId)
-                .Select(c => c.ClosureDate)
-                .ToListAsync(ct);
-
-            var fromLocalDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(occurredAtUtc, newTimeZone));
-            var intervalTuples = weeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)).ToList();
-
-            foreach (var minutes in staffedTargets)
-            {
-                if (!StaffedHoursReachability.IsReachable(intervalTuples, closureDates, minutes, fromLocalDate, newTimeZone))
-                    return Result.Failure(KeepResponsePolicyErrors.StaffedHoursTargetUnreachable);
-            }
-        }
-
-        var updateResult = account.UpdateProfile(account.BusinessName, normalizedTimeZoneId);
-        if (updateResult.IsFailure)
-            return updateResult;
-
-        AddAuditEvent(KeepSettingsAuditEvent.CreateTimeZoneChanged(
-            accountId, actorAccountUserId, actorDisplayName,
-            $"{oldTimeZoneId} -> {normalizedTimeZoneId}", occurredAtUtc));
+        var stageResult = await KeepSettingsPersistenceSupport.StageTimeZoneChangeAsync(
+            dbContext, account, actorAccountUserId, actorDisplayName, timeZoneId, occurredAtUtc, ct);
+        if (stageResult.IsFailure)
+            return stageResult;
 
         try
         {
             await dbContext.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         }
-        catch (Exception ex) when (IsConcurrencyConflict(ex))
+        catch (Exception ex) when (KeepSettingsPersistenceSupport.IsConcurrencyConflict(ex))
         {
             return Result.Failure(KeepResponsePolicyErrors.ConcurrentSettingsChange);
         }
@@ -415,18 +364,4 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
     private void AddAuditEvent(KeepSettingsAuditEvent evt) => dbContext.Set<KeepSettingsAuditEvent>().Add(evt);
 
     private static string Format(TimeOnly time) => time.ToString("HH:mm");
-
-    private static bool IsConcurrencyConflict(Exception ex)
-    {
-        for (var current = ex; current is not null; current = current.InnerException)
-        {
-            if (current is DbUpdateConcurrencyException)
-                return true;
-            if (current is PostgresException pg &&
-                (pg.SqlState == PostgresErrorCodes.UniqueViolation || pg.SqlState == PostgresErrorCodes.SerializationFailure))
-                return true;
-        }
-
-        return false;
-    }
 }
