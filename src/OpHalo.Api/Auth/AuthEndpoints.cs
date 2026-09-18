@@ -7,6 +7,7 @@ using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Entities.Accounts.Errors;
 using OpHalo.Foundation.Infrastructure.Security;
+using OpHalo.SharedKernel.Time;
 
 namespace OpHalo.Api.Auth;
 
@@ -35,7 +36,7 @@ public static class AuthEndpoints
             return ValidationProblem("Business name is required.", "Validation.BusinessNameRequired");
         if (string.IsNullOrWhiteSpace(body.TimeZone))
             return ValidationProblem("Time zone is required.", "Validation.TimeZoneRequired");
-        if (!IsValidIanaTimeZone(body.TimeZone))
+        if (!TimeZoneId.TryResolve(body.TimeZone, out _))
             return ValidationProblem("Time zone is not a valid IANA time zone identifier.", "Validation.TimeZoneInvalid");
 
         var result = await service.HandleAsync(body.Email, body.BusinessName, body.Name, body.TimeZone, ct);
@@ -272,9 +273,6 @@ public static class AuthEndpoints
             EntryContext.MultipleMembers => "multiple_members",
             _ => null
         };
-
-    private static bool IsValidIanaTimeZone(string tz) =>
-        TimeZoneInfo.TryFindSystemTimeZoneById(tz, out _);
 
     private static IResult ValidationProblem(string detail, string code) =>
         Results.Problem(

@@ -8,6 +8,7 @@ using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
+using OpHalo.SharedKernel.Time;
 
 namespace OpHalo.Keep.Application.Requests;
 
@@ -233,12 +234,10 @@ public sealed class LogExternalContactService(
 
     // ADR-451: the next business day (Mon-Fri) in the account's timezone, at local midnight,
     // converted back to UTC. Falls back to UTC if the stored timezone id is missing/invalid —
-    // Account.TimeZone is validated as IANA at input (AuthEndpoints.IsValidIanaTimeZone).
+    // Account.TimeZone is validated as IANA at account-input boundaries (SharedKernel.Time.TimeZoneId.TryResolve).
     internal static DateTime ComputeNextBusinessDayUtc(DateTime nowUtc, string? timeZoneId)
     {
-        var timeZone = timeZoneId is not null && TimeZoneInfo.TryFindSystemTimeZoneById(timeZoneId, out var found)
-            ? found
-            : TimeZoneInfo.Utc;
+        TimeZoneId.TryResolve(timeZoneId, out var timeZone);
 
         var localDate = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, timeZone).Date.AddDays(1);
         while (localDate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
