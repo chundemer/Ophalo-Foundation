@@ -1,4 +1,5 @@
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.UnitTests.Keep;
 
@@ -98,4 +99,44 @@ public class KeepResponsePolicyTests
     [InlineData(-1)]
     public void Update_rejects_non_positive_status_check_threshold(int days) =>
         Assert.Throws<ArgumentException>(() => NewPolicy().Update(15, 240, 60, days));
+
+    // --- UpdateTargetsAndTimingBasis ---
+
+    [Fact]
+    public void UpdateTargetsAndTimingBasis_sets_all_fields()
+    {
+        var policy = NewPolicy();
+
+        policy.UpdateTargetsAndTimingBasis(
+            30, 480, 90, 10,
+            ResponseTimingBasis.StaffedHours, ResponseTimingBasis.Continuous, ResponseTimingBasis.StaffedHours);
+
+        Assert.Equal(30, policy.FirstResponseTargetMinutes);
+        Assert.Equal(480, policy.StandardResponseTargetMinutes);
+        Assert.Equal(90, policy.PriorityResponseTargetMinutes);
+        Assert.Equal(10, policy.StatusCheckThresholdDays);
+        Assert.Equal(ResponseTimingBasis.StaffedHours, policy.FirstResponseTimingBasis);
+        Assert.Equal(ResponseTimingBasis.Continuous, policy.StandardResponseTimingBasis);
+        Assert.Equal(ResponseTimingBasis.StaffedHours, policy.PriorityResponseTimingBasis);
+    }
+
+    [Fact]
+    public void UpdateTargetsAndTimingBasis_rejects_unknown_timing_basis() =>
+        Assert.Throws<ArgumentException>(() => NewPolicy().UpdateTargetsAndTimingBasis(
+            15, 240, 60, 5, (ResponseTimingBasis)999, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous));
+
+    [Fact]
+    public void UpdateTargetsAndTimingBasis_still_enforces_duration_invariants() =>
+        Assert.Throws<ArgumentException>(() => NewPolicy().UpdateTargetsAndTimingBasis(
+            0, 240, 60, 5, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous));
+
+    [Fact]
+    public void Create_defaults_timing_basis_to_continuous()
+    {
+        var policy = NewPolicy();
+
+        Assert.Equal(ResponseTimingBasis.Continuous, policy.FirstResponseTimingBasis);
+        Assert.Equal(ResponseTimingBasis.Continuous, policy.StandardResponseTimingBasis);
+        Assert.Equal(ResponseTimingBasis.Continuous, policy.PriorityResponseTimingBasis);
+    }
 }

@@ -66,4 +66,33 @@ public sealed class KeepResponsePolicy : BaseEntity
         PriorityResponseTargetMinutes = priorityResponseTargetMinutes;
         StatusCheckThresholdDays = statusCheckThresholdDays;
     }
+
+    /// <summary>
+    /// Settings-surface mutation (ADR-505 batch 4): sets targets, threshold, and per-target
+    /// timing basis together. Callers must validate the cross-aggregate staffed-hours
+    /// invariants (weekly-interval existence, five-year reachability) before calling this —
+    /// this method only enforces the entity's own field-level invariants.
+    /// </summary>
+    public void UpdateTargetsAndTimingBasis(
+        int firstResponseTargetMinutes,
+        int standardResponseTargetMinutes,
+        int priorityResponseTargetMinutes,
+        int statusCheckThresholdDays,
+        ResponseTimingBasis firstResponseTimingBasis,
+        ResponseTimingBasis standardResponseTimingBasis,
+        ResponseTimingBasis priorityResponseTimingBasis)
+    {
+        Update(firstResponseTargetMinutes, standardResponseTargetMinutes, priorityResponseTargetMinutes, statusCheckThresholdDays);
+
+        if (!Enum.IsDefined(firstResponseTimingBasis))
+            throw new ArgumentException($"Unknown ResponseTimingBasis: {firstResponseTimingBasis}.", nameof(firstResponseTimingBasis));
+        if (!Enum.IsDefined(standardResponseTimingBasis))
+            throw new ArgumentException($"Unknown ResponseTimingBasis: {standardResponseTimingBasis}.", nameof(standardResponseTimingBasis));
+        if (!Enum.IsDefined(priorityResponseTimingBasis))
+            throw new ArgumentException($"Unknown ResponseTimingBasis: {priorityResponseTimingBasis}.", nameof(priorityResponseTimingBasis));
+
+        FirstResponseTimingBasis = firstResponseTimingBasis;
+        StandardResponseTimingBasis = standardResponseTimingBasis;
+        PriorityResponseTimingBasis = priorityResponseTimingBasis;
+    }
 }

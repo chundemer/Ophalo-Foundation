@@ -20,6 +20,8 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IKeepIntakePersistence, KeepIntakePersistence>();
         services.AddScoped<IKeepIntakeSetupPersistence, KeepIntakeSetupPersistence>();
         services.AddScoped<IKeepSetupPersistence, EfKeepSetupPersistence>();
+        services.AddScoped<IKeepResponsePolicyPersistence, EfKeepResponsePolicyPersistence>();
+        services.AddScoped<KeepResponsePolicyService>();
         services.AddScoped<IKeepProductOpsPersistence, EfKeepProductOpsPersistence>();
         services.AddScoped<IKeepSetupDeferralPersistence, EfKeepSetupDeferralPersistence>();
         services.AddScoped<KeepSetupService>();
