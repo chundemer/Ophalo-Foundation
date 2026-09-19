@@ -4,30 +4,19 @@
 scope, sequencing, gates, and deferrals. Locked decisions are in
 [decision-index](decisions/decision-index.md); completed-work evidence is in `docs/build-log/`.
 
-**Updated 2026-09-17.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
+**Updated 2026-09-18.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
 GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, GAP-048, GAP-049, and GAP-092 are
-complete. The canonical scope, order, gates, and deferrals are in the [workboard](workboard.md).
+complete. GAP-100 is the active item (batches 1-4 done — see below). The canonical scope, order,
+gates, and deferrals are in the [workboard](workboard.md).
 
 ## Start here — GAP-100
 
-GAP-092 (business-timezone display) is fully complete, including slice (3) cleanup: `helpers.ts`'s
-`formatDate`/`formatEventTime` now take a required `timeZone: string | null` (the `undefined`
-compatibility branch is gone), and `buildAttentionGuidance` (called from `DetailPanels.tsx`'s
-`HeroAttentionBanner`, threaded through `RequestDetailWorkCanvas.tsx`) was folded into the same
-migration — it was still calling the old formatters with one argument. Repo-wide grep confirmed no
-remaining one-argument call sites. See the workboard's Done/evidence index for the full trail.
+GAP-100 (promoted from DEF-025 — office-hours-aware signals the current pilot requires). ADR-505
+is locked and indexed. Batches 1-4 are done (defaults reconciliation, shared timezone validation,
+policy/calendar schema, audit-backed atomic settings persistence — see the workboard's evidence
+index for the full trail, including 4a/4b/4c).
 
-Take up **GAP-100** next (promoted from DEF-025 — office-hours-aware signals the current pilot
-requires). ADR-505 is locked and indexed. Its implementation plan was code-validated before
-starting: no live or development `KeepResponsePolicy` row has the obsolete 15-minute first-response
-target, so the first 15→60 default reconciliation changes only the unsaved-policy path. The
-calculator must be a pure function of one writer-loaded policy/calendar snapshot; it must not issue
-a second persistence read. The ADR's DST wording fixes the calculator test behavior, rather than
-leaving a further design choice.
-
-Batches 1-4 are done (defaults reconciliation, shared timezone validation, policy/calendar schema,
-audit-backed atomic settings persistence — see the workboard's evidence index for the full 4a/4b/4c
-trail). Next: **settings backend and UI** — the first real API/UI surface for
+Next: **settings backend and UI** — the first real API/UI surface for
 `KeepResponsePolicyService`'s three operations (`UpdatePolicyTargets`, `UpdateCalendar`,
 `UpdateTimeZone`). Its request-shape design is still open: one-row-per-field-vs-per-save audit
 granularity and `Content` string format were explicitly deferred here in batch 4b. After that:
