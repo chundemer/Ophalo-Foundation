@@ -111,12 +111,11 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         // ADR-506 stale-save protection: recomputed inside this serializable transaction, before
         // any validation or write, so a stale snapshot is a refreshable 409 — never a misleading
         // business error — and nothing is written.
-        var currentVersion = KeepSettingsVersion.Compute(
+        var currentVersion = KeepSettingsPersistenceSupport.ComputeVersion(
             account.TimeZone,
             existingPolicy,
-            new KeepCalendarSnapshot(
-                weeklyIntervals.Select(i => new KeepWeeklyIntervalSnapshot(i.Weekday, i.OpensAt, i.ClosesAt)).ToList(),
-                closureDates));
+            weeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)),
+            closureDates);
         if (!string.Equals(expectedSettingsVersion, currentVersion, StringComparison.Ordinal))
             return Result.Failure(KeepResponsePolicyErrors.SettingsVersionMismatch);
 
@@ -256,12 +255,11 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         // ADR-506 stale-save protection: recomputed inside this serializable transaction, before
         // any validation or write, so a missing/stale snapshot is a refreshable 409 and nothing
         // is written.
-        var currentVersion = KeepSettingsVersion.Compute(
+        var currentVersion = KeepSettingsPersistenceSupport.ComputeVersion(
             account.TimeZone,
             policy,
-            new KeepCalendarSnapshot(
-                existingIntervals.Select(i => new KeepWeeklyIntervalSnapshot(i.Weekday, i.OpensAt, i.ClosesAt)).ToList(),
-                existingClosures.Select(c => c.ClosureDate).ToList()));
+            existingIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)),
+            existingClosures.Select(c => c.ClosureDate));
         if (!string.Equals(expectedSettingsVersion, currentVersion, StringComparison.Ordinal))
             return Result.Failure(KeepResponsePolicyErrors.SettingsVersionMismatch);
 

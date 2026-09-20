@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using OpHalo.Keep.Application.Setup;
 using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
@@ -20,6 +21,23 @@ namespace OpHalo.Keep.Infrastructure.Persistence;
 /// </summary>
 internal static class KeepSettingsPersistenceSupport
 {
+    /// <summary>
+    /// The ADR-506 whole-settings version over the given rows. Callers load the rows inside their
+    /// own transaction (each reuses them for later validation, so loading stays with the writer);
+    /// this only maps them to the pure <see cref="KeepSettingsVersion"/> inputs.
+    /// </summary>
+    public static string ComputeVersion(
+        string timeZone,
+        KeepResponsePolicy? policy,
+        IEnumerable<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> weeklyIntervals,
+        IEnumerable<DateOnly> closureDates) =>
+        KeepSettingsVersion.Compute(
+            timeZone,
+            policy,
+            new KeepCalendarSnapshot(
+                weeklyIntervals.Select(i => new KeepWeeklyIntervalSnapshot(i.Weekday, i.OpensAt, i.ClosesAt)).ToList(),
+                closureDates.ToList()));
+
     /// <summary>
     /// Stages a timezone change on <paramref name="account"/> (already tracked by
     /// <paramref name="dbContext"/>) and its settings-audit row, WITHOUT opening or committing a
