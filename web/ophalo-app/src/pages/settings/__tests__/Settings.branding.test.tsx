@@ -164,4 +164,39 @@ describe("Settings branding draft and preview", () => {
     expect(await screen.findByText("Logo URL must be an HTTPS URL.")).toBeInTheDocument();
     expect(logoInput).toHaveValue("http://example.com/logo.png");
   });
+
+  it("keeps the typed draft through a stale-save 409 and Refresh, then saves with the refreshed version", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await vi.importActual<typeof import("../../../lib/apiClient")>(
+      "../../../lib/apiClient",
+    );
+    mockGetSetup.mockResolvedValue({ ...baseSetup, settingsVersion: "v1" });
+    mockUpdateProfile.mockRejectedValueOnce(
+      new ApiError(409, "KeepResponsePolicy.SettingsVersionMismatch", "stale"),
+    );
+    renderSettings();
+
+    const nameInput = await screen.findByLabelText("Business name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Zenith Plumbing Co");
+    await user.click(screen.getByRole("button", { name: /save company/i }));
+    expect(await screen.findByText(/Someone else changed these settings/)).toBeInTheDocument();
+
+    // The refreshed canonical setup arrives with a new version and a different server name.
+    mockGetSetup.mockResolvedValue({ ...baseSetup, businessName: "Server Name", settingsVersion: "v2" });
+    await user.click(screen.getByRole("button", { name: "Refresh settings" }));
+
+    await waitFor(() => expect(screen.queryByText(/Someone else changed these settings/)).not.toBeInTheDocument());
+    expect(nameInput).toHaveValue("Zenith Plumbing Co");
+    expect(mockUpdateProfile).toHaveBeenCalledTimes(1);
+
+    mockUpdateProfile.mockResolvedValueOnce({ ...baseSetup, businessName: "Zenith Plumbing Co", settingsVersion: "v3" });
+    await user.click(screen.getByRole("button", { name: /save company/i }));
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(2));
+    expect(mockUpdateProfile.mock.calls[1][0]).toMatchObject({
+      businessName: "Zenith Plumbing Co",
+      settingsVersion: "v2",
+    });
+    await waitFor(() => expect(nameInput).toHaveValue("Zenith Plumbing Co"));
+  });
 });

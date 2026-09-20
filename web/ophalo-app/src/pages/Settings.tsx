@@ -20,6 +20,10 @@ const TABS: Array<{ id: SettingsTab; label: string }> = [
   { id: "team", label: "Team" },
 ];
 
+function draftsEqual(a: ProfileDraft, b: ProfileDraft): boolean {
+  return (Object.keys(a) as (keyof ProfileDraft)[]).every((k) => a[k] === b[k]);
+}
+
 export function Settings({
   callerRole,
   scrollToSection,
@@ -45,12 +49,17 @@ export function Settings({
 
   // Unsaved profile draft, shared between the company form and the public-link
   // preview so the preview never presents unsaved edits as live. Re-synced
-  // whenever `setup` changes identity (initial load or a successful save).
+  // whenever `setup` changes identity (initial load, refetch, or refresh) — but only while the
+  // draft is unedited relative to the previously synced setup, so a refresh after a stale-save
+  // 409 never discards the user's typed values. A successful save re-syncs explicitly through
+  // `onSaved`, since the saved draft is by definition "edited".
   const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
   const [syncedSetup, setSyncedSetup] = useState<typeof setup>(undefined);
   if (setup && setup !== syncedSetup) {
+    const draftIsUnedited =
+      !profileDraft || !syncedSetup || draftsEqual(profileDraft, draftFromSetup(syncedSetup));
     setSyncedSetup(setup);
-    setProfileDraft(draftFromSetup(setup));
+    if (draftIsUnedited) setProfileDraft(draftFromSetup(setup));
   }
 
   const needsSetup = activeTab === "public-profile" || activeTab === "policy";
@@ -117,6 +126,9 @@ export function Settings({
               <CompanySection
                 draft={profileDraft}
                 onDraftChange={(patch) => setProfileDraft({ ...profileDraft, ...patch })}
+                onSaved={(saved) => setProfileDraft(draftFromSetup(saved))}
+                settingsVersion={setup.settingsVersion}
+                savedTimeZone={setup.timeZone}
               />
               <PublicLinkSection
                 businessName={profileDraft.businessName}

@@ -36,18 +36,48 @@ export function draftFromSetup(setup: KeepSetupResult): ProfileDraft {
 interface CompanySectionProps {
   draft: ProfileDraft;
   onDraftChange: (patch: Partial<ProfileDraft>) => void;
+  /** Called with the canonical setup after a successful save so the parent re-syncs the draft. */
+  onSaved: (saved: KeepSetupResult) => void;
+  /** Opaque whole-settings version from the canonical setup read (ADR-506). */
+  settingsVersion?: string;
+  /** The stored account timezone; a version is required only when the draft differs from it. */
+  savedTimeZone: string;
 }
 
-export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
+export function CompanySection({ draft, onDraftChange, onSaved, settingsVersion, savedTimeZone }: CompanySectionProps) {
   const queryClient = useQueryClient();
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [conflict, setConflict] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const hasVersion = typeof settingsVersion === "string" && settingsVersion.length > 0;
+  const timeZoneChanged = draft.timeZone !== savedTimeZone;
+  const needsVersion = timeZoneChanged && !hasVersion;
+
+  async function handleRefresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await queryClient.refetchQueries({ queryKey: ["setup"] }, { throwOnError: true });
+      setConflict(false);
+      setError(null);
+    } catch {
+      setError("Couldn't refresh settings. Please try again.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
+    if (needsVersion) {
+      setError("Settings version isn't available. Refresh settings, then try again.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setSaved(false);
@@ -59,16 +89,22 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
         customerFacingEmail: draft.customerFacingEmail.trim() || null,
         logoUrl: draft.logoUrl.trim() || null,
         websiteUrl: draft.websiteUrl.trim() || null,
+        settingsVersion,
       });
       queryClient.setQueryData(["setup"], updated);
+      onSaved(updated);
       // GAP-042: keep the workspace-shell ["me"] cache in sync immediately (no title flicker),
       // then invalidate to reconfirm server authority.
       queryClient.setQueryData(["me"], (prev: MeResponse | undefined) =>
         prev ? { ...prev, businessName: updated.businessName } : prev);
       void queryClient.invalidateQueries({ queryKey: ["me"] });
+      setConflict(false);
       setSaved(true);
     } catch (err) {
-      if (err instanceof ApiError) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Stale save: never retried automatically; the draft stays as typed.
+        setConflict(true);
+      } else if (err instanceof ApiError) {
         setError(err.message);
       } else {
         setError("Something went wrong. Please try again.");
@@ -191,6 +227,11 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
           </div>
         </div>
 
+        {conflict && (
+          <p role="alert" className="text-sm text-[var(--ophalo-danger)]">
+            Someone else changed these settings, so your save wasn't applied. Refresh settings to load the latest version, then review your changes and save again.
+          </p>
+        )}
         {error && (
           <p className="text-sm text-[var(--ophalo-danger)]">{error}</p>
         )}
@@ -199,6 +240,11 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
           <KeepButton type="submit" variant="primary" disabled={submitting}>
             {submitting ? "Saving…" : "Save company"}
           </KeepButton>
+          {(conflict || needsVersion) && (
+            <KeepButton type="button" variant="secondary" onClick={handleRefresh} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh settings"}
+            </KeepButton>
+          )}
           {saved && <span className="text-sm text-[var(--ophalo-success)]">Saved.</span>}
         </div>
       </form>

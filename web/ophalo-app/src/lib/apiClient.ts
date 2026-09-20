@@ -766,6 +766,7 @@ export const api = {
     customerFacingEmail: string | null;
     logoUrl: string | null;
     websiteUrl: string | null;
+    settingsVersion?: string;
   }) =>
     apiFetch<KeepSetupResult>("/keep/setup/profile", {
       method: "PUT",
