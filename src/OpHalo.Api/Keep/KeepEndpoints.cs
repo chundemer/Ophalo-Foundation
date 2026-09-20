@@ -127,7 +127,9 @@ public static class KeepEndpoints
         {
             var result = await service.UpdatePolicyAsync(
                 body.FirstResponseTargetMinutes, body.StandardResponseTargetMinutes,
-                body.PriorityResponseTargetMinutes, body.StatusCheckThresholdDays, ct);
+                body.PriorityResponseTargetMinutes, body.StatusCheckThresholdDays,
+                body.FirstResponseTimingBasis, body.StandardResponseTimingBasis,
+                body.PriorityResponseTimingBasis, body.SettingsVersion, ct);
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 

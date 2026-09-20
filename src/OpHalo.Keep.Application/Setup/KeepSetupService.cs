@@ -29,6 +29,10 @@ public sealed class KeepSetupService(
         "KeepSetup.CalendarValidation",
         "Calendar must list weekly intervals as weekday names with HH:mm times and closures as YYYY-MM-DD dates.");
 
+    private static readonly Error PolicyValidation = Error.Create(
+        "KeepSetup.PolicyValidation",
+        "Policy durations must be positive and timing bases must be Continuous or StaffedHours.");
+
     // Canonical unsaved-policy defaults (ADR-505) — returned when no policy row exists yet.
     private const int DefaultFirstResponseTargetMinutes = KeepResponsePolicyDefaults.FirstResponseTargetMinutes;
     private const int DefaultStandardResponseTargetMinutes = KeepResponsePolicyDefaults.StandardResponseTargetMinutes;
@@ -95,43 +99,54 @@ public sealed class KeepSetupService(
         int standardResponseTargetMinutes,
         int priorityResponseTargetMinutes,
         int statusCheckThresholdDays,
+        string? firstResponseTimingBasis,
+        string? standardResponseTimingBasis,
+        string? priorityResponseTimingBasis,
+        string? expectedSettingsVersion,
         CancellationToken ct = default)
     {
         var auth = await AuthorizeAsync(ct);
         if (auth.IsFailure) return Result<KeepSetupResult>.Failure(auth.Error);
 
-        var existingPolicy = await persistence.GetPolicyAsync(currentUser.AccountId, ct);
-        bool isNew;
-        KeepResponsePolicy policy;
+        // Advisory boundary pre-check: the domain stays authoritative, but its ArgumentException
+        // would otherwise escape the governed path as an HTTP 500.
+        if (firstResponseTargetMinutes <= 0
+            || standardResponseTargetMinutes <= 0
+            || priorityResponseTargetMinutes <= 0
+            || statusCheckThresholdDays <= 0)
+            return Result<KeepSetupResult>.Failure(PolicyValidation);
 
-        if (existingPolicy is null)
-        {
-            policy = KeepResponsePolicy.Create(
-                currentUser.AccountId,
-                firstResponseTargetMinutes,
-                standardResponseTargetMinutes,
-                priorityResponseTargetMinutes,
-                statusCheckThresholdDays);
-            isNew = true;
-        }
-        else
-        {
-            existingPolicy.Update(
-                firstResponseTargetMinutes,
-                standardResponseTargetMinutes,
-                priorityResponseTargetMinutes,
-                statusCheckThresholdDays);
-            policy = existingPolicy;
-            isNew = false;
-        }
+        if (!TryParseTimingBasis(firstResponseTimingBasis, out var first)
+            || !TryParseTimingBasis(standardResponseTimingBasis, out var standard)
+            || !TryParseTimingBasis(priorityResponseTimingBasis, out var priority))
+            return Result<KeepSetupResult>.Failure(PolicyValidation);
 
-        var policyEvent = KeepProductOpsEvent.Record(
-            currentUser.AccountId, KeepProductOpsEventType.PolicySaved, clock.UtcNow);
-        await persistence.SavePolicyAsync(policy, isNew, policyEvent, ct);
+        var write = await responsePolicyService.UpdatePolicyTargetsAsync(
+            firstResponseTargetMinutes,
+            standardResponseTargetMinutes,
+            priorityResponseTargetMinutes,
+            statusCheckThresholdDays,
+            first,
+            standard,
+            priority,
+            expectedSettingsVersion,
+            ct);
+        if (write.IsFailure) return Result<KeepSetupResult>.Failure(write.Error);
 
-        var (account, profile) = await persistence.GetProfileDataAsync(currentUser.AccountId, ct);
+        return await GetSetupAsync(ct);
+    }
 
-        return Result<KeepSetupResult>.Success(await BuildResultAsync(account, profile, policy, ct));
+    // Omitted (null) preserves the persisted basis (ADR-506 rollout); anything else must be an
+    // explicit known value — an unknown string is a request-shape error, never a silent default.
+    private static bool TryParseTimingBasis(string? value, out ResponseTimingBasis? basis)
+    {
+        basis = null;
+        if (value is null) return true;
+        if (string.Equals(value, nameof(ResponseTimingBasis.Continuous), StringComparison.OrdinalIgnoreCase))
+            basis = ResponseTimingBasis.Continuous;
+        else if (string.Equals(value, nameof(ResponseTimingBasis.StaffedHours), StringComparison.OrdinalIgnoreCase))
+            basis = ResponseTimingBasis.StaffedHours;
+        return basis is not null;
     }
 
     /// <summary>

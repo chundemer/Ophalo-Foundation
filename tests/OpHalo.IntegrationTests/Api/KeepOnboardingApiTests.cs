@@ -327,6 +327,14 @@ public sealed class KeepOnboardingApiTests : IClassFixture<KeepApiWebFactory>, I
 
     private async Task PutPolicyAsync(string cookie, int first, int standard, int priority, int threshold)
     {
+        // ADR-506: the governed policy write requires the current settingsVersion.
+        using var get = new HttpRequestMessage(HttpMethod.Get, "/keep/setup");
+        get.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        var getResponse = await _client.SendAsync(get);
+        getResponse.EnsureSuccessStatusCode();
+        var settingsVersion = (await getResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>())
+            .GetProperty("settingsVersion").GetString();
+
         using var request = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/policy");
         request.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
         request.Content = JsonContent.Create(new
@@ -334,7 +342,8 @@ public sealed class KeepOnboardingApiTests : IClassFixture<KeepApiWebFactory>, I
             FirstResponseTargetMinutes    = first,
             StandardResponseTargetMinutes = standard,
             PriorityResponseTargetMinutes = priority,
-            StatusCheckThresholdDays      = threshold
+            StatusCheckThresholdDays      = threshold,
+            SettingsVersion               = settingsVersion
         });
         var response = await _client.SendAsync(request);
         response.EnsureSuccessStatusCode();

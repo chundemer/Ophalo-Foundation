@@ -109,6 +109,67 @@ public class KeepSetupServiceTests
         Assert.Equal("KeepSetup.CalendarValidation", result.Error.Code);
     }
 
+    // ── UpdatePolicyAsync (6a-1) ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdatePolicy_DelegatesToGovernedPathWithVersionAndParsedBases()
+    {
+        var persistence = HappyPersistence();
+        var policy = PolicyFor(persistence);
+
+        var result = await BuildSut(persistence, policy).UpdatePolicyAsync(
+            30, 120, 45, 7, "StaffedHours", "continuous", null, "v1");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal((30, 120, 45, 7), policy.LastPolicyTargets);
+        Assert.Equal((ResponseTimingBasis.StaffedHours, ResponseTimingBasis.Continuous, (ResponseTimingBasis?)null), policy.LastPolicyBases);
+        Assert.Equal("v1", policy.LastExpectedVersion);
+    }
+
+    [Fact]
+    public async Task UpdatePolicy_VersionMismatchFromGovernedPath_IsReturnedUnchanged()
+    {
+        var persistence = HappyPersistence();
+        var policy = PolicyFor(persistence);
+        policy.Failure = KeepResponsePolicyErrors.SettingsVersionMismatch;
+
+        var result = await BuildSut(persistence, policy).UpdatePolicyAsync(60, 240, 60, 5, null, null, null, null);
+
+        Assert.Equal(KeepResponsePolicyErrors.SettingsVersionMismatch, result.Error);
+        Assert.Null(policy.LastExpectedVersion);
+    }
+
+    [Theory]
+    [InlineData(0, 240, 60, 5)]
+    [InlineData(60, -1, 60, 5)]
+    [InlineData(60, 240, 0, 5)]
+    [InlineData(60, 240, 60, 0)]
+    public async Task UpdatePolicy_NonPositiveNumber_ReturnsValidationErrorWithoutWriting(int a, int b, int c, int d)
+    {
+        var persistence = HappyPersistence();
+        var policy = PolicyFor(persistence);
+
+        var result = await BuildSut(persistence, policy).UpdatePolicyAsync(a, b, c, d, null, null, null, "v");
+
+        Assert.Equal("KeepSetup.PolicyValidation", result.Error.Code);
+        Assert.False(policy.Called);
+    }
+
+    [Theory]
+    [InlineData("Funday", null, null)]
+    [InlineData(null, "", null)]
+    [InlineData(null, null, "1")]
+    public async Task UpdatePolicy_UnknownTimingBasis_ReturnsValidationErrorWithoutWriting(string? f, string? s, string? p)
+    {
+        var persistence = HappyPersistence();
+        var policy = PolicyFor(persistence);
+
+        var result = await BuildSut(persistence, policy).UpdatePolicyAsync(60, 240, 60, 5, f, s, p, "v");
+
+        Assert.Equal("KeepSetup.PolicyValidation", result.Error.Code);
+        Assert.False(policy.Called);
+    }
+
     private static FakeSetupPersistence HappyPersistence(KeepBusinessProfile? profile = null) => new()
     {
         UserSnapshot = new AccountUserSnapshot(UserId, AccountId, AccountUserRole.Owner, MembershipStatus.Active),
@@ -360,11 +421,20 @@ public class KeepSetupServiceTests
             return Task.FromResult(Failure is { } e ? Result.Failure(e) : Result.Success());
         }
 
+        public (int First, int Standard, int Priority, int Threshold)? LastPolicyTargets { get; private set; }
+        public (ResponseTimingBasis?, ResponseTimingBasis?, ResponseTimingBasis?) LastPolicyBases { get; private set; }
+
         public Task<Result> UpdatePolicyTargetsAsync(
             Guid accountId, Guid actorAccountUserId, string actorDisplayName, int a, int b, int c, int d,
             ResponseTimingBasis? e, ResponseTimingBasis? f, ResponseTimingBasis? g,
-            string? expectedSettingsVersion, DateTime occurredAtUtc, CancellationToken ct) =>
-            throw new NotSupportedException();
+            string? expectedSettingsVersion, DateTime occurredAtUtc, CancellationToken ct)
+        {
+            Called = true;
+            LastExpectedVersion = expectedSettingsVersion;
+            LastPolicyTargets = (a, b, c, d);
+            LastPolicyBases = (e, f, g);
+            return Task.FromResult(Failure is { } err ? Result.Failure(err) : Result.Success());
+        }
 
         public Task<Result> UpdateTimeZoneAsync(
             Guid accountId, Guid actorAccountUserId, string actorDisplayName, string timeZone,
