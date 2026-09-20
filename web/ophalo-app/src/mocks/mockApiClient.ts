@@ -219,8 +219,12 @@ export function installMockApi(): void {
   api.getSetup = () => delay({ ...mockSetup });
   api.updateProfile = (body) =>
     delay({ ...mockSetup, ...body });
-  api.updatePolicy = (body) =>
-    delay({ ...mockSetup, responsePolicy: { ...mockSetup.responsePolicy, ...body } });
+  api.updatePolicy = ({ settingsVersion, ...policy }) =>
+    delay({
+      ...mockSetup,
+      responsePolicy: { ...mockSetup.responsePolicy, ...policy },
+      settingsVersion: `${settingsVersion}+`,
+    });
 
   // Members
   api.listMembers = () => delay({ ...mockMembers, members: [...mockMembers.members] });

@@ -776,6 +776,7 @@ export const api = {
     standardResponseTargetMinutes: number;
     priorityResponseTargetMinutes: number;
     statusCheckThresholdDays: number;
+    settingsVersion: string;
   }) =>
     apiFetch<KeepSetupResult>("/keep/setup/policy", {
       method: "PUT",

@@ -106,6 +106,7 @@ export const mockSetup: KeepSetupResult = {
     priorityResponseTargetMinutes: 30,
     statusCheckThresholdDays: 3,
   },
+  settingsVersion: "mock-settings-v1",
 };
 
 export const mockMembers: ListMembersResponse = {

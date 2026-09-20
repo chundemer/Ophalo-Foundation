@@ -41,6 +41,11 @@ export interface KeepSetupResult {
   logoUrl: string | null;
   websiteUrl: string | null;
   responsePolicy: KeepSetupPolicyResult;
+  // GAP-100 (ADR-506): opaque coupled-settings version; echo it unchanged on policy/calendar and
+  // timezone-changing profile writes. TEMPORARILY optional to keep the 6a-1 slice under the file
+  // cap (nine test fixtures build this type); writers guard for a nonempty value at runtime. A
+  // dedicated slice tightens this to required and updates the fixtures.
+  settingsVersion?: string;
 }
 
 export interface SeatUsage {

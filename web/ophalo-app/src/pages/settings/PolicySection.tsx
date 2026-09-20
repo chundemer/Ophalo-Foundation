@@ -3,6 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api, type KeepSetupResult, ApiError } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
 
+type PolicyField = "first" | "standard" | "priority" | "statusCheck";
+const CLEAN: Record<PolicyField, boolean> = { first: false, standard: false, priority: false, statusCheck: false };
+
 interface PolicySectionProps {
   setup: KeepSetupResult;
 }
@@ -18,31 +21,73 @@ export function PolicySection({ setup }: PolicySectionProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Fields the user has edited since the last successful save; the sync effect never overwrites
+  // these from the server (ADR-506: preserve unsaved values).
+  const [dirty, setDirty] = useState<Record<PolicyField, boolean>>(CLEAN);
+  const [conflict, setConflict] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshed, setRefreshed] = useState(false);
+
+  const settingsVersion = setup.settingsVersion;
+  const hasVersion = typeof settingsVersion === "string" && settingsVersion.length > 0;
+  const anyDirty = Object.values(dirty).some(Boolean);
 
   useEffect(() => {
-    setFirstResponse(String(p.firstResponseTargetMinutes));
-    setStandardResponse(String(p.standardResponseTargetMinutes));
-    setPriorityResponse(String(p.priorityResponseTargetMinutes));
-    setStatusCheck(String(p.statusCheckThresholdDays));
-  }, [p.firstResponseTargetMinutes, p.standardResponseTargetMinutes, p.priorityResponseTargetMinutes, p.statusCheckThresholdDays]);
+    if (!dirty.first) setFirstResponse(String(p.firstResponseTargetMinutes));
+    if (!dirty.standard) setStandardResponse(String(p.standardResponseTargetMinutes));
+    if (!dirty.priority) setPriorityResponse(String(p.priorityResponseTargetMinutes));
+    if (!dirty.statusCheck) setStatusCheck(String(p.statusCheckThresholdDays));
+  }, [p.firstResponseTargetMinutes, p.standardResponseTargetMinutes, p.priorityResponseTargetMinutes, p.statusCheckThresholdDays, dirty]);
+
+  function edit(field: PolicyField, set: (value: string) => void, value: string) {
+    set(value);
+    setDirty((d) => ({ ...d, [field]: true }));
+    setSaved(false);
+  }
+
+  async function handleRefresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await queryClient.refetchQueries({ queryKey: ["setup"] }, { throwOnError: true });
+      setConflict(false);
+      setError(null);
+      setRefreshed(true);
+    } catch {
+      setError("Couldn't refresh settings. Please try again.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
+    if (!hasVersion) {
+      setError("Settings version isn't available. Refresh settings, then try again.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setSaved(false);
+    setRefreshed(false);
     try {
       const updated = await api.updatePolicy({
         firstResponseTargetMinutes: Number(firstResponse),
         standardResponseTargetMinutes: Number(standardResponse),
         priorityResponseTargetMinutes: Number(priorityResponse),
         statusCheckThresholdDays: Number(statusCheck),
+        settingsVersion,
       });
       queryClient.setQueryData(["setup"], updated);
+      setDirty(CLEAN);
+      setConflict(false);
       setSaved(true);
     } catch (err) {
-      if (err instanceof ApiError) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Stale save: never retried automatically; the draft stays as typed.
+        setConflict(true);
+      } else if (err instanceof ApiError) {
         setError(err.message);
       } else {
         setError("Something went wrong. Please try again.");
@@ -74,7 +119,7 @@ export function PolicySection({ setup }: PolicySectionProps) {
             type="number"
             min={1}
             value={firstResponse}
-            onChange={(e) => { setFirstResponse(e.target.value); setSaved(false); }}
+            onChange={(e) => edit("first", setFirstResponse, e.target.value)}
             required
             className="keep-field w-36"
           />
@@ -88,7 +133,7 @@ export function PolicySection({ setup }: PolicySectionProps) {
             type="number"
             min={1}
             value={standardResponse}
-            onChange={(e) => { setStandardResponse(e.target.value); setSaved(false); }}
+            onChange={(e) => edit("standard", setStandardResponse, e.target.value)}
             required
             className="keep-field w-36"
           />
@@ -102,7 +147,7 @@ export function PolicySection({ setup }: PolicySectionProps) {
             type="number"
             min={1}
             value={priorityResponse}
-            onChange={(e) => { setPriorityResponse(e.target.value); setSaved(false); }}
+            onChange={(e) => edit("priority", setPriorityResponse, e.target.value)}
             required
             className="keep-field w-36"
           />
@@ -116,20 +161,40 @@ export function PolicySection({ setup }: PolicySectionProps) {
             type="number"
             min={1}
             value={statusCheck}
-            onChange={(e) => { setStatusCheck(e.target.value); setSaved(false); }}
+            onChange={(e) => edit("statusCheck", setStatusCheck, e.target.value)}
             required
             className="keep-field w-36"
           />
         </div>
 
+        {conflict && (
+          <p role="alert" className="text-sm text-[var(--ophalo-danger)]">
+            Someone else changed these settings, so your save wasn't applied. Refresh settings to load the latest version, then review your changes and save again.
+          </p>
+        )}
+        {!conflict && !hasVersion && (
+          <p role="alert" className="text-sm text-[var(--ophalo-danger)]">
+            Settings version isn't available. Refresh settings to continue.
+          </p>
+        )}
+        {refreshed && anyDirty && (
+          <p className="text-sm text-[var(--ophalo-muted)]">
+            Refreshed settings are loaded. Your unsaved edits are still shown.
+          </p>
+        )}
         {error && (
           <p className="text-sm text-[var(--ophalo-danger)]">{error}</p>
         )}
 
         <div className="flex items-center gap-3">
-          <KeepButton type="submit" variant="primary" disabled={submitting}>
+          <KeepButton type="submit" variant="primary" disabled={submitting || !hasVersion}>
             {submitting ? "Saving…" : "Save policy"}
           </KeepButton>
+          {(conflict || !hasVersion) && (
+            <KeepButton type="button" variant="secondary" onClick={handleRefresh} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh settings"}
+            </KeepButton>
+          )}
           {saved && <span className="text-sm text-[var(--ophalo-success)]">Saved.</span>}
         </div>
       </form>
