@@ -44,6 +44,7 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
             ],
             closureDatesToAdd: [],
             closureDatesToRemove: [],
+            expectedSettingsVersion: await CurrentSettingsVersionAsync(_factory, accountId),
             occurredAtUtc: DateTime.UtcNow,
             ct: CancellationToken.None);
 
@@ -63,6 +64,7 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
             weeklyIntervals: [],
             closureDatesToAdd: [new DateOnly(2026, 12, 25), new DateOnly(2026, 12, 25)],
             closureDatesToRemove: [],
+            expectedSettingsVersion: await CurrentSettingsVersionAsync(_factory, accountId),
             occurredAtUtc: DateTime.UtcNow,
             ct: CancellationToken.None);
 
@@ -82,6 +84,7 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
             weeklyIntervals: [],
             closureDatesToAdd: [new DateOnly(2026, 12, 25)],
             closureDatesToRemove: [new DateOnly(2026, 12, 25)],
+            expectedSettingsVersion: await CurrentSettingsVersionAsync(_factory, accountId),
             occurredAtUtc: DateTime.UtcNow,
             ct: CancellationToken.None);
 
@@ -190,6 +193,70 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         return await db.Set<KeepProductOpsEvent>().CountAsync(
             e => e.AccountId == accountId && e.EventType == KeepProductOpsEventType.PolicySaved);
+    }
+
+    private async Task<OpHalo.SharedKernel.Results.Result> WriteCalendarAsync(
+        Guid accountId, Guid ownerId,
+        IReadOnlyList<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> intervals,
+        IReadOnlyList<DateOnly> add, IReadOnlyList<DateOnly> remove, string? version)
+    {
+        await using var scope = _factory.CreateScope();
+        var persistence = scope.ServiceProvider.GetRequiredService<IKeepResponsePolicyPersistence>();
+        return await persistence.UpdateCalendarAsync(
+            accountId, ownerId, "Owner", intervals, add, remove, version, DateTime.UtcNow, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task UpdateCalendarAsync_rejects_a_missing_or_stale_version_without_writing()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("calendar-version-mismatch");
+        var version = await CurrentSettingsVersionAsync(_factory, accountId);
+        var monday = new[] { (DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(17, 0)) };
+
+        var missing = await WriteCalendarAsync(accountId, ownerId, monday, [], [], null);
+        var stale = await WriteCalendarAsync(accountId, ownerId, monday, [], [], version + "x");
+
+        Assert.Equal(KeepResponsePolicyErrors.SettingsVersionMismatch, missing.Error);
+        Assert.Equal(KeepResponsePolicyErrors.SettingsVersionMismatch, stale.Error);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        Assert.False(await db.Set<KeepCalendarWeeklyInterval>().AnyAsync(i => i.AccountId == accountId));
+        Assert.Empty(await AuditEventsAsync(accountId));
+    }
+
+    [Fact]
+    public async Task UpdateCalendarAsync_with_the_current_version_writes_and_the_version_then_changes()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("calendar-version-ok");
+        var version = await CurrentSettingsVersionAsync(_factory, accountId);
+
+        var result = await WriteCalendarAsync(accountId, ownerId,
+            [(DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(17, 0))], [], [], version);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(version, await CurrentSettingsVersionAsync(_factory, accountId));
+        var events = await AuditEventsAsync(accountId);
+        Assert.Equal("Monday: closed -> 08:00-17:00", Assert.Single(events).Content);
+    }
+
+    [Fact]
+    public async Task UpdateCalendarAsync_audits_closures_as_date_absent_closed_and_closed_absent()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("calendar-closure-audit");
+        var date = new DateOnly(2026, 12, 25);
+
+        Assert.True((await WriteCalendarAsync(accountId, ownerId, [], [date], [],
+            await CurrentSettingsVersionAsync(_factory, accountId))).IsSuccess);
+        Assert.True((await WriteCalendarAsync(accountId, ownerId, [], [], [date],
+            await CurrentSettingsVersionAsync(_factory, accountId))).IsSuccess);
+
+        var contents = (await AuditEventsAsync(accountId))
+            .Where(e => e.EventType == KeepSettingsAuditEventType.ClosureChanged)
+            .Select(e => e.Content).ToList();
+        Assert.Contains("2026-12-25: absent -> closed", contents);
+        Assert.Contains("2026-12-25: closed -> absent", contents);
+        Assert.Equal(2, contents.Count);
     }
 
     [Fact]

@@ -64,6 +64,7 @@ public sealed class KeepResponsePolicyService(
         IReadOnlyList<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> weeklyIntervals,
         IReadOnlyList<DateOnly> closureDatesToAdd,
         IReadOnlyList<DateOnly> closureDatesToRemove,
+        string? expectedSettingsVersion,
         CancellationToken ct = default)
     {
         var auth = await AuthorizeAsync(ct);
@@ -80,6 +81,7 @@ public sealed class KeepResponsePolicyService(
             weeklyIntervals,
             closureDatesToAdd,
             closureDatesToRemove,
+            expectedSettingsVersion,
             clock.UtcNow,
             ct);
     }

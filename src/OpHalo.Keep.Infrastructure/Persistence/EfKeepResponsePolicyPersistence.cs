@@ -224,6 +224,7 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         IReadOnlyList<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> weeklyIntervals,
         IReadOnlyList<DateOnly> closureDatesToAdd,
         IReadOnlyList<DateOnly> closureDatesToRemove,
+        string? expectedSettingsVersion,
         DateTime occurredAtUtc,
         CancellationToken ct)
     {
@@ -251,6 +252,18 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         var policy = await dbContext.Set<KeepResponsePolicy>()
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
+
+        // ADR-506 stale-save protection: recomputed inside this serializable transaction, before
+        // any validation or write, so a missing/stale snapshot is a refreshable 409 and nothing
+        // is written.
+        var currentVersion = KeepSettingsVersion.Compute(
+            account.TimeZone,
+            policy,
+            new KeepCalendarSnapshot(
+                existingIntervals.Select(i => new KeepWeeklyIntervalSnapshot(i.Weekday, i.OpensAt, i.ClosesAt)).ToList(),
+                existingClosures.Select(c => c.ClosureDate).ToList()));
+        if (!string.Equals(expectedSettingsVersion, currentVersion, StringComparison.Ordinal))
+            return Result.Failure(KeepResponsePolicyErrors.SettingsVersionMismatch);
 
         var staffedTargets = new List<int>();
         if (policy is not null)
@@ -389,7 +402,7 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             if (existingClosures.Any(c => c.ClosureDate == date)) continue;
             dbContext.Set<KeepCalendarClosure>().Add(KeepCalendarClosure.Create(accountId, date));
             AddAuditEvent(KeepSettingsAuditEvent.CreateClosureChanged(
-                accountId, actorAccountUserId, actorDisplayName, $"Added closure {date:yyyy-MM-dd}", occurredAtUtc));
+                accountId, actorAccountUserId, actorDisplayName, $"{date:yyyy-MM-dd}: absent -> closed", occurredAtUtc));
         }
 
         foreach (var date in closureDatesToRemove)
@@ -398,7 +411,7 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             if (toRemove is null) continue;
             dbContext.Set<KeepCalendarClosure>().Remove(toRemove);
             AddAuditEvent(KeepSettingsAuditEvent.CreateClosureChanged(
-                accountId, actorAccountUserId, actorDisplayName, $"Removed closure {date:yyyy-MM-dd}", occurredAtUtc));
+                accountId, actorAccountUserId, actorDisplayName, $"{date:yyyy-MM-dd}: closed -> absent", occurredAtUtc));
         }
     }
 

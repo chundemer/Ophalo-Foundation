@@ -45,6 +45,7 @@ public interface IKeepResponsePolicyPersistence
         IReadOnlyList<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> weeklyIntervals,
         IReadOnlyList<DateOnly> closureDatesToAdd,
         IReadOnlyList<DateOnly> closureDatesToRemove,
+        string? expectedSettingsVersion,
         DateTime occurredAtUtc,
         CancellationToken ct);
 

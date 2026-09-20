@@ -67,6 +67,7 @@ public sealed class KeepResponsePolicyPersistenceRaceTests : IClassFixture<KeepA
             weeklyIntervals: [],
             closureDatesToAdd: [],
             closureDatesToRemove: [],
+            expectedSettingsVersion: raceVersion,
             occurredAtUtc: now,
             ct: CancellationToken.None);
 
