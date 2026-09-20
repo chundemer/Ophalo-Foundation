@@ -19,13 +19,95 @@ public class KeepSetupServiceTests
     private static readonly Guid     AccountId = Guid.NewGuid();
     private static readonly Guid     UserId    = Guid.NewGuid();
 
-    private static KeepSetupService BuildSut(FakeSetupPersistence persistence) =>
+    private static KeepSetupService BuildSut(FakeSetupPersistence persistence, FakePolicyPersistence? policyPersistence = null) =>
         new(
             persistence,
             new FakeCurrentUser(UserId, AccountId),
             new FakeUserAccessPolicy(),
             new FakeAccountAccessPolicy(),
-            new FakeClock(Now));
+            new FakeClock(Now),
+            new KeepResponsePolicyService(
+                policyPersistence ?? new FakePolicyPersistence { UserSnapshot = persistence.UserSnapshot, AccountSnapshot = persistence.AccountSnapshot },
+                new FakeCurrentUser(UserId, AccountId),
+                new FakeUserAccessPolicy(),
+                new FakeAccountAccessPolicy(),
+                new FakeClock(Now)));
+
+    private static FakePolicyPersistence PolicyFor(FakeSetupPersistence p) =>
+        new() { UserSnapshot = p.UserSnapshot, AccountSnapshot = p.AccountSnapshot };
+
+    // ── UpdateCalendarAsync (5c-1b) ──────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateCalendar_DiffsClosuresAndPassesVersionThroughUnchanged()
+    {
+        var persistence = HappyPersistence();
+        persistence.Calendar = new KeepCalendarSnapshot([], [new DateOnly(2026, 12, 25), new DateOnly(2026, 12, 26)]);
+        var policy = PolicyFor(persistence);
+        var sut = BuildSut(persistence, policy);
+
+        var result = await sut.UpdateCalendarAsync(
+            [new KeepSetupWeeklyIntervalInput("monday", "08:00", "17:30")],
+            ["2026-12-26", "2027-01-01"],
+            expectedSettingsVersion: null);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(policy.LastExpectedVersion);
+        Assert.Equal([new DateOnly(2027, 1, 1)], policy.LastAdd);
+        Assert.Equal([new DateOnly(2026, 12, 25)], policy.LastRemove);
+        Assert.Equal((DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(17, 30)), Assert.Single(policy.LastIntervals));
+    }
+
+    [Fact]
+    public async Task UpdateCalendar_VersionMismatchFromGovernedPath_IsReturnedUnchanged()
+    {
+        var persistence = HappyPersistence();
+        var policy = PolicyFor(persistence);
+        policy.Failure = KeepResponsePolicyErrors.SettingsVersionMismatch;
+
+        var result = await BuildSut(persistence, policy).UpdateCalendarAsync([], [], "stale");
+
+        Assert.Equal(KeepResponsePolicyErrors.SettingsVersionMismatch, result.Error);
+        Assert.Equal("stale", policy.LastExpectedVersion);
+    }
+
+    [Fact]
+    public async Task UpdateCalendar_DuplicateClosureDateInRequest_Fails422Error()
+    {
+        var persistence = HappyPersistence();
+        var policy = PolicyFor(persistence);
+
+        var result = await BuildSut(persistence, policy).UpdateCalendarAsync([], ["2026-12-25", "2026-12-25"], "v");
+
+        Assert.Equal(KeepResponsePolicyErrors.DuplicateClosureDate, result.Error);
+        Assert.False(policy.Called);
+    }
+
+    [Theory]
+    [InlineData("Funday", "08:00", "17:00", "2026-12-25")]
+    [InlineData("1", "08:00", "17:00", "2026-12-25")]
+    [InlineData("Monday", "8am", "17:00", "2026-12-25")]
+    [InlineData("Monday", "08:00", "17:00", "25/12/2026")]
+    public async Task UpdateCalendar_ParseFailure_ReturnsValidationErrorWithoutWriting(
+        string weekday, string opens, string closes, string closure)
+    {
+        var persistence = HappyPersistence();
+        var policy = PolicyFor(persistence);
+
+        var result = await BuildSut(persistence, policy).UpdateCalendarAsync(
+            [new KeepSetupWeeklyIntervalInput(weekday, opens, closes)], [closure], "v");
+
+        Assert.Equal("KeepSetup.CalendarValidation", result.Error.Code);
+        Assert.False(policy.Called);
+    }
+
+    [Fact]
+    public async Task UpdateCalendar_NullCollections_ReturnsValidationError()
+    {
+        var persistence = HappyPersistence();
+        var result = await BuildSut(persistence).UpdateCalendarAsync(null, null, "v");
+        Assert.Equal("KeepSetup.CalendarValidation", result.Error.Code);
+    }
 
     private static FakeSetupPersistence HappyPersistence(KeepBusinessProfile? profile = null) => new()
     {
@@ -247,6 +329,47 @@ public class KeepSetupServiceTests
 
         public Task SavePolicyAsync(KeepResponsePolicy policy, bool isNew, KeepProductOpsEvent? opsEvent, CancellationToken ct) =>
             Task.CompletedTask;
+    }
+
+    private sealed class FakePolicyPersistence : IKeepResponsePolicyPersistence
+    {
+        public AccountUserSnapshot?   UserSnapshot    { get; set; }
+        public AccountAccessSnapshot? AccountSnapshot { get; set; }
+        public Error? Failure { get; set; }
+        public bool Called { get; private set; }
+        public string? LastExpectedVersion { get; private set; }
+        public IReadOnlyList<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> LastIntervals { get; private set; } = [];
+        public IReadOnlyList<DateOnly> LastAdd { get; private set; } = [];
+        public IReadOnlyList<DateOnly> LastRemove { get; private set; } = [];
+
+        public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid id, CancellationToken ct) => Task.FromResult(UserSnapshot);
+        public Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(Guid id, CancellationToken ct) => Task.FromResult(AccountSnapshot);
+        public Task<string?> GetActorDisplayNameAsync(Guid accountUserId, CancellationToken ct) => Task.FromResult<string?>("Owner");
+
+        public Task<Result> UpdateCalendarAsync(
+            Guid accountId, Guid actorAccountUserId, string actorDisplayName,
+            IReadOnlyList<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> weeklyIntervals,
+            IReadOnlyList<DateOnly> closureDatesToAdd, IReadOnlyList<DateOnly> closureDatesToRemove,
+            string? expectedSettingsVersion, DateTime occurredAtUtc, CancellationToken ct)
+        {
+            Called = true;
+            LastExpectedVersion = expectedSettingsVersion;
+            LastIntervals = weeklyIntervals;
+            LastAdd = closureDatesToAdd;
+            LastRemove = closureDatesToRemove;
+            return Task.FromResult(Failure is { } e ? Result.Failure(e) : Result.Success());
+        }
+
+        public Task<Result> UpdatePolicyTargetsAsync(
+            Guid accountId, Guid actorAccountUserId, string actorDisplayName, int a, int b, int c, int d,
+            ResponseTimingBasis? e, ResponseTimingBasis? f, ResponseTimingBasis? g,
+            string? expectedSettingsVersion, DateTime occurredAtUtc, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<Result> UpdateTimeZoneAsync(
+            Guid accountId, Guid actorAccountUserId, string actorDisplayName, string timeZone,
+            DateTime occurredAtUtc, CancellationToken ct) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeUserAccessPolicy : IUserAccessPolicy

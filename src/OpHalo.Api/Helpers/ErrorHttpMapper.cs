@@ -67,6 +67,18 @@ public static class ErrorHttpMapper
             "KeepPublicIntakeLink.ReplaceConfirmationInvalid" =>
                 (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // GAP-100 settings writes (ADR-506): stale/concurrent saves are recoverable 409s;
+            // domain-rule violations are 422. Calendar parse/binding failures stay 400
+            // (KeepSetup.CalendarValidation matches the Validation rule below).
+            "KeepResponsePolicy.SettingsVersionMismatch" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            "KeepResponsePolicy.ConcurrentSettingsChange" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            "KeepResponsePolicy.DuplicateWeekday" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "KeepResponsePolicy.DuplicateClosureDate" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "KeepResponsePolicy.OverlappingClosureChange" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "KeepResponsePolicy.StaffedHoursTargetUnreachable" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "KeepResponsePolicy.LastWeeklyIntervalRequired" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "KeepResponsePolicy.StaffedTimingRequiresWeeklyInterval" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+
             // --- 400 — validation / malformed client request ---
             var c when c.Contains("Validation") => (StatusCodes.Status400BadRequest, "Validation failed.", null),
 

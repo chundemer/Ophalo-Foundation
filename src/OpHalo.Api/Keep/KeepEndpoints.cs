@@ -131,6 +131,13 @@ public static class KeepEndpoints
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        app.MapPut("/keep/setup/calendar", async (UpdateCalendarBody body, KeepSetupService service, CancellationToken ct) =>
+        {
+            var result = await service.UpdateCalendarAsync(
+                body.WeeklyIntervals, body.ClosureDates, body.SettingsVersion, ct);
+            return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapGet("/keep/setup/onboarding", async (KeepOnboardingService service, CancellationToken ct) =>
         {
             var result = await service.GetChecklistAsync(ct);

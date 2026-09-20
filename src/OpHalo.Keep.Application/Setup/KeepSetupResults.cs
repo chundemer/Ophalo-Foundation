@@ -33,3 +33,6 @@ public sealed record KeepSetupCalendarResult(
     IReadOnlyList<string> ClosureDates);
 
 public sealed record KeepSetupWeeklyIntervalResult(string Weekday, string OpensAt, string ClosesAt);
+
+/// <summary>Weekly interval as submitted by a calendar save: weekday name and same-day <c>HH:mm</c> times.</summary>
+public sealed record KeepSetupWeeklyIntervalInput(string Weekday, string OpensAt, string ClosesAt);

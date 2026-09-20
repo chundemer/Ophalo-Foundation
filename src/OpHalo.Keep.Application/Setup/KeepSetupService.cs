@@ -5,6 +5,7 @@ using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
+using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
 
@@ -15,13 +16,18 @@ public sealed class KeepSetupService(
     ICurrentUser currentUser,
     IUserAccessPolicy userAccessPolicy,
     IAccountAccessPolicy accountAccessPolicy,
-    IClock clock)
+    IClock clock,
+    KeepResponsePolicyService responsePolicyService)
 {
     private static readonly Error Unauthorized =
         Error.Create("auth.unauthorized", "Authentication required.");
 
     private static readonly Error Forbidden =
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
+
+    private static readonly Error CalendarValidation = Error.Create(
+        "KeepSetup.CalendarValidation",
+        "Calendar must list weekly intervals as weekday names with HH:mm times and closures as YYYY-MM-DD dates.");
 
     // Canonical unsaved-policy defaults (ADR-505) — returned when no policy row exists yet.
     private const int DefaultFirstResponseTargetMinutes = KeepResponsePolicyDefaults.FirstResponseTargetMinutes;
@@ -126,6 +132,72 @@ public sealed class KeepSetupService(
         var (account, profile) = await persistence.GetProfileDataAsync(currentUser.AccountId, ct);
 
         return Result<KeepSetupResult>.Success(await BuildResultAsync(account, profile, policy, ct));
+    }
+
+    /// <summary>
+    /// Full-snapshot calendar save (ADR-506): parses the desired weekly intervals and closure
+    /// dates, diffs closures against the stored calendar, and delegates to the governed policy
+    /// service, which owns authorization, the version check, and validation. Missing or stale
+    /// <paramref name="expectedSettingsVersion"/> is passed through unchanged.
+    /// </summary>
+    public async Task<Result<KeepSetupResult>> UpdateCalendarAsync(
+        IReadOnlyList<KeepSetupWeeklyIntervalInput>? weeklyIntervals,
+        IReadOnlyList<string>? closureDates,
+        string? expectedSettingsVersion,
+        CancellationToken ct = default)
+    {
+        var parsed = ParseCalendar(weeklyIntervals, closureDates);
+        if (parsed.IsFailure) return Result<KeepSetupResult>.Failure(parsed.Error);
+        var (intervals, desiredClosures) = parsed.Value;
+
+        // Authorize before reading stored state so an unauthorized caller learns nothing.
+        var auth = await AuthorizeAsync(ct);
+        if (auth.IsFailure) return Result<KeepSetupResult>.Failure(auth.Error);
+
+        if (desiredClosures.Distinct().Count() != desiredClosures.Count)
+            return Result<KeepSetupResult>.Failure(KeepResponsePolicyErrors.DuplicateClosureDate);
+
+        var current = await persistence.GetCalendarAsync(currentUser.AccountId, ct);
+        var currentClosures = current.ClosureDates.ToHashSet();
+        var desiredSet = desiredClosures.ToHashSet();
+        var toAdd = desiredClosures.Where(d => !currentClosures.Contains(d)).ToList();
+        var toRemove = current.ClosureDates.Where(d => !desiredSet.Contains(d)).ToList();
+
+        var write = await responsePolicyService.UpdateCalendarAsync(
+            intervals, toAdd, toRemove, expectedSettingsVersion, ct);
+        if (write.IsFailure) return Result<KeepSetupResult>.Failure(write.Error);
+
+        return await GetSetupAsync(ct);
+    }
+
+    private static Result<(List<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> Intervals, List<DateOnly> Closures)>
+        ParseCalendar(IReadOnlyList<KeepSetupWeeklyIntervalInput>? weeklyIntervals, IReadOnlyList<string>? closureDates)
+    {
+        var invalid = Result<(List<(DayOfWeek, TimeOnly, TimeOnly)>, List<DateOnly>)>.Failure(CalendarValidation);
+        if (weeklyIntervals is null || closureDates is null) return invalid;
+
+        var intervals = new List<(DayOfWeek, TimeOnly, TimeOnly)>();
+        foreach (var i in weeklyIntervals)
+        {
+            if (i is null
+                || string.IsNullOrWhiteSpace(i.Weekday)
+                || char.IsDigit(i.Weekday.Trim()[0])
+                || !Enum.TryParse<DayOfWeek>(i.Weekday.Trim(), ignoreCase: true, out var weekday)
+                || !TimeOnly.TryParseExact(i.OpensAt, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var opens)
+                || !TimeOnly.TryParseExact(i.ClosesAt, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var closes))
+                return invalid;
+            intervals.Add((weekday, opens, closes));
+        }
+
+        var closures = new List<DateOnly>();
+        foreach (var d in closureDates)
+        {
+            if (!DateOnly.TryParseExact(d, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+                return invalid;
+            closures.Add(date);
+        }
+
+        return Result<(List<(DayOfWeek, TimeOnly, TimeOnly)>, List<DateOnly>)>.Success((intervals, closures));
     }
 
     private async Task<KeepSetupResult> BuildResultAsync(
