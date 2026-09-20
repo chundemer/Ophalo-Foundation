@@ -6,4 +6,5 @@ public sealed record UpdateProfileBody(
     string? CustomerFacingPhone,
     string? CustomerFacingEmail,
     string? LogoUrl,
-    string? WebsiteUrl);
+    string? WebsiteUrl,
+    string? SettingsVersion = null);

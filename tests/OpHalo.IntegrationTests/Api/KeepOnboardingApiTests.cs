@@ -318,9 +318,17 @@ public sealed class KeepOnboardingApiTests : IClassFixture<KeepApiWebFactory>, I
 
     private async Task PutProfileAsync(string cookie, string businessName, string timeZone, string? phone, string? email)
     {
+        // ADR-506: a timezone change requires the current settingsVersion.
+        using var get = new HttpRequestMessage(HttpMethod.Get, "/keep/setup");
+        get.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        var getResponse = await _client.SendAsync(get);
+        getResponse.EnsureSuccessStatusCode();
+        var settingsVersion = (await getResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>())
+            .GetProperty("settingsVersion").GetString();
+
         using var request = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/profile");
         request.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
-        request.Content = JsonContent.Create(new { BusinessName = businessName, TimeZone = timeZone, CustomerFacingPhone = phone, CustomerFacingEmail = email });
+        request.Content = JsonContent.Create(new { BusinessName = businessName, TimeZone = timeZone, CustomerFacingPhone = phone, CustomerFacingEmail = email, SettingsVersion = settingsVersion });
         var response = await _client.SendAsync(request);
         response.EnsureSuccessStatusCode();
     }

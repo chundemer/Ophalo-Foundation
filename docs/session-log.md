@@ -17,7 +17,7 @@ validation, policy/calendar schema, audit-backed atomic settings persistence —
 evidence index for the full trail, including 4a/4b/4c). Railway production table-presence
 verification confirmed all four GAP-100 settings tables after deployment on 2026-09-20.
 
-Next: **6a-2b (backend profile timezone version enforcement; 6a-2a frontend pass-through done (`8021ab4c`)), then 6b/6c**; earlier: settings backend contract, then settings UI — the first real API/UI surface for
+Next: **6b (calendar section), then 6c** — 6a-2b backend profile timezone version enforcement is done and awaiting commit; earlier: settings backend contract, then settings UI — the first real API/UI surface for
 `KeepResponsePolicyService`'s governed policy, calendar, and timezone operations. ADR-506 locks
 the route family, full-snapshot request shape, opaque stale-save protection with an explicit UI
 refresh recovery path, and deterministic audit granularity/content. Batch 5 (backend) is split

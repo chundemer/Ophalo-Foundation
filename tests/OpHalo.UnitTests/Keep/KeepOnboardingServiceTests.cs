@@ -235,7 +235,7 @@ public class KeepOnboardingServiceTests
 
         public Task<OpHalo.SharedKernel.Results.Result> SaveProfileWithTimeZoneAsync(
             Account account, OpHalo.Keep.Core.Entities.KeepBusinessProfile profile, OpHalo.Keep.Core.Entities.KeepProductOpsEvent? opsEvent,
-            Guid actorAccountUserId, string actorDisplayName, string timeZone, DateTime occurredAtUtc, CancellationToken ct) =>
+            Guid actorAccountUserId, string actorDisplayName, string timeZone, string? expectedSettingsVersion, DateTime occurredAtUtc, CancellationToken ct) =>
             throw new NotImplementedException();
 
         public Task SavePolicyAsync(OpHalo.Keep.Core.Entities.KeepResponsePolicy policy, bool isNew, OpHalo.Keep.Core.Entities.KeepProductOpsEvent? opsEvent, CancellationToken ct) =>

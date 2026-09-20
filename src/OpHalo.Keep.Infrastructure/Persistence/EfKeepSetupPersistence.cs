@@ -109,10 +109,59 @@ public sealed class EfKeepSetupPersistence(OpHaloDbContext dbContext) : IKeepSet
         Guid actorAccountUserId,
         string actorDisplayName,
         string timeZone,
+        string? expectedSettingsVersion,
         DateTime occurredAtUtc,
         CancellationToken ct)
     {
         await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
+        // ADR-506 stale-save protection. `account` was loaded by the caller BEFORE this transaction
+        // and may be stale, so the stored timezone is read fresh here and is the only state used
+        // to decide whether the timezone differs and to compute the version. Only an actual change
+        // (same trimmed ordinal comparison StageTimeZoneChangeAsync uses) requires a version; it
+        // is checked before any validation or write, so a missing/stale one is a refreshable 409.
+        var accountId = account.Id;
+        var storedTimeZone = await dbContext.Accounts
+            .AsNoTracking()
+            .Where(a => a.Id == accountId)
+            .Select(a => a.TimeZone)
+            .FirstAsync(ct);
+
+        if (!string.Equals(storedTimeZone, timeZone.Trim(), StringComparison.Ordinal))
+        {
+            var policy = await dbContext.Set<KeepResponsePolicy>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
+            var intervals = await dbContext.Set<KeepCalendarWeeklyInterval>()
+                .AsNoTracking()
+                .Where(i => i.AccountId == accountId)
+                .Select(i => new { i.Weekday, i.OpensAt, i.ClosesAt })
+                .ToListAsync(ct);
+            var closureDates = await dbContext.Set<KeepCalendarClosure>()
+                .AsNoTracking()
+                .Where(c => c.AccountId == accountId)
+                .Select(c => c.ClosureDate)
+                .ToListAsync(ct);
+
+            var currentVersion = KeepSettingsPersistenceSupport.ComputeVersion(
+                storedTimeZone,
+                policy,
+                intervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)),
+                closureDates);
+            if (!string.Equals(expectedSettingsVersion, currentVersion, StringComparison.Ordinal))
+                return Result.Failure(KeepResponsePolicyErrors.SettingsVersionMismatch);
+        }
+
+        // The tracked entity may carry a stale timezone (another save landed after the caller's
+        // read). Align only that property, original and current, to the stored value so the
+        // staged business-name change is kept and StageTimeZoneChangeAsync compares against the
+        // real stored timezone instead of auditing/applying a phantom change.
+        if (!string.Equals(account.TimeZone, storedTimeZone, StringComparison.Ordinal))
+        {
+            var timeZoneEntry = dbContext.Entry(account).Property(a => a.TimeZone);
+            timeZoneEntry.OriginalValue = storedTimeZone;
+            timeZoneEntry.CurrentValue = storedTimeZone;
+        }
 
         var stageResult = await KeepSettingsPersistenceSupport.StageTimeZoneChangeAsync(
             dbContext, account, actorAccountUserId, actorDisplayName, timeZone, occurredAtUtc, ct);

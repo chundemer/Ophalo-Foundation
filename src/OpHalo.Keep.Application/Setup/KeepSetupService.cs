@@ -57,6 +57,7 @@ public sealed class KeepSetupService(
         string? customerFacingEmail,
         string? logoUrl,
         string? websiteUrl,
+        string? expectedSettingsVersion,
         CancellationToken ct = default)
     {
         var auth = await AuthorizeAsync(ct);
@@ -86,7 +87,7 @@ public sealed class KeepSetupService(
         var profileEvent = KeepProductOpsEvent.Record(
             currentUser.AccountId, KeepProductOpsEventType.ProfileAndContactSaved, clock.UtcNow);
         var saveResult = await persistence.SaveProfileWithTimeZoneAsync(
-            account, profile, profileEvent, currentUser.UserId, actorDisplayName, timeZone, clock.UtcNow, ct);
+            account, profile, profileEvent, currentUser.UserId, actorDisplayName, timeZone, expectedSettingsVersion, clock.UtcNow, ct);
         if (saveResult.IsFailure) return Result<KeepSetupResult>.Failure(saveResult.Error);
 
         var policy = await persistence.GetPolicyAsync(currentUser.AccountId, ct);

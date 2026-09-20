@@ -195,7 +195,7 @@ public class KeepSetupServiceTests
 
         var result = await sut.UpdateProfileAsync(
             "Acme Services", "America/Chicago", null, null,
-            "https://cdn.example.com/logo.png", "https://acme.example.com");
+            "https://cdn.example.com/logo.png", "https://acme.example.com", null);
 
         Assert.True(result.IsSuccess);
         Assert.Equal("https://cdn.example.com/logo.png", result.Value.LogoUrl);
@@ -211,7 +211,7 @@ public class KeepSetupServiceTests
         var sut = BuildSut(persistence);
 
         var result = await sut.UpdateProfileAsync(
-            "Acme Services", "America/Chicago", null, null, "not-a-url", null);
+            "Acme Services", "America/Chicago", null, null, "not-a-url", null, null);
 
         Assert.True(result.IsFailure);
         Assert.Equal(KeepBusinessProfileErrors.LogoUrlInvalid, result.Error);
@@ -225,7 +225,7 @@ public class KeepSetupServiceTests
         var sut = BuildSut(persistence);
 
         var result = await sut.UpdateProfileAsync(
-            "Acme Services", "America/Chicago", null, null, null, "http://acme.example.com");
+            "Acme Services", "America/Chicago", null, null, null, "http://acme.example.com", null);
 
         Assert.True(result.IsFailure);
         Assert.Equal(KeepBusinessProfileErrors.WebsiteUrlInvalid, result.Error);
@@ -244,7 +244,36 @@ public class KeepSetupServiceTests
         var sut = BuildSut(persistence);
 
         var result = await sut.UpdateProfileAsync(
-            "New Business Name", "America/New_York", null, null, null, null);
+            "New Business Name", "America/New_York", null, null, null, null, null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(error, result.Error);
+        Assert.Null(persistence.SavedProfile);
+    }
+
+    [Fact]
+    public async Task UpdateProfile_passes_expected_settings_version_through_unchanged()
+    {
+        var persistence = HappyPersistence();
+        var sut = BuildSut(persistence);
+
+        var result = await sut.UpdateProfileAsync(
+            "Acme Services", "America/New_York", null, null, null, null, "v-opaque-1");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("v-opaque-1", persistence.SavedExpectedSettingsVersion);
+    }
+
+    [Fact]
+    public async Task UpdateProfile_settings_version_mismatch_fails_the_whole_save()
+    {
+        var error = OpHalo.Keep.Core.Errors.KeepResponsePolicyErrors.SettingsVersionMismatch;
+        var persistence = HappyPersistence();
+        persistence.TimeZoneGovernanceFailure = error;
+        var sut = BuildSut(persistence);
+
+        var result = await sut.UpdateProfileAsync(
+            "New Business Name", "America/New_York", null, null, null, null, "stale");
 
         Assert.True(result.IsFailure);
         Assert.Equal(error, result.Error);
@@ -356,6 +385,9 @@ public class KeepSetupServiceTests
         /// </summary>
         public Error? TimeZoneGovernanceFailure { get; set; }
 
+        /// <summary>The <c>expectedSettingsVersion</c> the service last passed to the profile save.</summary>
+        public string? SavedExpectedSettingsVersion { get; private set; }
+
         public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid id, CancellationToken ct) =>
             Task.FromResult(UserSnapshot);
 
@@ -379,8 +411,10 @@ public class KeepSetupServiceTests
 
         public Task<Result> SaveProfileWithTimeZoneAsync(
             Account account, KeepBusinessProfile profile, KeepProductOpsEvent? opsEvent,
-            Guid actorAccountUserId, string actorDisplayName, string timeZone, DateTime occurredAtUtc, CancellationToken ct)
+            Guid actorAccountUserId, string actorDisplayName, string timeZone, string? expectedSettingsVersion,
+            DateTime occurredAtUtc, CancellationToken ct)
         {
+            SavedExpectedSettingsVersion = expectedSettingsVersion;
             if (TimeZoneGovernanceFailure is { } error)
                 return Task.FromResult(Result.Failure(error));
 

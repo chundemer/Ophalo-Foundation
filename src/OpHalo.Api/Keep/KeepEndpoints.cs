@@ -119,7 +119,7 @@ public static class KeepEndpoints
         {
             var result = await service.UpdateProfileAsync(
                 body.BusinessName, body.TimeZone, body.CustomerFacingPhone, body.CustomerFacingEmail,
-                body.LogoUrl, body.WebsiteUrl, ct);
+                body.LogoUrl, body.WebsiteUrl, body.SettingsVersion, ct);
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 

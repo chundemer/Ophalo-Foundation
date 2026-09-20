@@ -22,6 +22,9 @@ public interface IKeepSetupPersistence
     /// re-preflighted against it, and a settings audit row is appended — a rejection fails the
     /// whole save, including the already-staged business-name/profile fields, so a partial apply
     /// (timezone changed but the rest of the profile not saved, or vice versa) is impossible.
+    /// ADR-506: only when the timezone differs, <paramref name="expectedSettingsVersion"/> must
+    /// equal the version recomputed inside the transaction, before any validation or write; a
+    /// missing or stale value returns <c>SettingsVersionMismatch</c> with nothing written.
     /// </summary>
     Task<Result> SaveProfileWithTimeZoneAsync(
         Account account,
@@ -30,6 +33,7 @@ public interface IKeepSetupPersistence
         Guid actorAccountUserId,
         string actorDisplayName,
         string timeZone,
+        string? expectedSettingsVersion,
         DateTime occurredAtUtc,
         CancellationToken ct);
 
