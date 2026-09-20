@@ -1,7 +1,7 @@
 # ADR-506 — Keep settings contract and audit content
 
-**Status:** Locked  
-**Date:** 2026-09-20  
+**Status:** Locked
+**Date:** 2026-09-20
 **Related:** ADR-501, ADR-505, GAP-100 batches 4–6
 
 ## Context
