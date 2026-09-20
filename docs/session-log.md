@@ -4,7 +4,7 @@
 scope, sequencing, gates, and deferrals. Locked decisions are in
 [decision-index](decisions/decision-index.md); completed-work evidence is in `docs/build-log/`.
 
-**Updated 2026-09-18.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
+**Updated 2026-09-20.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
 GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, GAP-048, GAP-049, and GAP-092 are
 complete. GAP-100 is the active item (batches 1-4 done — see below). The canonical scope, order,
 gates, and deferrals are in the [workboard](workboard.md).
@@ -12,17 +12,21 @@ gates, and deferrals are in the [workboard](workboard.md).
 ## Start here — GAP-100
 
 GAP-100 (promoted from DEF-025 — office-hours-aware signals the current pilot requires). ADR-505
-is locked and indexed. Batches 1-4 are done (defaults reconciliation, shared timezone validation,
-policy/calendar schema, audit-backed atomic settings persistence — see the workboard's evidence
-index for the full trail, including 4a/4b/4c).
+is locked and indexed. Batches 1-4 are done and pushed (defaults reconciliation, shared timezone
+validation, policy/calendar schema, audit-backed atomic settings persistence — see the workboard's
+evidence index for the full trail, including 4a/4b/4c). Railway production table-presence
+verification confirmed all four GAP-100 settings tables after deployment on 2026-09-20.
 
-Next: **settings backend and UI** — the first real API/UI surface for
-`KeepResponsePolicyService`'s three operations (`UpdatePolicyTargets`, `UpdateCalendar`,
-`UpdateTimeZone`). Its request-shape design is still open: one-row-per-field-vs-per-save audit
-granularity and `Content` string format were explicitly deferred here in batch 4b. After that:
-pure business clock, then one writer family at a time. Public intake is its own fork-worthy writer
-slice because `CreateFromCustomerIntake` has 37 positional test call sites across 12 files. Keep
-ADR-451 voicemail promises out of GAP-100; its calendar-aware replacement is recorded as DEF-097.
+Next: **settings backend contract, then settings UI** — the first real API/UI surface for
+`KeepResponsePolicyService`'s governed policy, calendar, and timezone operations. ADR-506 locks
+the route family, full-snapshot request shape, opaque stale-save protection with an explicit UI
+refresh recovery path, and deterministic audit granularity/content. Batch 5 (backend) is split
+into three slices to stay under the batch-size gate (preflight complete 2026-09-20; **5a is
+active**): **5a** `settingsVersion` hash + extended `GET /keep/setup` (explicit string timing bases; absent policy hashes a distinct `unset` marker), no writes, no error mapping; **5b** `PUT /keep/setup/policy` moved to the governed service with version check, omitted-basis preservation, the new policy audit format, and the `SettingsVersionMismatch` error with explicit 409 (stale/concurrent) and 422 (staffed-hours) mapping; **5c** `PUT /keep/setup/calendar` (full-snapshot diff, closure audit format, version check) plus the profile-write version check. Locked for 5c: `settingsVersion` is required on a profile save only when the requested timezone differs from the stored one. Batch 6 is the settings
+UI. After that: pure business
+clock, then one writer family at a time. Public intake is its own fork-worthy writer slice because
+`CreateFromCustomerIntake` has 37 positional test call sites across 12 files. Keep ADR-451
+voicemail promises out of GAP-100; its calendar-aware replacement is recorded as DEF-097.
 
 ## Next several sessions
 
