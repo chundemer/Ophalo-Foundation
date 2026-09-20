@@ -42,6 +42,10 @@ public sealed class KeepResponsePolicyPersistenceRaceTests : IClassFixture<KeepA
 
         var now = DateTime.UtcNow;
 
+        // Both racers act on the same pre-race snapshot, as two clients holding the same
+        // GET /keep/setup version would.
+        var raceVersion = await EfKeepResponsePolicyPersistenceTests.CurrentSettingsVersionAsync(_factory, accountId);
+
         // Racer A: selects staffed-hours timing for First Response, relying on the one existing
         // weekly interval.
         var taskA = persistenceA.UpdatePolicyTargetsAsync(
@@ -53,6 +57,7 @@ public sealed class KeepResponsePolicyPersistenceRaceTests : IClassFixture<KeepA
             firstResponseTimingBasis: ResponseTimingBasis.StaffedHours,
             standardResponseTimingBasis: ResponseTimingBasis.Continuous,
             priorityResponseTimingBasis: ResponseTimingBasis.Continuous,
+            expectedSettingsVersion: raceVersion,
             occurredAtUtc: now,
             ct: CancellationToken.None);
 

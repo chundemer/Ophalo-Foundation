@@ -18,6 +18,11 @@ public interface IKeepResponsePolicyPersistence
     Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(Guid accountId, CancellationToken ct);
     Task<string?> GetActorDisplayNameAsync(Guid accountUserId, CancellationToken ct);
 
+    /// <summary>
+    /// A null timing basis means "omitted": the persisted basis is preserved (ADR-506). The
+    /// <paramref name="expectedSettingsVersion"/> must equal the version recomputed inside the
+    /// transaction, otherwise the write is rejected with <c>SettingsVersionMismatch</c>.
+    /// </summary>
     Task<Result> UpdatePolicyTargetsAsync(
         Guid accountId,
         Guid actorAccountUserId,
@@ -26,9 +31,10 @@ public interface IKeepResponsePolicyPersistence
         int standardResponseTargetMinutes,
         int priorityResponseTargetMinutes,
         int statusCheckThresholdDays,
-        ResponseTimingBasis firstResponseTimingBasis,
-        ResponseTimingBasis standardResponseTimingBasis,
-        ResponseTimingBasis priorityResponseTimingBasis,
+        ResponseTimingBasis? firstResponseTimingBasis,
+        ResponseTimingBasis? standardResponseTimingBasis,
+        ResponseTimingBasis? priorityResponseTimingBasis,
+        string? expectedSettingsVersion,
         DateTime occurredAtUtc,
         CancellationToken ct);
 

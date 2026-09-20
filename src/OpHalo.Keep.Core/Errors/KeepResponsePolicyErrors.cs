@@ -20,6 +20,10 @@ public static class KeepResponsePolicyErrors
         "KeepResponsePolicy.ConcurrentSettingsChange",
         "These settings were just updated by another change. Please retry.");
 
+    public static readonly Error SettingsVersionMismatch = Error.Create(
+        "KeepResponsePolicy.SettingsVersionMismatch",
+        "Settings were changed since they were last loaded. Refresh settings and try again.");
+
     public static readonly Error InvalidTimeZone = Error.Create(
         "KeepResponsePolicy.InvalidTimeZone",
         "Time zone is not a valid IANA time zone identifier.");

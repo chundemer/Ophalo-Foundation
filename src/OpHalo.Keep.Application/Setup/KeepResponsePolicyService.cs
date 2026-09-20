@@ -31,9 +31,10 @@ public sealed class KeepResponsePolicyService(
         int standardResponseTargetMinutes,
         int priorityResponseTargetMinutes,
         int statusCheckThresholdDays,
-        ResponseTimingBasis firstResponseTimingBasis,
-        ResponseTimingBasis standardResponseTimingBasis,
-        ResponseTimingBasis priorityResponseTimingBasis,
+        ResponseTimingBasis? firstResponseTimingBasis,
+        ResponseTimingBasis? standardResponseTimingBasis,
+        ResponseTimingBasis? priorityResponseTimingBasis,
+        string? expectedSettingsVersion,
         CancellationToken ct = default)
     {
         var auth = await AuthorizeAsync(ct);
@@ -54,6 +55,7 @@ public sealed class KeepResponsePolicyService(
             firstResponseTimingBasis,
             standardResponseTimingBasis,
             priorityResponseTimingBasis,
+            expectedSettingsVersion,
             clock.UtcNow,
             ct);
     }

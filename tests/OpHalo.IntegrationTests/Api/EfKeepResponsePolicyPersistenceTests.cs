@@ -149,6 +149,165 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
         Assert.Equal(0, auditCount);
     }
 
+    /// <summary>
+    /// The version a client would echo from <c>GET /keep/setup</c>, computed from the same
+    /// persistence read seams the setup read uses.
+    /// </summary>
+    public static async Task<string> CurrentSettingsVersionAsync(KeepApiWebFactory factory, Guid accountId)
+    {
+        await using var scope = factory.CreateScope();
+        var setup = scope.ServiceProvider.GetRequiredService<IKeepSetupPersistence>();
+        var (account, _) = await setup.GetProfileDataAsync(accountId, CancellationToken.None);
+        var policy = await setup.GetPolicyAsync(accountId, CancellationToken.None);
+        var calendar = await setup.GetCalendarAsync(accountId, CancellationToken.None);
+        return KeepSettingsVersion.Compute(account.TimeZone, policy, calendar);
+    }
+
+    private async Task<OpHalo.SharedKernel.Results.Result> WritePolicyAsync(
+        Guid accountId, Guid ownerId,
+        int first, int standard, int priority, int statusDays,
+        ResponseTimingBasis? firstBasis, ResponseTimingBasis? standardBasis, ResponseTimingBasis? priorityBasis,
+        string? version)
+    {
+        await using var scope = _factory.CreateScope();
+        var persistence = scope.ServiceProvider.GetRequiredService<IKeepResponsePolicyPersistence>();
+        return await persistence.UpdatePolicyTargetsAsync(
+            accountId, ownerId, "Owner", first, standard, priority, statusDays,
+            firstBasis, standardBasis, priorityBasis, version, DateTime.UtcNow, CancellationToken.None);
+    }
+
+    private async Task<List<KeepSettingsAuditEvent>> AuditEventsAsync(Guid accountId)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        return await db.Set<KeepSettingsAuditEvent>().AsNoTracking()
+            .Where(e => e.AccountId == accountId).OrderBy(e => e.EventType).ToListAsync();
+    }
+
+    private async Task<int> PolicySavedEventCountAsync(Guid accountId)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        return await db.Set<KeepProductOpsEvent>().CountAsync(
+            e => e.AccountId == accountId && e.EventType == KeepProductOpsEventType.PolicySaved);
+    }
+
+    [Fact]
+    public async Task UpdatePolicyTargetsAsync_rejects_a_missing_or_stale_version_without_writing()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("policy-version-mismatch");
+        var version = await CurrentSettingsVersionAsync(_factory, accountId);
+
+        var missing = await WritePolicyAsync(accountId, ownerId, 60, 240, 60, 5,
+            ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, null);
+        var stale = await WritePolicyAsync(accountId, ownerId, 60, 240, 60, 5,
+            ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, version + "x");
+
+        Assert.Equal(KeepResponsePolicyErrors.SettingsVersionMismatch, missing.Error);
+        Assert.Equal(KeepResponsePolicyErrors.SettingsVersionMismatch, stale.Error);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        Assert.False(await db.Set<KeepResponsePolicy>().AnyAsync(p => p.AccountId == accountId));
+        Assert.Empty(await AuditEventsAsync(accountId));
+        Assert.Equal(0, await PolicySavedEventCountAsync(accountId));
+    }
+
+    [Fact]
+    public async Task UpdatePolicyTargetsAsync_checks_the_version_before_business_validation()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("policy-version-first");
+
+        // Staffed timing with no weekly interval would be a 422 — but the stale version wins.
+        var result = await WritePolicyAsync(accountId, ownerId, 60, 240, 60, 5,
+            ResponseTimingBasis.StaffedHours, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, "stale");
+
+        Assert.Equal(KeepResponsePolicyErrors.SettingsVersionMismatch, result.Error);
+    }
+
+    [Fact]
+    public async Task UpdatePolicyTargetsAsync_first_policy_audits_every_field_as_unset_to_value_and_records_policy_saved()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("policy-first-audit");
+
+        var result = await WritePolicyAsync(accountId, ownerId, 60, 240, 90, 5,
+            ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous,
+            await CurrentSettingsVersionAsync(_factory, accountId));
+
+        Assert.True(result.IsSuccess);
+        var events = await AuditEventsAsync(accountId);
+        Assert.Equal(2, events.Count);
+        Assert.Equal(
+            "firstResponseTargetMinutes: unset -> 60; standardResponseTargetMinutes: unset -> 240; " +
+            "priorityResponseTargetMinutes: unset -> 90; statusCheckThresholdDays: unset -> 5",
+            events.Single(e => e.EventType == KeepSettingsAuditEventType.ResponseTargetDurationChanged).Content);
+        Assert.Equal(
+            "firstResponseTimingBasis: unset -> Continuous; standardResponseTimingBasis: unset -> Continuous; " +
+            "priorityResponseTimingBasis: unset -> Continuous",
+            events.Single(e => e.EventType == KeepSettingsAuditEventType.ResponseTimingBasisChanged).Content);
+        Assert.Equal(1, await PolicySavedEventCountAsync(accountId));
+    }
+
+    [Fact]
+    public async Task UpdatePolicyTargetsAsync_audits_only_changed_fields_and_keeps_policy_saved_to_one_event()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("policy-changed-audit");
+        Assert.True((await WritePolicyAsync(accountId, ownerId, 60, 240, 60, 5,
+            ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous,
+            await CurrentSettingsVersionAsync(_factory, accountId))).IsSuccess);
+        var firstEvents = (await AuditEventsAsync(accountId)).Select(e => e.Id).ToHashSet();
+
+        var result = await WritePolicyAsync(accountId, ownerId, 90, 240, 60, 7,
+            ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous,
+            await CurrentSettingsVersionAsync(_factory, accountId));
+
+        Assert.True(result.IsSuccess);
+        var added = (await AuditEventsAsync(accountId)).Where(e => !firstEvents.Contains(e.Id)).ToList();
+        var only = Assert.Single(added); // bases unchanged → no basis event
+        Assert.Equal(KeepSettingsAuditEventType.ResponseTargetDurationChanged, only.EventType);
+        Assert.Equal("firstResponseTargetMinutes: 60 -> 90; statusCheckThresholdDays: 5 -> 7", only.Content);
+        Assert.Equal(1, await PolicySavedEventCountAsync(accountId));
+    }
+
+    [Fact]
+    public async Task UpdatePolicyTargetsAsync_no_op_write_emits_no_audit_events()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("policy-noop-audit");
+        Assert.True((await WritePolicyAsync(accountId, ownerId, 60, 240, 60, 5,
+            ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous,
+            await CurrentSettingsVersionAsync(_factory, accountId))).IsSuccess);
+        var before = (await AuditEventsAsync(accountId)).Count;
+
+        var result = await WritePolicyAsync(accountId, ownerId, 60, 240, 60, 5,
+            ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous,
+            await CurrentSettingsVersionAsync(_factory, accountId));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(before, (await AuditEventsAsync(accountId)).Count);
+    }
+
+    [Fact]
+    public async Task UpdatePolicyTargetsAsync_omitted_bases_preserve_the_persisted_bases()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("policy-omitted-bases");
+        await SeedWeeklyIntervalAsync(accountId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(17, 0));
+        Assert.True((await WritePolicyAsync(accountId, ownerId, 60, 240, 60, 5,
+            ResponseTimingBasis.StaffedHours, ResponseTimingBasis.Continuous, ResponseTimingBasis.StaffedHours,
+            await CurrentSettingsVersionAsync(_factory, accountId))).IsSuccess);
+
+        var result = await WritePolicyAsync(accountId, ownerId, 90, 240, 60, 5,
+            null, null, null, await CurrentSettingsVersionAsync(_factory, accountId));
+
+        Assert.True(result.IsSuccess);
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var policy = await db.Set<KeepResponsePolicy>().AsNoTracking().SingleAsync(p => p.AccountId == accountId);
+        Assert.Equal(90, policy.FirstResponseTargetMinutes);
+        Assert.Equal(ResponseTimingBasis.StaffedHours, policy.FirstResponseTimingBasis);
+        Assert.Equal(ResponseTimingBasis.Continuous, policy.StandardResponseTimingBasis);
+        Assert.Equal(ResponseTimingBasis.StaffedHours, policy.PriorityResponseTimingBasis);
+    }
+
     [Fact]
     public async Task UpdateTimeZoneAsync_blocks_the_change_when_a_staffed_target_becomes_unreachable()
     {
@@ -165,6 +324,7 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
                 firstResponseTimingBasis: ResponseTimingBasis.Continuous,
                 standardResponseTimingBasis: ResponseTimingBasis.Continuous,
                 priorityResponseTimingBasis: ResponseTimingBasis.Continuous,
+                expectedSettingsVersion: await CurrentSettingsVersionAsync(_factory, accountId),
                 occurredAtUtc: DateTime.UtcNow, ct: CancellationToken.None);
             Assert.True(policyResult.IsSuccess);
         }

@@ -82,9 +82,10 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         int standardResponseTargetMinutes,
         int priorityResponseTargetMinutes,
         int statusCheckThresholdDays,
-        ResponseTimingBasis firstResponseTimingBasis,
-        ResponseTimingBasis standardResponseTimingBasis,
-        ResponseTimingBasis priorityResponseTimingBasis,
+        ResponseTimingBasis? firstResponseTimingBasis,
+        ResponseTimingBasis? standardResponseTimingBasis,
+        ResponseTimingBasis? priorityResponseTimingBasis,
+        string? expectedSettingsVersion,
         DateTime occurredAtUtc,
         CancellationToken ct)
     {
@@ -101,10 +102,34 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             .Select(i => new { i.Weekday, i.OpensAt, i.ClosesAt })
             .ToListAsync(ct);
 
+        var closureDates = await dbContext.Set<KeepCalendarClosure>()
+            .AsNoTracking()
+            .Where(c => c.AccountId == accountId)
+            .Select(c => c.ClosureDate)
+            .ToListAsync(ct);
+
+        // ADR-506 stale-save protection: recomputed inside this serializable transaction, before
+        // any validation or write, so a stale snapshot is a refreshable 409 — never a misleading
+        // business error — and nothing is written.
+        var currentVersion = KeepSettingsVersion.Compute(
+            account.TimeZone,
+            existingPolicy,
+            new KeepCalendarSnapshot(
+                weeklyIntervals.Select(i => new KeepWeeklyIntervalSnapshot(i.Weekday, i.OpensAt, i.ClosesAt)).ToList(),
+                closureDates));
+        if (!string.Equals(expectedSettingsVersion, currentVersion, StringComparison.Ordinal))
+            return Result.Failure(KeepResponsePolicyErrors.SettingsVersionMismatch);
+
+        // An omitted basis preserves the persisted value (ADR-506 rollout compatibility); with no
+        // persisted policy there is nothing to preserve, so the entity default (Continuous) applies.
+        var firstBasis = firstResponseTimingBasis ?? existingPolicy?.FirstResponseTimingBasis ?? ResponseTimingBasis.Continuous;
+        var standardBasis = standardResponseTimingBasis ?? existingPolicy?.StandardResponseTimingBasis ?? ResponseTimingBasis.Continuous;
+        var priorityBasis = priorityResponseTimingBasis ?? existingPolicy?.PriorityResponseTimingBasis ?? ResponseTimingBasis.Continuous;
+
         var staffedTargets = new List<int>();
-        if (firstResponseTimingBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(firstResponseTargetMinutes);
-        if (standardResponseTimingBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(standardResponseTargetMinutes);
-        if (priorityResponseTimingBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(priorityResponseTargetMinutes);
+        if (firstBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(firstResponseTargetMinutes);
+        if (standardBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(standardResponseTargetMinutes);
+        if (priorityBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(priorityResponseTargetMinutes);
 
         if (staffedTargets.Count > 0 && weeklyIntervals.Count == 0)
             return Result.Failure(KeepResponsePolicyErrors.StaffedTimingRequiresWeeklyInterval);
@@ -113,12 +138,6 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         {
             TimeZoneId.TryResolve(account.TimeZone, out var timeZone);
             var fromLocalDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(occurredAtUtc, timeZone));
-
-            var closureDates = await dbContext.Set<KeepCalendarClosure>()
-                .AsNoTracking()
-                .Where(c => c.AccountId == accountId)
-                .Select(c => c.ClosureDate)
-                .ToListAsync(ct);
 
             var intervalTuples = weeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)).ToList();
 
@@ -129,39 +148,47 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             }
         }
 
-        var isNew = existingPolicy is null;
-        var durationsChanged = !isNew &&
-            (existingPolicy!.FirstResponseTargetMinutes != firstResponseTargetMinutes ||
-             existingPolicy.StandardResponseTargetMinutes != standardResponseTargetMinutes ||
-             existingPolicy.PriorityResponseTargetMinutes != priorityResponseTargetMinutes ||
-             existingPolicy.StatusCheckThresholdDays != statusCheckThresholdDays);
-        var basisChanged = !isNew &&
-            (existingPolicy!.FirstResponseTimingBasis != firstResponseTimingBasis ||
-             existingPolicy.StandardResponseTimingBasis != standardResponseTimingBasis ||
-             existingPolicy.PriorityResponseTimingBasis != priorityResponseTimingBasis);
+        // Audit content is computed from the pre-mutation state (ADR-506 §4): changed fields only,
+        // fixed order, "field: before -> after"; a first policy records every field as unset -> value.
+        var durationsContent = DescribeChanges(
+        [
+            ("firstResponseTargetMinutes", existingPolicy?.FirstResponseTargetMinutes.ToString(), firstResponseTargetMinutes.ToString()),
+            ("standardResponseTargetMinutes", existingPolicy?.StandardResponseTargetMinutes.ToString(), standardResponseTargetMinutes.ToString()),
+            ("priorityResponseTargetMinutes", existingPolicy?.PriorityResponseTargetMinutes.ToString(), priorityResponseTargetMinutes.ToString()),
+            ("statusCheckThresholdDays", existingPolicy?.StatusCheckThresholdDays.ToString(), statusCheckThresholdDays.ToString()),
+        ]);
+        var basisContent = DescribeChanges(
+        [
+            ("firstResponseTimingBasis", existingPolicy?.FirstResponseTimingBasis.ToString(), firstBasis.ToString()),
+            ("standardResponseTimingBasis", existingPolicy?.StandardResponseTimingBasis.ToString(), standardBasis.ToString()),
+            ("priorityResponseTimingBasis", existingPolicy?.PriorityResponseTimingBasis.ToString(), priorityBasis.ToString()),
+        ]);
 
         var policy = existingPolicy ?? KeepResponsePolicy.Create(
             accountId, firstResponseTargetMinutes, standardResponseTargetMinutes, priorityResponseTargetMinutes, statusCheckThresholdDays);
 
         policy.UpdateTargetsAndTimingBasis(
             firstResponseTargetMinutes, standardResponseTargetMinutes, priorityResponseTargetMinutes, statusCheckThresholdDays,
-            firstResponseTimingBasis, standardResponseTimingBasis, priorityResponseTimingBasis);
+            firstBasis, standardBasis, priorityBasis);
 
-        if (isNew)
+        if (existingPolicy is null)
             dbContext.Set<KeepResponsePolicy>().Add(policy);
 
-        if (isNew || durationsChanged)
+        if (durationsContent is not null)
             dbContext.Set<KeepSettingsAuditEvent>().Add(KeepSettingsAuditEvent.CreateResponseTargetDurationChanged(
-                accountId, actorAccountUserId, actorDisplayName,
-                $"First {firstResponseTargetMinutes}m, Standard {standardResponseTargetMinutes}m, " +
-                $"Priority {priorityResponseTargetMinutes}m, status-check {statusCheckThresholdDays}d",
-                occurredAtUtc));
+                accountId, actorAccountUserId, actorDisplayName, durationsContent, occurredAtUtc));
 
-        if (isNew || basisChanged)
+        if (basisContent is not null)
             dbContext.Set<KeepSettingsAuditEvent>().Add(KeepSettingsAuditEvent.CreateResponseTimingBasisChanged(
-                accountId, actorAccountUserId, actorDisplayName,
-                $"First {firstResponseTimingBasis}, Standard {standardResponseTimingBasis}, Priority {priorityResponseTimingBasis}",
-                occurredAtUtc));
+                accountId, actorAccountUserId, actorDisplayName, basisContent, occurredAtUtc));
+
+        // The onboarding checklist's "policy saved" step derives from this once-per-account event
+        // (previously recorded by the ungoverned setup write) — it must survive the governed path.
+        var policySavedRecorded = await dbContext.Set<KeepProductOpsEvent>()
+            .AnyAsync(e => e.AccountId == accountId && e.EventType == KeepProductOpsEventType.PolicySaved, ct);
+        if (!policySavedRecorded)
+            dbContext.Set<KeepProductOpsEvent>().Add(
+                KeepProductOpsEvent.Record(accountId, KeepProductOpsEventType.PolicySaved, occurredAtUtc));
 
         try
         {
@@ -174,6 +201,20 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         }
 
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Deterministic ADR-506 audit text: only fields whose value changed, in the supplied order,
+    /// as <c>field: before -&gt; after</c> joined by <c>"; "</c>; a missing "before" renders as
+    /// <c>unset</c>. Returns null when nothing changed (a no-op emits no event).
+    /// </summary>
+    private static string? DescribeChanges(IEnumerable<(string Field, string? Before, string After)> fields)
+    {
+        var changes = fields
+            .Where(f => f.Before != f.After)
+            .Select(f => $"{f.Field}: {f.Before ?? "unset"} -> {f.After}")
+            .ToList();
+        return changes.Count == 0 ? null : string.Join("; ", changes);
     }
 
     public async Task<Result> UpdateCalendarAsync(
