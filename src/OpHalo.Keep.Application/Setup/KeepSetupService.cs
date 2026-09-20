@@ -1,6 +1,8 @@
+using System.Globalization;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
+using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.SharedKernel.Abstractions;
@@ -35,14 +37,7 @@ public sealed class KeepSetupService(
         var (account, profile) = await persistence.GetProfileDataAsync(currentUser.AccountId, ct);
         var policy = await persistence.GetPolicyAsync(currentUser.AccountId, ct);
 
-        return Result<KeepSetupResult>.Success(new KeepSetupResult(
-            BusinessName: account.BusinessName,
-            TimeZone: account.TimeZone,
-            CustomerFacingPhone: profile?.CustomerFacingPhone,
-            CustomerFacingEmail: profile?.CustomerFacingEmail,
-            LogoUrl: profile?.LogoUrl,
-            WebsiteUrl: profile?.WebsiteUrl,
-            ResponsePolicy: ToPolicy(policy)));
+        return Result<KeepSetupResult>.Success(await BuildResultAsync(account, profile, policy, ct));
     }
 
     public async Task<Result<KeepSetupResult>> UpdateProfileAsync(
@@ -86,14 +81,7 @@ public sealed class KeepSetupService(
 
         var policy = await persistence.GetPolicyAsync(currentUser.AccountId, ct);
 
-        return Result<KeepSetupResult>.Success(new KeepSetupResult(
-            BusinessName: account.BusinessName,
-            TimeZone: account.TimeZone,
-            CustomerFacingPhone: profile.CustomerFacingPhone,
-            CustomerFacingEmail: profile.CustomerFacingEmail,
-            LogoUrl: profile.LogoUrl,
-            WebsiteUrl: profile.WebsiteUrl,
-            ResponsePolicy: ToPolicy(policy)));
+        return Result<KeepSetupResult>.Success(await BuildResultAsync(account, profile, policy, ct));
     }
 
     public async Task<Result<KeepSetupResult>> UpdatePolicyAsync(
@@ -137,14 +125,24 @@ public sealed class KeepSetupService(
 
         var (account, profile) = await persistence.GetProfileDataAsync(currentUser.AccountId, ct);
 
-        return Result<KeepSetupResult>.Success(new KeepSetupResult(
+        return Result<KeepSetupResult>.Success(await BuildResultAsync(account, profile, policy, ct));
+    }
+
+    private async Task<KeepSetupResult> BuildResultAsync(
+        Account account, KeepBusinessProfile? profile, KeepResponsePolicy? policy, CancellationToken ct)
+    {
+        var calendar = await persistence.GetCalendarAsync(currentUser.AccountId, ct);
+
+        return new KeepSetupResult(
             BusinessName: account.BusinessName,
             TimeZone: account.TimeZone,
             CustomerFacingPhone: profile?.CustomerFacingPhone,
             CustomerFacingEmail: profile?.CustomerFacingEmail,
             LogoUrl: profile?.LogoUrl,
             WebsiteUrl: profile?.WebsiteUrl,
-            ResponsePolicy: ToPolicy(policy)));
+            ResponsePolicy: ToPolicy(policy),
+            Calendar: ToCalendar(calendar),
+            SettingsVersion: KeepSettingsVersion.Compute(account.TimeZone, policy, calendar));
     }
 
     private static KeepSetupPolicyResult ToPolicy(KeepResponsePolicy? policy) =>
@@ -153,12 +151,32 @@ public sealed class KeepSetupService(
                 DefaultFirstResponseTargetMinutes,
                 DefaultStandardResponseTargetMinutes,
                 DefaultPriorityResponseTargetMinutes,
-                DefaultStatusCheckThresholdDays)
+                DefaultStatusCheckThresholdDays,
+                nameof(ResponseTimingBasis.Continuous),
+                nameof(ResponseTimingBasis.Continuous),
+                nameof(ResponseTimingBasis.Continuous))
             : new KeepSetupPolicyResult(
                 policy.FirstResponseTargetMinutes,
                 policy.StandardResponseTargetMinutes,
                 policy.PriorityResponseTargetMinutes,
-                policy.StatusCheckThresholdDays);
+                policy.StatusCheckThresholdDays,
+                policy.FirstResponseTimingBasis.ToString(),
+                policy.StandardResponseTimingBasis.ToString(),
+                policy.PriorityResponseTimingBasis.ToString());
+
+    private static KeepSetupCalendarResult ToCalendar(KeepCalendarSnapshot calendar) =>
+        new(
+            calendar.WeeklyIntervals
+                .OrderBy(i => i.Weekday)
+                .Select(i => new KeepSetupWeeklyIntervalResult(
+                    i.Weekday.ToString(),
+                    i.OpensAt.ToString("HH:mm", CultureInfo.InvariantCulture),
+                    i.ClosesAt.ToString("HH:mm", CultureInfo.InvariantCulture)))
+                .ToList(),
+            calendar.ClosureDates
+                .OrderBy(d => d)
+                .Select(d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+                .ToList());
 
     private async Task<Result> AuthorizeAsync(CancellationToken ct)
     {

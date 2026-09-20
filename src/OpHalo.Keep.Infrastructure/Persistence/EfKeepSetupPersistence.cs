@@ -83,6 +83,25 @@ public sealed class EfKeepSetupPersistence(OpHaloDbContext dbContext) : IKeepSet
         dbContext.Set<KeepResponsePolicy>()
             .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
 
+    public async Task<KeepCalendarSnapshot> GetCalendarAsync(Guid accountId, CancellationToken ct)
+    {
+        var intervals = await dbContext.Set<KeepCalendarWeeklyInterval>()
+            .AsNoTracking()
+            .Where(i => i.AccountId == accountId)
+            .OrderBy(i => i.Weekday)
+            .Select(i => new KeepWeeklyIntervalSnapshot(i.Weekday, i.OpensAt, i.ClosesAt))
+            .ToListAsync(ct);
+
+        var closures = await dbContext.Set<KeepCalendarClosure>()
+            .AsNoTracking()
+            .Where(c => c.AccountId == accountId)
+            .OrderBy(c => c.ClosureDate)
+            .Select(c => c.ClosureDate)
+            .ToListAsync(ct);
+
+        return new KeepCalendarSnapshot(intervals, closures);
+    }
+
     public async Task<Result> SaveProfileWithTimeZoneAsync(
         Account account,
         KeepBusinessProfile profile,

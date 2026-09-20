@@ -12,6 +12,7 @@ public interface IKeepSetupPersistence
     Task<string?> GetActorDisplayNameAsync(Guid accountUserId, CancellationToken ct);
     Task<(Account account, KeepBusinessProfile? profile)> GetProfileDataAsync(Guid accountId, CancellationToken ct);
     Task<KeepResponsePolicy?> GetPolicyAsync(Guid accountId, CancellationToken ct);
+    Task<KeepCalendarSnapshot> GetCalendarAsync(Guid accountId, CancellationToken ct);
 
     /// <summary>
     /// Persists <paramref name="account"/> (already staged with its non-timezone profile

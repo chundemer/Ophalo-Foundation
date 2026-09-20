@@ -68,6 +68,52 @@ public sealed class EfKeepSetupPersistenceTests : IClassFixture<KeepApiWebFactor
         Assert.NotEqual("New Business Name", reloaded.BusinessName);
     }
 
+    [Fact]
+    public async Task GetCalendarAsync_returns_only_the_accounts_intervals_and_closures_in_order()
+    {
+        var (accountId, _) = await SeedAccountAsync("setup-calendar-read");
+        var (otherAccountId, _) = await SeedAccountAsync("setup-calendar-read-other");
+
+        await using (var setupScope = _factory.CreateScope())
+        {
+            var db = setupScope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            db.Set<KeepCalendarWeeklyInterval>().AddRange(
+                KeepCalendarWeeklyInterval.Create(accountId, DayOfWeek.Wednesday, new TimeOnly(9, 0), new TimeOnly(17, 30)),
+                KeepCalendarWeeklyInterval.Create(accountId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(16, 0)),
+                KeepCalendarWeeklyInterval.Create(otherAccountId, DayOfWeek.Friday, new TimeOnly(7, 0), new TimeOnly(15, 0)));
+            db.Set<KeepCalendarClosure>().AddRange(
+                KeepCalendarClosure.Create(accountId, new DateOnly(2027, 1, 1)),
+                KeepCalendarClosure.Create(accountId, new DateOnly(2026, 12, 25)),
+                KeepCalendarClosure.Create(otherAccountId, new DateOnly(2026, 7, 4)));
+            await db.SaveChangesAsync();
+        }
+
+        await using var scope = _factory.CreateScope();
+        var persistence = scope.ServiceProvider.GetRequiredService<IKeepSetupPersistence>();
+
+        var calendar = await persistence.GetCalendarAsync(accountId, CancellationToken.None);
+
+        Assert.Equal(
+            [(DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(16, 0)),
+             (DayOfWeek.Wednesday, new TimeOnly(9, 0), new TimeOnly(17, 30))],
+            calendar.WeeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)));
+        Assert.Equal([new DateOnly(2026, 12, 25), new DateOnly(2027, 1, 1)], calendar.ClosureDates);
+    }
+
+    [Fact]
+    public async Task GetCalendarAsync_returns_an_empty_snapshot_when_no_calendar_is_configured()
+    {
+        var (accountId, _) = await SeedAccountAsync("setup-calendar-empty");
+
+        await using var scope = _factory.CreateScope();
+        var persistence = scope.ServiceProvider.GetRequiredService<IKeepSetupPersistence>();
+
+        var calendar = await persistence.GetCalendarAsync(accountId, CancellationToken.None);
+
+        Assert.Empty(calendar.WeeklyIntervals);
+        Assert.Empty(calendar.ClosureDates);
+    }
+
     private static KeepResponsePolicy CreateUnreachableStaffedPolicy(Guid accountId)
     {
         var policy = KeepResponsePolicy.Create(accountId, 10_000, 240, 60, 5);

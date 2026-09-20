@@ -6,6 +6,7 @@ using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.Setup;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
@@ -110,6 +111,56 @@ public class KeepSetupServiceTests
     // --- GetSetupAsync ---
 
     [Fact]
+    public async Task GetSetup_without_a_policy_returns_defaults_continuous_bases_and_a_version()
+    {
+        var sut = BuildSut(HappyPersistence());
+
+        var result = await sut.GetSetupAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Continuous", result.Value.ResponsePolicy.FirstResponseTimingBasis);
+        Assert.Equal("Continuous", result.Value.ResponsePolicy.StandardResponseTimingBasis);
+        Assert.Equal("Continuous", result.Value.ResponsePolicy.PriorityResponseTimingBasis);
+        Assert.Empty(result.Value.Calendar.WeeklyIntervals);
+        Assert.Empty(result.Value.Calendar.ClosureDates);
+        Assert.False(string.IsNullOrEmpty(result.Value.SettingsVersion));
+    }
+
+    [Fact]
+    public async Task GetSetup_returns_string_bases_and_calendar_and_a_version_that_tracks_the_state()
+    {
+        var persistence = HappyPersistence();
+        var policy = KeepResponsePolicy.Create(AccountId, 60, 240, 60, 5);
+        policy.UpdateTargetsAndTimingBasis(
+            60, 240, 60, 5,
+            ResponseTimingBasis.StaffedHours, ResponseTimingBasis.Continuous, ResponseTimingBasis.StaffedHours);
+        persistence.Policy = policy;
+        persistence.Calendar = new KeepCalendarSnapshot(
+            [
+                new KeepWeeklyIntervalSnapshot(DayOfWeek.Tuesday, new TimeOnly(8, 30), new TimeOnly(17, 0)),
+                new KeepWeeklyIntervalSnapshot(DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(16, 45)),
+            ],
+            [new DateOnly(2026, 12, 25)]);
+        var sut = BuildSut(persistence);
+
+        var first = await sut.GetSetupAsync();
+
+        Assert.True(first.IsSuccess);
+        Assert.Equal("StaffedHours", first.Value.ResponsePolicy.FirstResponseTimingBasis);
+        Assert.Equal("Continuous", first.Value.ResponsePolicy.StandardResponseTimingBasis);
+        Assert.Equal("StaffedHours", first.Value.ResponsePolicy.PriorityResponseTimingBasis);
+        Assert.Equal(
+            [("Monday", "08:00", "16:45"), ("Tuesday", "08:30", "17:00")],
+            first.Value.Calendar.WeeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)));
+        Assert.Equal(["2026-12-25"], first.Value.Calendar.ClosureDates);
+
+        persistence.Calendar = new KeepCalendarSnapshot([], []);
+        var second = await sut.GetSetupAsync();
+
+        Assert.NotEqual(first.Value.SettingsVersion, second.Value.SettingsVersion);
+    }
+
+    [Fact]
     public async Task GetSetup_returns_logo_and_website_from_existing_profile()
     {
         var profile = KeepBusinessProfile.Create(AccountId);
@@ -174,8 +225,14 @@ public class KeepSetupServiceTests
         public Task<(Account account, KeepBusinessProfile? profile)> GetProfileDataAsync(Guid accountId, CancellationToken ct) =>
             Task.FromResult((Account!, Profile));
 
+        public KeepResponsePolicy? Policy { get; set; }
+        public KeepCalendarSnapshot Calendar { get; set; } = new([], []);
+
         public Task<KeepResponsePolicy?> GetPolicyAsync(Guid accountId, CancellationToken ct) =>
-            Task.FromResult<KeepResponsePolicy?>(null);
+            Task.FromResult(Policy);
+
+        public Task<KeepCalendarSnapshot> GetCalendarAsync(Guid accountId, CancellationToken ct) =>
+            Task.FromResult(Calendar);
 
         public Task<Result> SaveProfileWithTimeZoneAsync(
             Account account, KeepBusinessProfile profile, KeepProductOpsEvent? opsEvent,
