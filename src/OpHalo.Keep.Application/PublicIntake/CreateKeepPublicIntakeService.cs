@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
@@ -7,9 +8,11 @@ using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Application.Validation;
 using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
+using OpHalo.SharedKernel.Time;
 
 namespace OpHalo.Keep.Application.PublicIntake;
 
@@ -19,7 +22,8 @@ public sealed class CreateKeepPublicIntakeService(
     IAccountAccessPolicy accessPolicy,
     IFeatureAccessPolicy featurePolicy,
     IClock clock,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ILogger<CreateKeepPublicIntakeService> logger)
 {
     private const int MaxAttempts = 5;
 
@@ -154,8 +158,8 @@ public sealed class CreateKeepPublicIntakeService(
         if (!featurePolicy.IsEnabled(snapshot.Plan, FeatureKeys.Keep.PublicIntake))
             return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
 
-        var policy = await persistence.GetResponsePolicyAsync(accountId, ct);
-        var firstResponseTargetMinutes = policy?.FirstResponseTargetMinutes ?? KeepResponsePolicyDefaults.FirstResponseTargetMinutes;
+        var responseSnapshot = await persistence.GetFirstResponseSnapshotAsync(accountId, ct);
+        var (firstResponseDueAtUtc, deadlineFailure) = ResolveFirstResponseDeadline(responseSnapshot, nowUtc);
 
         var customer = await persistence.FindCustomerByCanonicalPhoneAsync(accountId, v.CanonicalPhone, ct);
         if (customer is null)
@@ -174,7 +178,7 @@ public sealed class CreateKeepPublicIntakeService(
             var request = KeepRequest.CreateFromCustomerIntake(
                 accountId, customer.Id,
                 v.TrimmedName, v.TrimmedPhone, v.TrimmedEmail,
-                v.TrimmedDescription, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes,
+                v.TrimmedDescription, referenceCode, pageToken, nowUtc, firstResponseDueAtUtc,
                 command.ServiceAddressLine1, command.ServiceAddressLine2,
                 command.ServiceCity, command.ServiceState, command.ServiceZip,
                 command.IntakeUrgency, command.ContactPreference);
@@ -184,6 +188,13 @@ public sealed class CreateKeepPublicIntakeService(
             switch (commitResult)
             {
                 case PublicIntakeCommitResult.Committed:
+                    // ADR-505: a controlled clock failure never blocks the customer or falls back to
+                    // continuous timing; the request is accepted with no deadline and flagged for
+                    // operator attention. Ids and the failure reason only: no customer data.
+                    if (deadlineFailure is not null)
+                        logger.LogError(
+                            "Public intake first-response deadline not stamped: account {AccountId}, request {RequestId}, reason {Reason}",
+                            accountId, request.Id, deadlineFailure);
                     return Result<CreateKeepPublicIntakeResult>.Success(
                         new CreateKeepPublicIntakeResult(request.Id, referenceCode, pageToken));
 
@@ -205,5 +216,36 @@ public sealed class CreateKeepPublicIntakeService(
 
         throw new InvalidOperationException(
             $"Failed to commit public intake after {MaxAttempts} attempts.");
+    }
+
+    /// <summary>
+    /// ADR-505: one UTC deadline from the snapshot, or a null deadline plus a failure label. Never
+    /// substitutes a continuous deadline for a failed staffed-hours calculation.
+    /// </summary>
+    private static (DateTime? DeadlineUtc, string? Failure) ResolveFirstResponseDeadline(
+        KeepIntakeResponseSnapshot snapshot, DateTime nowUtc)
+    {
+        var intervals = Array.Empty<(DayOfWeek, TimeOnly, TimeOnly)>();
+        IReadOnlyCollection<DateOnly> closures = [];
+        var timeZone = TimeZoneInfo.Utc;
+
+        if (snapshot.TimingBasis == ResponseTimingBasis.StaffedHours)
+        {
+            if (snapshot.Calendar is null)
+                return (null, "CalendarUnavailable");
+            if (!TimeZoneId.TryResolve(snapshot.Calendar.TimeZoneId, out timeZone))
+                return (null, "InvalidTimeZone");
+
+            intervals = snapshot.Calendar.WeeklyIntervals
+                .Select(i => (i.Weekday, i.OpensAt, i.ClosesAt))
+                .ToArray();
+            closures = snapshot.Calendar.ClosureDates;
+        }
+
+        return BusinessClock.TryCalculate(
+            nowUtc, snapshot.TargetMinutes, snapshot.TimingBasis, intervals, closures, timeZone,
+            out var deadlineUtc, out var failure)
+            ? (deadlineUtc, null)
+            : (null, failure.ToString());
     }
 }

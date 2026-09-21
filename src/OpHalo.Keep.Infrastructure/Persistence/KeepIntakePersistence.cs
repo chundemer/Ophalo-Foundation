@@ -1,8 +1,11 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.PublicIntake;
+using OpHalo.Keep.Application.Setup;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.Keep.Infrastructure.Persistence;
 
@@ -67,10 +70,58 @@ public sealed class KeepIntakePersistence(OpHaloDbContext dbContext) : IKeepInta
         dbContext.Set<KeepCustomer>()
             .FirstOrDefaultAsync(c => c.AccountId == accountId && c.CanonicalPhone == canonicalPhone, ct);
 
-    public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct) =>
+    public async Task<KeepIntakeResponseSnapshot> GetFirstResponseSnapshotAsync(Guid accountId, CancellationToken ct)
+    {
+        var policy = await ReadPolicyAsync(accountId, ct);
+        if (policy is null || policy.FirstResponseTimingBasis != ResponseTimingBasis.StaffedHours)
+            return ContinuousSnapshot(policy);
+
+        // Staffed hours: policy, timezone, intervals, and closures must come from one snapshot. A
+        // settings save is Serializable and rewrites these rows together; independent reads could
+        // straddle it and manufacture an empty calendar. RepeatableRead is a true snapshot in
+        // PostgreSQL and never blocks the writer. The policy is re-read inside it, so the basis
+        // used is the one the calendar was read with.
+        await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+
+        policy = await ReadPolicyAsync(accountId, ct);
+        if (policy is null || policy.FirstResponseTimingBasis != ResponseTimingBasis.StaffedHours)
+            return ContinuousSnapshot(policy);
+
+        var timeZoneId = await dbContext.Accounts.AsNoTracking()
+            .Where(a => a.Id == accountId)
+            .Select(a => a.TimeZone)
+            .FirstOrDefaultAsync(ct) ?? string.Empty;
+
+        var intervals = await dbContext.Set<KeepCalendarWeeklyInterval>()
+            .AsNoTracking()
+            .Where(i => i.AccountId == accountId)
+            .OrderBy(i => i.Weekday)
+            .Select(i => new KeepWeeklyIntervalSnapshot(i.Weekday, i.OpensAt, i.ClosesAt))
+            .ToListAsync(ct);
+
+        var closureDates = await dbContext.Set<KeepCalendarClosure>()
+            .AsNoTracking()
+            .Where(c => c.AccountId == accountId)
+            .Select(c => c.ClosureDate)
+            .ToListAsync(ct);
+
+        await tx.CommitAsync(ct);
+        return new KeepIntakeResponseSnapshot(
+            policy.FirstResponseTargetMinutes,
+            ResponseTimingBasis.StaffedHours,
+            new KeepIntakeStaffedCalendar(timeZoneId, intervals, closureDates));
+    }
+
+    private Task<KeepResponsePolicy?> ReadPolicyAsync(Guid accountId, CancellationToken ct) =>
         dbContext.Set<KeepResponsePolicy>()
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
+
+    private static KeepIntakeResponseSnapshot ContinuousSnapshot(KeepResponsePolicy? policy) =>
+        new(
+            policy?.FirstResponseTargetMinutes ?? KeepResponsePolicyDefaults.FirstResponseTargetMinutes,
+            ResponseTimingBasis.Continuous,
+            Calendar: null);
 
     public async Task<KeepPublicIntakeInfo?> GetPublicIdentityByTokenHashAsync(string tokenHash, CancellationToken ct)
     {

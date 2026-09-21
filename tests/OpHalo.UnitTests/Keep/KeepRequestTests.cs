@@ -420,4 +420,45 @@ public class KeepRequestTests
         Assert.True(result.IsSuccess);
         Assert.Null(result.Value.Content);
     }
+
+    // --- ADR-505 explicit first-response deadline overload -----------------------
+
+    private static KeepRequest IntakeWithDeadline(DateTime? dueAtUtc) =>
+        KeepRequest.CreateFromCustomerIntake(
+            AccountId, CustomerId, "Jane", "04123", null, "desc", "REF1", "tok", Now, dueAtUtc);
+
+    [Fact]
+    public void CreateFromCustomerIntake_explicit_deadline_is_stamped_literally()
+    {
+        var due = Now.AddHours(20);
+
+        Assert.Equal(due, IntakeWithDeadline(due).FirstResponseDueAtUtc);
+    }
+
+    [Fact]
+    public void CreateFromCustomerIntake_explicit_null_means_no_deadline_and_never_falls_back_to_a_duration() =>
+        Assert.Null(IntakeWithDeadline(null).FirstResponseDueAtUtc);
+
+    [Theory]
+    [InlineData(DateTimeKind.Local)]
+    [InlineData(DateTimeKind.Unspecified)]
+    public void CreateFromCustomerIntake_explicit_deadline_must_be_utc(DateTimeKind kind) =>
+        Assert.Throws<ArgumentException>(() =>
+            IntakeWithDeadline(new DateTime(2025, 6, 2, 12, 0, 0, kind)));
+
+    [Theory]
+    [InlineData(0)]   // equal to nowUtc
+    [InlineData(-1)]  // before nowUtc
+    public void CreateFromCustomerIntake_explicit_deadline_must_be_strictly_after_now(int minutesFromNow) =>
+        Assert.Throws<ArgumentException>(() => IntakeWithDeadline(Now.AddMinutes(minutesFromNow)));
+
+    [Fact]
+    public void CreateFromCustomerIntake_explicit_deadline_overload_keeps_intake_defaults()
+    {
+        var request = IntakeWithDeadline(Now.AddHours(1));
+
+        Assert.Equal(KeepRequestOrigin.Customer, request.Origin);
+        Assert.Equal(KeepRequestSource.PublicIntake, request.Source);
+        Assert.Equal(Now, request.LastCustomerActivityAt);
+    }
 }

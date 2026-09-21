@@ -1,5 +1,7 @@
 using OpHalo.Keep.Application.Abstractions;
+using OpHalo.Keep.Application.Setup;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.Keep.Application.PublicIntake;
 
@@ -42,10 +44,13 @@ public interface IKeepIntakePersistence
         Guid accountId, string canonicalPhone, CancellationToken ct);
 
     /// <summary>
-    /// Returns the response policy for the account, or null if no policy row exists.
-    /// Callers should fall back to pilot defaults (first=60, standard=240, priority=60 min).
+    /// Returns what public intake needs to stamp the first-response deadline (ADR-505). With no
+    /// policy row the canonical unsaved defaults apply (60 minutes, Continuous). A Continuous basis
+    /// loads the policy only; a StaffedHours basis additionally loads the account timezone, weekly
+    /// intervals, and closures, with the policy, timezone, and calendar read from one consistent
+    /// snapshot so a concurrent settings save cannot produce a torn calendar.
     /// </summary>
-    Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct);
+    Task<KeepIntakeResponseSnapshot> GetFirstResponseSnapshotAsync(Guid accountId, CancellationToken ct);
 
     /// <summary>
     /// Returns the public-safe business identity for an active intake link identified by
@@ -91,3 +96,16 @@ public sealed record KeepPublicIntakeInfo(
     string? LogoUrl,
     string? WebsiteUrl,
     string? Phone);
+
+/// <summary>First-response timing inputs for public intake (ADR-505). Domain scalars only.</summary>
+/// <param name="Calendar">Null when <paramref name="TimingBasis"/> is Continuous.</param>
+public sealed record KeepIntakeResponseSnapshot(
+    int TargetMinutes,
+    ResponseTimingBasis TimingBasis,
+    KeepIntakeStaffedCalendar? Calendar);
+
+/// <param name="TimeZoneId">The account's stored IANA id, unresolved; the caller validates it.</param>
+public sealed record KeepIntakeStaffedCalendar(
+    string TimeZoneId,
+    IReadOnlyList<KeepWeeklyIntervalSnapshot> WeeklyIntervals,
+    IReadOnlyList<DateOnly> ClosureDates);

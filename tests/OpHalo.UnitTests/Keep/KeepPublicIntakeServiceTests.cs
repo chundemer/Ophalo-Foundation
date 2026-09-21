@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
@@ -18,13 +20,165 @@ public class KeepPublicIntakeServiceTests
     private static readonly DateTime Now = new(2026, 6, 15, 10, 0, 0, DateTimeKind.Utc);
     private static readonly Guid AccountId = Guid.NewGuid();
 
+    // --- ADR-505 first-response deadline (slice 8) ------------------------------
+
+    private static KeepIntakeResponseSnapshot StaffedSnapshot(
+        string timeZoneId, int minutes, params (DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)[] intervals) =>
+        new(minutes, ResponseTimingBasis.StaffedHours,
+            new KeepIntakeStaffedCalendar(
+                timeZoneId,
+                intervals.Select(i => new OpHalo.Keep.Application.Setup.KeepWeeklyIntervalSnapshot(i.Weekday, i.OpensAt, i.ClosesAt)).ToList(),
+                []));
+
+    [Fact]
+    public async Task Execute_continuous_default_stamps_now_plus_sixty_minutes()
+    {
+        var p = HappyPathPersistence();
+
+        var result = await BuildSut(p).ExecuteAsync(ValidCommand(p));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(Now.AddMinutes(60), p.LastCommittedRequest!.FirstResponseDueAtUtc);
+    }
+
+    [Fact]
+    public async Task Execute_continuous_uses_the_snapshot_target()
+    {
+        var p = HappyPathPersistence();
+        p.SnapshotToReturn = new(120, ResponseTimingBasis.Continuous, null);
+
+        await BuildSut(p).ExecuteAsync(ValidCommand(p));
+
+        Assert.Equal(Now.AddMinutes(120), p.LastCommittedRequest!.FirstResponseDueAtUtc);
+    }
+
+    [Fact]
+    public async Task Execute_staffed_closed_arrival_waits_for_opening()
+    {
+        // Now = Mon 2026-06-15 10:00Z = 06:00 EDT; opens 08:00 EDT (12:00Z) → +60 = 13:00Z.
+        var p = HappyPathPersistence();
+        p.SnapshotToReturn = StaffedSnapshot("America/New_York", 60, (DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(17, 0)));
+
+        var result = await BuildSut(p).ExecuteAsync(ValidCommand(p));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new DateTime(2026, 6, 15, 13, 0, 0, DateTimeKind.Utc), p.LastCommittedRequest!.FirstResponseDueAtUtc);
+    }
+
+    [Fact]
+    public async Task Execute_staffed_arrival_inside_open_hours_consumes_immediately()
+    {
+        // 06:00 EDT is inside 05:00–17:00 EDT.
+        var p = HappyPathPersistence();
+        p.SnapshotToReturn = StaffedSnapshot("America/New_York", 60, (DayOfWeek.Monday, new TimeOnly(5, 0), new TimeOnly(17, 0)));
+
+        await BuildSut(p).ExecuteAsync(ValidCommand(p));
+
+        Assert.Equal(Now.AddMinutes(60), p.LastCommittedRequest!.FirstResponseDueAtUtc);
+    }
+
+    [Fact]
+    public async Task Execute_clock_success_logs_no_error()
+    {
+        var p = HappyPathPersistence();
+        var logger = new CapturingLogger();
+
+        await BuildSut(p, logger: logger).ExecuteAsync(ValidCommand(p));
+
+        Assert.Empty(logger.Entries);
+    }
+
+    [Fact]
+    public async Task Execute_staffed_without_intervals_accepts_request_with_no_deadline_and_logs_error()
+    {
+        var p = HappyPathPersistence();
+        p.SnapshotToReturn = StaffedSnapshot("America/New_York", 60);
+        var logger = new CapturingLogger();
+
+        var result = await BuildSut(p, logger: logger).ExecuteAsync(ValidCommand(p));
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(p.LastCommittedRequest!.FirstResponseDueAtUtc); // never a continuous fallback
+        AssertDeadlineFailureLogged(logger, p, "NoWeeklyIntervals");
+    }
+
+    [Fact]
+    public async Task Execute_unresolvable_timezone_accepts_request_with_no_deadline_and_logs_error()
+    {
+        var p = HappyPathPersistence();
+        p.SnapshotToReturn = StaffedSnapshot("Not/AZone", 60, (DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(17, 0)));
+        var logger = new CapturingLogger();
+
+        var result = await BuildSut(p, logger: logger).ExecuteAsync(ValidCommand(p));
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(p.LastCommittedRequest!.FirstResponseDueAtUtc);
+        AssertDeadlineFailureLogged(logger, p, "InvalidTimeZone");
+    }
+
+    [Fact]
+    public async Task Execute_staffed_snapshot_without_calendar_accepts_request_with_no_deadline_and_logs_error()
+    {
+        var p = HappyPathPersistence();
+        p.SnapshotToReturn = new(60, ResponseTimingBasis.StaffedHours, null);
+        var logger = new CapturingLogger();
+
+        var result = await BuildSut(p, logger: logger).ExecuteAsync(ValidCommand(p));
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(p.LastCommittedRequest!.FirstResponseDueAtUtc);
+        AssertDeadlineFailureLogged(logger, p, "CalendarUnavailable");
+    }
+
+    [Fact]
+    public async Task Execute_non_positive_target_accepts_request_with_no_deadline_and_logs_error()
+    {
+        var p = HappyPathPersistence();
+        p.SnapshotToReturn = new(0, ResponseTimingBasis.Continuous, null);
+        var logger = new CapturingLogger();
+
+        var result = await BuildSut(p, logger: logger).ExecuteAsync(ValidCommand(p));
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(p.LastCommittedRequest!.FirstResponseDueAtUtc);
+        AssertDeadlineFailureLogged(logger, p, "InvalidTarget");
+    }
+
+    private static void AssertDeadlineFailureLogged(CapturingLogger logger, FakeIntakePersistence p, string reason)
+    {
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Contains(reason, entry.Message);
+        Assert.Contains(AccountId.ToString(), entry.Message);
+        Assert.Contains(p.LastCommittedRequest!.Id.ToString(), entry.Message);
+        // No customer data in the operational signal.
+        Assert.DoesNotContain("Jane", entry.Message);
+        Assert.DoesNotContain("555", entry.Message);
+        Assert.DoesNotContain("jane@example.com", entry.Message);
+    }
+
+    private sealed class CapturingLogger : ILogger<CreateKeepPublicIntakeService>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception)));
+    }
+
     // --- Helpers ----------------------------------------------------------------
 
     private static CreateKeepPublicIntakeService BuildSut(
         FakeIntakePersistence? persistence = null,
         AccountAccessPosture posture = AccountAccessPosture.FullAccess,
         bool featureEnabled = true,
-        ICurrentUser? currentUser = null)
+        ICurrentUser? currentUser = null,
+        ILogger<CreateKeepPublicIntakeService>? logger = null)
     {
         persistence ??= HappyPathPersistence();
         return new CreateKeepPublicIntakeService(
@@ -33,7 +187,8 @@ public class KeepPublicIntakeServiceTests
             new FakeAccountAccessPolicy(posture),
             new FakeFeatureAccessPolicy(featureEnabled),
             new FakeClock(Now),
-            currentUser ?? new FakeCurrentUser(Guid.Empty, Guid.Empty, false));
+            currentUser ?? new FakeCurrentUser(Guid.Empty, Guid.Empty, false),
+            logger ?? NullLogger<CreateKeepPublicIntakeService>.Instance);
     }
 
     private static FakeIntakePersistence HappyPathPersistence()
@@ -821,10 +976,11 @@ public class KeepPublicIntakeServiceTests
             Guid accountId, string canonicalPhone, CancellationToken ct) =>
             Task.FromResult(CustomerResults.Count > 0 ? CustomerResults.Dequeue() : ExistingCustomer);
 
-        public KeepResponsePolicy? ResponsePolicyToReturn { get; set; }
+        public KeepIntakeResponseSnapshot SnapshotToReturn { get; set; } =
+            new(KeepResponsePolicyDefaults.FirstResponseTargetMinutes, ResponseTimingBasis.Continuous, null);
 
-        public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct) =>
-            Task.FromResult(ResponsePolicyToReturn);
+        public Task<KeepIntakeResponseSnapshot> GetFirstResponseSnapshotAsync(Guid accountId, CancellationToken ct) =>
+            Task.FromResult(SnapshotToReturn);
 
         public Task<KeepPublicIntakeInfo?> GetPublicIdentityByTokenHashAsync(string tokenHash, CancellationToken ct) =>
             Task.FromResult<KeepPublicIntakeInfo?>(null);

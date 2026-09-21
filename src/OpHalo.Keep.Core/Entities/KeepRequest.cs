@@ -1419,8 +1419,78 @@ public sealed class KeepRequest : BaseEntity
         if (firstResponseTargetMinutes <= 0)
             throw new ArgumentException("First response target minutes must be positive.", nameof(firstResponseTargetMinutes));
 
+        return BuildCustomerIntake(
+            accountId, customerId, customerName, customerPhone, customerEmail,
+            description, referenceCode, pageToken, nowUtc, nowUtc.AddMinutes(firstResponseTargetMinutes),
+            serviceAddressLine1, serviceAddressLine2, serviceCity, serviceState, serviceZip,
+            intakeUrgency, contactPreference, workContext);
+    }
+
+    /// <summary>
+    /// ADR-505 overload for a caller that has already resolved the first-response deadline (business-
+    /// clock aware). <paramref name="firstResponseDueAtUtc"/> is taken literally: a non-null value is
+    /// the stamped deadline; <c>null</c> means "intentionally no deadline" (for example a controlled
+    /// business-clock failure) and is never replaced by a duration-derived value. A supplied
+    /// deadline must be UTC and strictly after <paramref name="nowUtc"/>. The duration-based
+    /// overload above is unchanged for existing callers.
+    /// </summary>
+    public static KeepRequest CreateFromCustomerIntake(
+        Guid accountId,
+        Guid customerId,
+        string customerName,
+        string customerPhone,
+        string? customerEmail,
+        string description,
+        string referenceCode,
+        string pageToken,
+        DateTime nowUtc,
+        DateTime? firstResponseDueAtUtc,
+        string? serviceAddressLine1 = null,
+        string? serviceAddressLine2 = null,
+        string? serviceCity = null,
+        string? serviceState = null,
+        string? serviceZip = null,
+        IntakeUrgency intakeUrgency = IntakeUrgency.Routine,
+        ContactPreference contactPreference = ContactPreference.NoPreference,
+        WorkContext workContext = WorkContext.Unclassified)
+    {
+        if (firstResponseDueAtUtc is { } due)
+        {
+            if (due.Kind != DateTimeKind.Utc)
+                throw new ArgumentException("First response deadline must be a UTC instant.", nameof(firstResponseDueAtUtc));
+            if (due <= nowUtc)
+                throw new ArgumentException("First response deadline must be after the creation instant.", nameof(firstResponseDueAtUtc));
+        }
+
+        return BuildCustomerIntake(
+            accountId, customerId, customerName, customerPhone, customerEmail,
+            description, referenceCode, pageToken, nowUtc, firstResponseDueAtUtc,
+            serviceAddressLine1, serviceAddressLine2, serviceCity, serviceState, serviceZip,
+            intakeUrgency, contactPreference, workContext);
+    }
+
+    private static KeepRequest BuildCustomerIntake(
+        Guid accountId,
+        Guid customerId,
+        string customerName,
+        string customerPhone,
+        string? customerEmail,
+        string description,
+        string referenceCode,
+        string pageToken,
+        DateTime nowUtc,
+        DateTime? firstResponseDueAtUtc,
+        string? serviceAddressLine1 = null,
+        string? serviceAddressLine2 = null,
+        string? serviceCity = null,
+        string? serviceState = null,
+        string? serviceZip = null,
+        IntakeUrgency intakeUrgency = IntakeUrgency.Routine,
+        ContactPreference contactPreference = ContactPreference.NoPreference,
+        WorkContext workContext = WorkContext.Unclassified)
+    {
         var request = CreateCore(accountId, customerId, customerName, customerPhone, customerEmail,
-            description, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes,
+            description, referenceCode, pageToken, nowUtc, firstResponseDueAtUtc,
             KeepRequestOrigin.Customer, KeepRequestSource.PublicIntake, needsShare: false);
 
         request.ServiceAddressLine1 = serviceAddressLine1?.Trim();
@@ -1459,7 +1529,7 @@ public sealed class KeepRequest : BaseEntity
         WorkContext workContext = WorkContext.Unclassified)
     {
         var request = CreateCore(accountId, customerId, customerName, customerPhone, customerEmail,
-            description, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes: 0,
+            description, referenceCode, pageToken, nowUtc, firstResponseDueAtUtc: null,
             KeepRequestOrigin.Business, source, needsShare: true);
         request.ServiceAddressLine1 = serviceAddressLine1?.Trim();
         request.ServiceAddressLine2 = serviceAddressLine2?.Trim();
@@ -1557,7 +1627,7 @@ public sealed class KeepRequest : BaseEntity
         string referenceCode,
         string pageToken,
         DateTime nowUtc,
-        int firstResponseTargetMinutes,
+        DateTime? firstResponseDueAtUtc,
         KeepRequestOrigin origin,
         KeepRequestSource? source,
         bool needsShare)
@@ -1594,7 +1664,7 @@ public sealed class KeepRequest : BaseEntity
             LastCustomerActivityAt = origin == KeepRequestOrigin.Customer ? nowUtc : null,
             LastBusinessActivityAt = origin == KeepRequestOrigin.Business ? nowUtc : null,
             FirstResponseDueAtUtc = origin == KeepRequestOrigin.Customer
-                ? nowUtc.AddMinutes(firstResponseTargetMinutes)
+                ? firstResponseDueAtUtc
                 : null,
             AttentionLevel = AttentionLevel.None,
             WaitingDirection = WaitingDirection.None,
