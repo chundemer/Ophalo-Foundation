@@ -443,8 +443,31 @@ public sealed class KeepRequest : BaseEntity
         int firstResponseTargetMinutes,
         int standardResponseTargetMinutes,
         int priorityResponseTargetMinutes,
+        DateTime nowUtc) =>
+        // Delegates so the ADR-505 earlier-of guard applies to every caller: the minutes overload
+        // supplies an always-present duration-derived deadline and cannot loosen a commitment.
+        AddCustomerMessage(
+            intent, message,
+            band => nowUtc.AddMinutes(band == PriorityBand.Priority
+                ? priorityResponseTargetMinutes
+                : standardResponseTargetMinutes),
+            nowUtc);
+
+    /// <summary>
+    /// ADR-505 overload for a caller that resolves response deadlines (business-clock aware).
+    /// <paramref name="responseDeadlineFor"/> is called at most once, with the band of this message,
+    /// and only when a deadline is actually needed: a fresh or flipped obligation stamps its result
+    /// literally (null means intentionally no deadline, never a duration-derived value), and a
+    /// Standard-to-Priority escalation stores the earlier of it and the existing deadline. It is not
+    /// called for a same-priority repeat.
+    /// </summary>
+    public Result<KeepRequestEvent> AddCustomerMessage(
+        MessageIntent intent,
+        string message,
+        Func<PriorityBand, DateTime?> responseDeadlineFor,
         DateTime nowUtc)
     {
+        ArgumentNullException.ThrowIfNull(responseDeadlineFor);
         if (nowUtc == default)
             throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
 
@@ -466,9 +489,6 @@ public sealed class KeepRequest : BaseEntity
             Id, AccountId, CustomerName, intent, trimmedMessage, nowUtc);
 
         var (newReason, newPriority) = MapIntentToAttention(intent);
-        var responseTargetMinutes = newPriority == PriorityBand.Priority
-            ? priorityResponseTargetMinutes
-            : standardResponseTargetMinutes;
 
         if (WaitingDirection == WaitingDirection.Customer)
         {
@@ -479,7 +499,7 @@ public sealed class KeepRequest : BaseEntity
             AttentionReason = newReason;
             PriorityBand = newPriority;
             AttentionSinceUtc = nowUtc;
-            NextAttentionAtUtc = nowUtc.AddMinutes(responseTargetMinutes);
+            NextAttentionAtUtc = responseDeadlineFor(newPriority);
         }
         else if (AttentionLevel == AttentionLevel.None)
         {
@@ -489,20 +509,29 @@ public sealed class KeepRequest : BaseEntity
             AttentionReason = newReason;
             PriorityBand = newPriority;
             AttentionSinceUtc = nowUtc;
-            NextAttentionAtUtc = nowUtc.AddMinutes(responseTargetMinutes);
+            NextAttentionAtUtc = responseDeadlineFor(newPriority);
         }
         else if (WaitingDirection == WaitingDirection.Business)
         {
             // Already business-waiting: preserve the oldest unresolved AttentionSinceUtc.
             // Upgrade reason and priority only when the new message is higher-priority.
             // NextAttentionAtUtc is NOT refreshed for same-priority repeated messages —
-            // the original deadline stands. A priority upgrade resets it because the
-            // response obligation changes to the priority target (ADR-125).
+            // the original deadline stands (the deadline delegate is not consulted). A priority
+            // upgrade calculates the priority deadline from this message but stores the earlier
+            // of it and the existing deadline, so escalation can never make an active
+            // commitment less urgent (ADR-505). A failed calculation (null) keeps the existing
+            // deadline; a null existing deadline imposes no earlier bound.
             if (newPriority == PriorityBand.Priority && this.PriorityBand == PriorityBand.Standard)
             {
                 AttentionReason = newReason;
                 PriorityBand = newPriority;
-                NextAttentionAtUtc = nowUtc.AddMinutes(responseTargetMinutes);
+
+                var escalated = responseDeadlineFor(newPriority);
+                if (escalated is { } candidate
+                    && (NextAttentionAtUtc is not { } existingDeadline || candidate < existingDeadline))
+                {
+                    NextAttentionAtUtc = candidate;
+                }
             }
         }
         else

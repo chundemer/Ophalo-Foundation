@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Logging;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Notifications;
+using OpHalo.Keep.Application.ResponseTiming;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
@@ -12,7 +14,9 @@ public sealed class AddCustomerMessageService(
     KeepPublicCustomerAccessGuard guard,
     IKeepCustomerWritePersistence persistence,
     IKeepPushNotifier pushNotifier,
-    IClock clock)
+    IKeepResponseTimingSnapshotPersistence responseTiming,
+    IClock clock,
+    ILogger<AddCustomerMessageService> logger)
 {
     public async Task<Result<KeepCustomerPageResult>> ExecuteAsync(
         AddCustomerMessageCommand command, CancellationToken ct = default)
@@ -39,13 +43,26 @@ public sealed class AddCustomerMessageService(
         if (request.ConcurrencyVersion != command.ExpectedVersion)
             return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.RequestChanged);
 
-        var policy = await persistence.GetResponsePolicyAsync(context.AccountId, ct);
-        var firstResponse = policy?.FirstResponseTargetMinutes ?? KeepResponsePolicyDefaults.FirstResponseTargetMinutes;
-        var standard     = policy?.StandardResponseTargetMinutes ?? KeepResponsePolicyDefaults.StandardResponseTargetMinutes;
-        var priority     = policy?.PriorityResponseTargetMinutes ?? KeepResponsePolicyDefaults.PriorityResponseTargetMinutes;
+        var nowUtc = clock.UtcNow;
+        var timing = await responseTiming.GetResponseTimingSnapshotAsync(context.AccountId, ct);
 
-        var domainResult = request.AddCustomerMessage(
-            command.Intent, command.Message, firstResponse, standard, priority, clock.UtcNow);
+        // ADR-505: the domain consults this at most once and only when a deadline is needed
+        // (fresh, flipped, or escalated obligation), so a failure here is a real one to report.
+        PriorityBand? failedBand = null;
+        string? deadlineFailure = null;
+        DateTime? ResolveDeadline(PriorityBand band)
+        {
+            var (deadlineUtc, failure) = KeepResponseDeadlineResolver.Resolve(timing, ToTarget(band), nowUtc);
+            if (failure is not null)
+            {
+                failedBand = band;
+                deadlineFailure = failure;
+            }
+
+            return deadlineUtc;
+        }
+
+        var domainResult = request.AddCustomerMessage(command.Intent, command.Message, ResolveDeadline, nowUtc);
         if (!domainResult.IsSuccess)
             return Result<KeepCustomerPageResult>.Failure(domainResult.Error);
 
@@ -53,6 +70,14 @@ public sealed class AddCustomerMessageService(
         switch (commitResult)
         {
             case KeepRequestCommitResult.Committed:
+                // ADR-505: a controlled clock failure never blocks the customer or falls back to
+                // continuous timing. A fresh/flipped obligation keeps no deadline and an escalation
+                // keeps its existing one; either way it is flagged for operator attention. Ids,
+                // band, and reason only: no customer content.
+                if (deadlineFailure is not null)
+                    logger.LogError(
+                        "Customer message response deadline not stamped: account {AccountId}, request {RequestId}, band {Band}, reason {Reason}",
+                        context.AccountId, request.Id, failedBand, deadlineFailure);
                 break;
             case KeepRequestCommitResult.Conflict:
                 return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.RequestChanged);
@@ -100,4 +125,11 @@ public sealed class AddCustomerMessageService(
         return Result<KeepCustomerPageResult>.Success(
             KeepCustomerPageMapper.BuildActiveResult(context with { Version = request.ConcurrencyVersion }, events));
     }
+
+    private static KeepResponseTarget ToTarget(PriorityBand band) => band switch
+    {
+        PriorityBand.Standard => KeepResponseTarget.Standard,
+        PriorityBand.Priority => KeepResponseTarget.Priority,
+        _ => throw new ArgumentOutOfRangeException(nameof(band), band, "Unknown priority band.")
+    };
 }
