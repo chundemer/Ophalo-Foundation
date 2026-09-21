@@ -183,7 +183,6 @@ public class KeepPushAssignmentHookTests
             KeepRequest r, IReadOnlyList<KeepRequestParticipant> n, KeepRequestEvent? e, CancellationToken ct) =>
             Task.FromResult(KeepRequestCommitResult.Committed);
 
-        public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid a, CancellationToken ct) => throw new NotImplementedException();
         public Task<bool> IsCustomerVisibleBusinessUpdateEventAsync(Guid r, Guid a, Guid e, CancellationToken ct) => throw new NotImplementedException();
         public Task<KeepRequestCommitResult> CommitAsync(KeepRequest r, KeepRequestEvent? e, CancellationToken ct) => throw new NotImplementedException();
     }

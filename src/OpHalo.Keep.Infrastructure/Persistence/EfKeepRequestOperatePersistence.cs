@@ -62,11 +62,6 @@ public sealed class EfKeepRequestOperatePersistence(OpHaloDbContext dbContext) :
         return !string.IsNullOrWhiteSpace(row.UserName) ? row.UserName.Trim() : row.Email.Trim();
     }
 
-    public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct) =>
-        dbContext.Set<KeepResponsePolicy>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
-
     public Task<bool> IsCustomerVisibleBusinessUpdateEventAsync(
         Guid requestId, Guid accountId, Guid eventId, CancellationToken ct) =>
         dbContext.Set<KeepRequestEvent>()

@@ -35,12 +35,6 @@ public interface IKeepRequestOperatePersistence
         KeepRequestVisibilityScope scope, CancellationToken ct);
 
     /// <summary>
-    /// Returns the response policy for the account, or null if no policy row exists.
-    /// Callers fall back to pilot defaults (standard=240 min).
-    /// </summary>
-    Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct);
-
-    /// <summary>
     /// True only if eventId is a same-request, same-account, customer-visible business update
     /// (Visibility=All, MessageIntent=BusinessUpdate) — the required referential check before
     /// PrepareUpdateNotification may link a notification obligation to it (ADR-451).

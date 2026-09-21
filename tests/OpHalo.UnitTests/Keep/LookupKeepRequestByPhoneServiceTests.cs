@@ -217,7 +217,6 @@ public class LookupKeepRequestByPhoneServiceTests
             Task.FromResult<string?>("Owner User");
 
         public Task<KeepRequest?> GetVisibleRequestForUpdateAsync(Guid r, Guid a, Guid u, KeepRequestVisibilityScope s, CancellationToken ct) => throw new NotImplementedException();
-        public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid a, CancellationToken ct) => throw new NotImplementedException();
         public Task<bool> IsCustomerVisibleBusinessUpdateEventAsync(Guid r, Guid a, Guid e, CancellationToken ct) => throw new NotImplementedException();
         public Task<KeepRequestCommitResult> CommitAsync(KeepRequest r, KeepRequestEvent? e, CancellationToken ct) => throw new NotImplementedException();
         public Task<List<KeepRequestParticipant>> GetParticipantsForUpdateAsync(Guid r, Guid a, CancellationToken ct) => throw new NotImplementedException();
