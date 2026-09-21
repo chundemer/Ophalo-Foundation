@@ -97,7 +97,7 @@ public sealed class EfKeepSetupPersistenceTests : IClassFixture<KeepApiWebFactor
             [(DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(16, 0)),
              (DayOfWeek.Wednesday, new TimeOnly(9, 0), new TimeOnly(17, 30))],
             calendar.WeeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)));
-        Assert.Equal([new DateOnly(2026, 12, 25), new DateOnly(2027, 1, 1)], calendar.ClosureDates);
+        Assert.Equal([new DateOnly(2026, 12, 25), new DateOnly(2027, 1, 1)], calendar.Closures.Select(c => c.Date));
     }
 
     [Fact]
@@ -111,7 +111,46 @@ public sealed class EfKeepSetupPersistenceTests : IClassFixture<KeepApiWebFactor
         var calendar = await persistence.GetCalendarAsync(accountId, CancellationToken.None);
 
         Assert.Empty(calendar.WeeklyIntervals);
-        Assert.Empty(calendar.ClosureDates);
+        Assert.Empty(calendar.Closures);
+    }
+
+    // --- ADR-507 closure reasons (GAP-100 batch 7a-1): the stored Label is the reason ---
+
+    [Fact]
+    public async Task Closure_label_is_read_as_the_reason_and_is_part_of_the_settings_version_on_both_read_paths()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("setup-closure-reason");
+        await SetStoredTimeZoneAsync(accountId, "America/Chicago");
+        var unlabeled = KeepCalendarClosure.Create(accountId, new DateOnly(2026, 12, 25));
+        await using (var seed = _factory.CreateScope())
+        {
+            var db = seed.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            db.Set<KeepCalendarClosure>().Add(unlabeled);
+            await db.SaveChangesAsync();
+        }
+        var versionWithoutReason = await CurrentVersionAsync(accountId);
+
+        await using (var scope = _factory.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<OpHaloDbContext>().Set<KeepCalendarClosure>()
+                .Where(c => c.Id == unlabeled.Id)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.Label, "Christmas \"Day\""));
+        }
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var calendar = await scope.ServiceProvider.GetRequiredService<IKeepSetupPersistence>()
+                .GetCalendarAsync(accountId, CancellationToken.None);
+            Assert.Equal("Christmas \"Day\"", Assert.Single(calendar.Closures).Reason);
+        }
+
+        var versionWithReason = await CurrentVersionAsync(accountId);
+        Assert.NotEqual(versionWithoutReason, versionWithReason);
+
+        // The transactional profile-timezone check must recompute the same version from the
+        // stored label; the pre-label version is now stale.
+        Assert.True((await SaveProfileAsync(accountId, ownerId, "Biz", "America/New_York", versionWithoutReason)).IsFailure);
+        Assert.True((await SaveProfileAsync(accountId, ownerId, "Biz", "America/New_York", versionWithReason)).IsSuccess);
     }
 
     // --- ADR-506 profile timezone versioning (GAP-100 batch 6a-2b) ---

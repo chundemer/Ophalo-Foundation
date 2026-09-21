@@ -96,7 +96,7 @@ public sealed class EfKeepSetupPersistence(OpHaloDbContext dbContext) : IKeepSet
             .AsNoTracking()
             .Where(c => c.AccountId == accountId)
             .OrderBy(c => c.ClosureDate)
-            .Select(c => c.ClosureDate)
+            .Select(c => new KeepCalendarClosureSnapshot(c.ClosureDate, c.Label))
             .ToListAsync(ct);
 
         return new KeepCalendarSnapshot(intervals, closures);
@@ -137,17 +137,17 @@ public sealed class EfKeepSetupPersistence(OpHaloDbContext dbContext) : IKeepSet
                 .Where(i => i.AccountId == accountId)
                 .Select(i => new { i.Weekday, i.OpensAt, i.ClosesAt })
                 .ToListAsync(ct);
-            var closureDates = await dbContext.Set<KeepCalendarClosure>()
+            var closures = await dbContext.Set<KeepCalendarClosure>()
                 .AsNoTracking()
                 .Where(c => c.AccountId == accountId)
-                .Select(c => c.ClosureDate)
+                .Select(c => new KeepCalendarClosureSnapshot(c.ClosureDate, c.Label))
                 .ToListAsync(ct);
 
             var currentVersion = KeepSettingsPersistenceSupport.ComputeVersion(
                 storedTimeZone,
                 policy,
                 intervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)),
-                closureDates);
+                closures);
             if (!string.Equals(expectedSettingsVersion, currentVersion, StringComparison.Ordinal))
                 return Result.Failure(KeepResponsePolicyErrors.SettingsVersionMismatch);
         }

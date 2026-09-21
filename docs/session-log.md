@@ -4,7 +4,7 @@
 scope, sequencing, gates, and deferrals. Locked decisions are in
 [decision-index](decisions/decision-index.md); completed-work evidence is in `docs/build-log/`.
 
-**Updated 2026-09-20.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
+**Updated 2026-09-21.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
 GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, GAP-048, GAP-049, and GAP-092 are
 complete. GAP-100 is the active item (batches 1-4 done — see below). The canonical scope, order,
 gates, and deferrals are in the [workboard](workboard.md).
@@ -17,7 +17,7 @@ validation, policy/calendar schema, audit-backed atomic settings persistence —
 evidence index for the full trail, including 4a/4b/4c). Railway production table-presence
 verification confirmed all four GAP-100 settings tables after deployment on 2026-09-20.
 
-Next: **6c (policy timing-basis controls)** — 6b calendar section is done (`a8c9d03b`); 6a-2b backend profile timezone version enforcement is done (`88eb993b`); earlier: settings backend contract, then settings UI — the first real API/UI surface for
+Next: **ADR-507 closure-label implementation — 7a-1 done (uncommitted, awaiting review); 7a-2 write/audit, 7b API, 7c frontend remain — then 6c (policy timing-basis controls)** — 6b calendar section is done (`a8c9d03b`), but its dates-only closure contract is superseded for V1 by [ADR-507](decisions/ADR-507-closure-labels-and-object-calendar-contract.md): object-native `{ date, reason }` entries, no legacy adapter because there are zero live web clients, reason included in the opaque `settingsVersion` and deterministic audit diff, and reason never affects the business clock or public display. Run the bounded mechanical preflight and present its file/handler-family gate before editing. 6a-2b backend profile timezone version enforcement is done (`88eb993b`); earlier: settings backend contract, then settings UI — the first real API/UI surface for
 `KeepResponsePolicyService`'s governed policy, calendar, and timezone operations. ADR-506 locks
 the route family, full-snapshot request shape, opaque stale-save protection with an explicit UI
 refresh recovery path, and deterministic audit granularity/content. Batch 5 (backend) is split

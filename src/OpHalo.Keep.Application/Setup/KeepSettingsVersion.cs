@@ -7,9 +7,15 @@ namespace OpHalo.Keep.Application.Setup;
 
 public sealed record KeepWeeklyIntervalSnapshot(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt);
 
+/// <summary>An account-local full-day closure and its optional internal reason (ADR-507).</summary>
+public sealed record KeepCalendarClosureSnapshot(DateOnly Date, string? Reason = null)
+{
+    public static implicit operator KeepCalendarClosureSnapshot(DateOnly date) => new(date);
+}
+
 public sealed record KeepCalendarSnapshot(
     IReadOnlyList<KeepWeeklyIntervalSnapshot> WeeklyIntervals,
-    IReadOnlyList<DateOnly> ClosureDates);
+    IReadOnlyList<KeepCalendarClosureSnapshot> Closures);
 
 /// <summary>
 /// ADR-506 opaque version of the coupled settings state: account timezone, response-policy
@@ -44,9 +50,14 @@ public static class KeepSettingsVersion
                 $"w={(int)interval.Weekday},{interval.OpensAt:HH:mm},{interval.ClosesAt:HH:mm}\n");
         }
 
-        foreach (var date in calendar.ClosureDates.OrderBy(d => d))
+        foreach (var closure in calendar.Closures.OrderBy(c => c.Date))
         {
-            canonical.Append(CultureInfo.InvariantCulture, $"c={date:yyyy-MM-dd}\n");
+            canonical.Append(CultureInfo.InvariantCulture, $"c={closure.Date:yyyy-MM-dd}");
+            // A null reason hashes exactly as a dates-only closure did; a present one is quoted and
+            // escaped so no reason text can forge another closure line or collide with null.
+            if (closure.Reason is not null)
+                canonical.Append("|r=\"").Append(closure.Reason.Replace("\\", "\\\\").Replace("\"", "\\\"")).Append('"');
+            canonical.Append('\n');
         }
 
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()));

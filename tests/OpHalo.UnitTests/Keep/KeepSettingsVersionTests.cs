@@ -75,4 +75,46 @@ public class KeepSettingsVersionTests
         Assert.DoesNotContain('=', version);
         Assert.NotEmpty(version);
     }
+
+    [Fact]
+    public void Closure_reason_is_part_of_the_version()
+    {
+        KeepCalendarSnapshot With(string? reason) =>
+            new([Mon], [new KeepCalendarClosureSnapshot(new DateOnly(2026, 12, 25), reason)]);
+        string V(string? reason) => KeepSettingsVersion.Compute("America/Chicago", Policy(), With(reason));
+
+        Assert.NotEqual(V(null), V("Christmas"));
+        Assert.NotEqual(V("Christmas"), V("Training"));
+        Assert.NotEqual(V(null), V(""));
+        Assert.Equal(V("Christmas"), V("Christmas"));
+    }
+
+    [Fact]
+    public void Closure_without_a_reason_hashes_as_a_dates_only_closure()
+    {
+        Assert.Equal(
+            KeepSettingsVersion.Compute("America/Chicago", Policy(), new KeepCalendarSnapshot([Mon], [new DateOnly(2026, 12, 25)])),
+            KeepSettingsVersion.Compute("America/Chicago", Policy(),
+                new KeepCalendarSnapshot([Mon], [new KeepCalendarClosureSnapshot(new DateOnly(2026, 12, 25), null)])));
+    }
+
+    [Fact]
+    public void Reason_text_cannot_forge_another_closure_or_collide_after_escaping()
+    {
+        var one = new KeepCalendarSnapshot([Mon],
+            [new KeepCalendarClosureSnapshot(new DateOnly(2026, 12, 25), "a\nc=2027-01-01")]);
+        var two = new KeepCalendarSnapshot([Mon],
+            [new DateOnly(2026, 12, 25), new DateOnly(2027, 1, 1)]);
+        var quote = new KeepCalendarSnapshot([Mon],
+            [new KeepCalendarClosureSnapshot(new DateOnly(2026, 12, 25), "a\"")]);
+        var slash = new KeepCalendarSnapshot([Mon],
+            [new KeepCalendarClosureSnapshot(new DateOnly(2026, 12, 25), "a\\")]);
+
+        Assert.NotEqual(
+            KeepSettingsVersion.Compute("America/Chicago", Policy(), one),
+            KeepSettingsVersion.Compute("America/Chicago", Policy(), two));
+        Assert.NotEqual(
+            KeepSettingsVersion.Compute("America/Chicago", Policy(), quote),
+            KeepSettingsVersion.Compute("America/Chicago", Policy(), slash));
+    }
 }

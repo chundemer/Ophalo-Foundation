@@ -30,13 +30,13 @@ internal static class KeepSettingsPersistenceSupport
         string timeZone,
         KeepResponsePolicy? policy,
         IEnumerable<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> weeklyIntervals,
-        IEnumerable<DateOnly> closureDates) =>
+        IEnumerable<KeepCalendarClosureSnapshot> closures) =>
         KeepSettingsVersion.Compute(
             timeZone,
             policy,
             new KeepCalendarSnapshot(
                 weeklyIntervals.Select(i => new KeepWeeklyIntervalSnapshot(i.Weekday, i.OpensAt, i.ClosesAt)).ToList(),
-                closureDates.ToList()));
+                closures.ToList()));
 
     /// <summary>
     /// Stages a timezone change on <paramref name="account"/> (already tracked by

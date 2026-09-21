@@ -174,10 +174,10 @@ public sealed class KeepSetupService(
             return Result<KeepSetupResult>.Failure(KeepResponsePolicyErrors.DuplicateClosureDate);
 
         var current = await persistence.GetCalendarAsync(currentUser.AccountId, ct);
-        var currentClosures = current.ClosureDates.ToHashSet();
+        var currentClosures = current.Closures.Select(c => c.Date).ToHashSet();
         var desiredSet = desiredClosures.ToHashSet();
         var toAdd = desiredClosures.Where(d => !currentClosures.Contains(d)).ToList();
-        var toRemove = current.ClosureDates.Where(d => !desiredSet.Contains(d)).ToList();
+        var toRemove = current.Closures.Select(c => c.Date).Where(d => !desiredSet.Contains(d)).ToList();
 
         var write = await responsePolicyService.UpdateCalendarAsync(
             intervals, toAdd, toRemove, expectedSettingsVersion, ct);
@@ -261,9 +261,9 @@ public sealed class KeepSetupService(
                     i.OpensAt.ToString("HH:mm", CultureInfo.InvariantCulture),
                     i.ClosesAt.ToString("HH:mm", CultureInfo.InvariantCulture)))
                 .ToList(),
-            calendar.ClosureDates
-                .OrderBy(d => d)
-                .Select(d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+            calendar.Closures
+                .OrderBy(c => c.Date)
+                .Select(c => c.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
                 .ToList());
 
     private async Task<Result> AuthorizeAsync(CancellationToken ct)

@@ -102,10 +102,10 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             .Select(i => new { i.Weekday, i.OpensAt, i.ClosesAt })
             .ToListAsync(ct);
 
-        var closureDates = await dbContext.Set<KeepCalendarClosure>()
+        var closures = await dbContext.Set<KeepCalendarClosure>()
             .AsNoTracking()
             .Where(c => c.AccountId == accountId)
-            .Select(c => c.ClosureDate)
+            .Select(c => new KeepCalendarClosureSnapshot(c.ClosureDate, c.Label))
             .ToListAsync(ct);
 
         // ADR-506 stale-save protection: recomputed inside this serializable transaction, before
@@ -115,7 +115,7 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             account.TimeZone,
             existingPolicy,
             weeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)),
-            closureDates);
+            closures);
         if (!string.Equals(expectedSettingsVersion, currentVersion, StringComparison.Ordinal))
             return Result.Failure(KeepResponsePolicyErrors.SettingsVersionMismatch);
 
@@ -142,7 +142,7 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
 
             foreach (var minutes in staffedTargets)
             {
-                if (!StaffedHoursReachability.IsReachable(intervalTuples, closureDates, minutes, fromLocalDate, timeZone))
+                if (!StaffedHoursReachability.IsReachable(intervalTuples, closures.Select(c => c.Date).ToList(), minutes, fromLocalDate, timeZone))
                     return Result.Failure(KeepResponsePolicyErrors.StaffedHoursTargetUnreachable);
             }
         }
@@ -259,7 +259,7 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             account.TimeZone,
             policy,
             existingIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)),
-            existingClosures.Select(c => c.ClosureDate));
+            existingClosures.Select(c => new KeepCalendarClosureSnapshot(c.ClosureDate, c.Label)));
         if (!string.Equals(expectedSettingsVersion, currentVersion, StringComparison.Ordinal))
             return Result.Failure(KeepResponsePolicyErrors.SettingsVersionMismatch);
 
