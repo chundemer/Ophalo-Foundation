@@ -556,8 +556,25 @@ public sealed class KeepRequest : BaseEntity
         bool wasResolved,
         string? comment,
         int priorityResponseTargetMinutes,
+        DateTime nowUtc) =>
+        SubmitFeedback(
+            wasResolved, comment, () => nowUtc.AddMinutes(priorityResponseTargetMinutes), nowUtc);
+
+    /// <summary>
+    /// ADR-505 overload for a caller that resolves the Priority response deadline (business-clock
+    /// aware). <paramref name="priorityDeadlineFor"/> is called at most once, and only for negative
+    /// feedback that passed validation. Closing clears attention, so negative feedback is always a
+    /// new obligation and stamps its result literally: null means intentionally no deadline
+    /// (attention is still raised), never a duration-derived value. Positive feedback never calls it.
+    /// </summary>
+    public Result<KeepRequestEvent> SubmitFeedback(
+        bool wasResolved,
+        string? comment,
+        Func<DateTime?> priorityDeadlineFor,
         DateTime nowUtc)
     {
+        ArgumentNullException.ThrowIfNull(priorityDeadlineFor);
+
         if (nowUtc == default)
             throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
 
@@ -585,7 +602,7 @@ public sealed class KeepRequest : BaseEntity
             AttentionReason = Enums.AttentionReason.UnresolvedFeedback;
             PriorityBand = Enums.PriorityBand.Priority;
             AttentionSinceUtc = nowUtc;
-            NextAttentionAtUtc = nowUtc.AddMinutes(priorityResponseTargetMinutes);
+            NextAttentionAtUtc = priorityDeadlineFor();
         }
 
         var feedbackEvent = KeepRequestEvent.CreateFeedbackReceived(Id, AccountId, wasResolved, trimmedComment, nowUtc);

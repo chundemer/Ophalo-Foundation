@@ -248,6 +248,83 @@ public class KeepPushCustomerIntentHookTests
         Assert.Contains(nameof(PriorityBand.Priority), entry.Message);
     }
 
+    // --- SubmitFeedbackService: ADR-505 Priority deadline (slice 10) ---
+
+    static SubmitFeedbackCommand FeedbackCommand(KeepRequest request, bool wasResolved, string? comment = "msg") =>
+        new(PageToken: "tok", WasResolved: wasResolved, Comment: comment, ExpectedVersion: request.ConcurrencyVersion);
+
+    [Fact]
+    public async Task SubmitFeedback_Unresolved_ContinuousDefault_StampsNowPlusThePriorityTarget()
+    {
+        var request = MakeClosedRequest();
+        var logger = new CapturingLogger<SubmitFeedbackService>();
+        var svc = BuildSubmitFeedbackSvc(new SpyPushNotifier(), request, logger: logger);
+
+        var result = await svc.ExecuteAsync(FeedbackCommand(request, wasResolved: false), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(Now.AddMinutes(60), request.NextAttentionAtUtc);
+        Assert.Empty(logger.Entries);
+    }
+
+    [Fact]
+    public async Task SubmitFeedback_Unresolved_StaffedPriorityTarget_StampsTheClockDeadline()
+    {
+        // Now = Fri 2026-06-26 12:00Z = 08:00 EDT, before the 10:00 EDT (14:00Z) opening → 14:00Z + 60 = 15:00Z.
+        var staffed = new KeepResponseTimingSnapshot(
+            60, ResponseTimingBasis.Continuous, 240, ResponseTimingBasis.Continuous, 60, ResponseTimingBasis.StaffedHours,
+            new KeepResponseTimingCalendar(
+                "America/New_York",
+                [new KeepWeeklyIntervalSnapshot(DayOfWeek.Friday, new TimeOnly(10, 0), new TimeOnly(17, 0))],
+                []));
+        var request = MakeClosedRequest();
+        var svc = BuildSubmitFeedbackSvc(new SpyPushNotifier(), request, timing: new FakeResponseTiming(staffed));
+
+        var result = await svc.ExecuteAsync(FeedbackCommand(request, wasResolved: false), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new DateTime(2026, 6, 26, 15, 0, 0, DateTimeKind.Utc), request.NextAttentionAtUtc);
+    }
+
+    [Fact]
+    public async Task SubmitFeedback_Unresolved_FailedDeadline_StillRecordsFeedbackAndLogsIdsTargetAndReasonOnly()
+    {
+        var request = MakeClosedRequest();
+        var logger = new CapturingLogger<SubmitFeedbackService>();
+        var svc = BuildSubmitFeedbackSvc(
+            new SpyPushNotifier(), request, timing: new FakeResponseTiming(PriorityCalendarBroken), logger: logger);
+
+        var result = await svc.ExecuteAsync(
+            FeedbackCommand(request, wasResolved: false, comment: "my private complaint text"), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(request.NextAttentionAtUtc); // never a continuous fallback
+        Assert.Equal(AttentionReason.UnresolvedFeedback, request.AttentionReason);
+        Assert.True(request.FeedbackSubmittedAtUtc.HasValue);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Contains("NoWeeklyIntervals", entry.Message);
+        Assert.Contains(nameof(KeepResponseTarget.Priority), entry.Message);
+        Assert.Contains(request.Id.ToString(), entry.Message);
+        Assert.DoesNotContain("private complaint text", entry.Message);
+        Assert.DoesNotContain("Alice", entry.Message);
+    }
+
+    [Fact]
+    public async Task SubmitFeedback_Resolved_ReadsNoSnapshotAndLogsNothing()
+    {
+        var request = MakeClosedRequest();
+        var logger = new CapturingLogger<SubmitFeedbackService>();
+        var svc = BuildSubmitFeedbackSvc(
+            new SpyPushNotifier(), request, timing: new ThrowingResponseTiming(), logger: logger);
+
+        var result = await svc.ExecuteAsync(FeedbackCommand(request, wasResolved: true), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(request.NextAttentionAtUtc);
+        Assert.Empty(logger.Entries);
+    }
+
     static KeepRequest MakeRequest()
     {
         return KeepRequest.CreateFromCustomerIntake(
@@ -298,12 +375,16 @@ public class KeepPushCustomerIntentHookTests
         IKeepPushNotifier notifier,
         KeepRequest request,
         IReadOnlyList<KeepParticipantProjection>? participants = null,
-        IReadOnlyList<ParticipantCandidateRecord>? ownerAdminMembers = null) =>
+        IReadOnlyList<ParticipantCandidateRecord>? ownerAdminMembers = null,
+        IKeepResponseTimingSnapshotPersistence? timing = null,
+        ILogger<SubmitFeedbackService>? logger = null) =>
         new(
             BuildGuard(request),
             new FakeCustomerPersistence(request, participants ?? [], ownerAdminMembers ?? []),
             notifier,
-            new FakeClock(Now));
+            timing ?? new FakeResponseTiming(ContinuousDefaults),
+            new FakeClock(Now),
+            logger ?? NullLogger<SubmitFeedbackService>.Instance);
 
     // --- fakes ---
 
@@ -311,6 +392,12 @@ public class KeepPushCustomerIntentHookTests
     {
         public Task<KeepResponseTimingSnapshot> GetResponseTimingSnapshotAsync(Guid accountId, CancellationToken ct) =>
             Task.FromResult(snapshot);
+    }
+
+    private sealed class ThrowingResponseTiming : IKeepResponseTimingSnapshotPersistence
+    {
+        public Task<KeepResponseTimingSnapshot> GetResponseTimingSnapshotAsync(Guid accountId, CancellationToken ct) =>
+            throw new InvalidOperationException("Positive feedback must not read the timing snapshot.");
     }
 
     private sealed class CapturingLogger<T> : ILogger<T>

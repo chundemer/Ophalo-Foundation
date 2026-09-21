@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Logging;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Notifications;
+using OpHalo.Keep.Application.ResponseTiming;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
@@ -11,7 +13,9 @@ public sealed class SubmitFeedbackService(
     KeepPublicCustomerAccessGuard guard,
     IKeepCustomerWritePersistence persistence,
     IKeepPushNotifier pushNotifier,
-    IClock clock)
+    IKeepResponseTimingSnapshotPersistence responseTiming,
+    IClock clock,
+    ILogger<SubmitFeedbackService> logger)
 {
     public async Task<Result<KeepCustomerPageResult>> ExecuteAsync(
         SubmitFeedbackCommand command, CancellationToken ct = default)
@@ -36,10 +40,25 @@ public sealed class SubmitFeedbackService(
         if (request.ConcurrencyVersion != command.ExpectedVersion)
             return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.RequestChanged);
 
-        var policy = await persistence.GetResponsePolicyAsync(context.AccountId, ct);
-        var priority = policy?.PriorityResponseTargetMinutes ?? KeepResponsePolicyDefaults.PriorityResponseTargetMinutes;
+        var nowUtc = clock.UtcNow;
 
-        var domainResult = request.SubmitFeedback(command.WasResolved, command.Comment, priority, clock.UtcNow);
+        // ADR-505: only negative feedback raises a response obligation, so only it needs the timing
+        // snapshot (positive feedback skips the read and its consistent-snapshot transaction).
+        var timing = command.WasResolved
+            ? null
+            : await responseTiming.GetResponseTimingSnapshotAsync(context.AccountId, ct);
+
+        string? deadlineFailure = null;
+        DateTime? ResolvePriorityDeadline()
+        {
+            var (deadlineUtc, failure) = KeepResponseDeadlineResolver.Resolve(
+                timing ?? throw new InvalidOperationException("Response timing snapshot was not loaded."),
+                KeepResponseTarget.Priority, nowUtc);
+            deadlineFailure = failure;
+            return deadlineUtc;
+        }
+
+        var domainResult = request.SubmitFeedback(command.WasResolved, command.Comment, ResolvePriorityDeadline, nowUtc);
         if (!domainResult.IsSuccess)
             return Result<KeepCustomerPageResult>.Failure(domainResult.Error);
 
@@ -47,6 +66,14 @@ public sealed class SubmitFeedbackService(
         switch (commitResult)
         {
             case KeepRequestCommitResult.Committed:
+                // ADR-505: a controlled clock failure never blocks the customer's one-time feedback
+                // or falls back to continuous timing. The attention is still raised with no
+                // deadline and flagged for operator attention. Ids, target, and reason only: no
+                // customer content (never the comment).
+                if (deadlineFailure is not null)
+                    logger.LogError(
+                        "Feedback response deadline not stamped: account {AccountId}, request {RequestId}, target {Target}, reason {Reason}",
+                        context.AccountId, request.Id, KeepResponseTarget.Priority, deadlineFailure);
                 break;
             case KeepRequestCommitResult.Conflict:
                 return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.RequestChanged);
