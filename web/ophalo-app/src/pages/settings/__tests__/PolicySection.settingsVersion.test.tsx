@@ -38,6 +38,9 @@ function setupWith(overrides: Partial<KeepSetupResult> = {}, first = 60): KeepSe
       standardResponseTargetMinutes: 240,
       priorityResponseTargetMinutes: 60,
       statusCheckThresholdDays: 5,
+      firstResponseTimingBasis: "Continuous",
+      standardResponseTimingBasis: "Continuous",
+      priorityResponseTimingBasis: "Continuous",
     },
     settingsVersion: "v1",
     ...overrides,
@@ -83,6 +86,9 @@ describe("PolicySection settingsVersion", () => {
       standardResponseTargetMinutes: 240,
       priorityResponseTargetMinutes: 60,
       statusCheckThresholdDays: 5,
+      firstResponseTimingBasis: "Continuous",
+      standardResponseTimingBasis: "Continuous",
+      priorityResponseTimingBasis: "Continuous",
       settingsVersion: "v1",
     });
     expect(await screen.findByText("Saved.")).toBeTruthy();

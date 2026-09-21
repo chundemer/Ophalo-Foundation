@@ -31,6 +31,14 @@ export interface KeepSetupPolicyResult {
   standardResponseTargetMinutes: number;
   priorityResponseTargetMinutes: number;
   statusCheckThresholdDays: number;
+  /**
+   * "Continuous" | "StaffedHours" (ADR-505). Temporarily optional in TypeScript only — required
+   * server-side — to keep GAP-100 6c under the file cap; PolicySection blocks a save when absent.
+   * Tightened to required together with `settingsVersion` in the later mechanical fixture slice.
+   */
+  firstResponseTimingBasis?: string;
+  standardResponseTimingBasis?: string;
+  priorityResponseTimingBasis?: string;
 }
 
 export interface KeepSetupWeeklyIntervalResult {

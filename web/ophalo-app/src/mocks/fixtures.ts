@@ -105,6 +105,9 @@ export const mockSetup: KeepSetupResult = {
     standardResponseTargetMinutes: 240,
     priorityResponseTargetMinutes: 30,
     statusCheckThresholdDays: 3,
+    firstResponseTimingBasis: "Continuous",
+    standardResponseTimingBasis: "Continuous",
+    priorityResponseTimingBasis: "Continuous",
   },
   settingsVersion: "mock-settings-v1",
   calendar: {

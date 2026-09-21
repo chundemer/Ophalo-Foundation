@@ -3,8 +3,32 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api, type KeepSetupResult, ApiError } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
 
-type PolicyField = "first" | "standard" | "priority" | "statusCheck";
-const CLEAN: Record<PolicyField, boolean> = { first: false, standard: false, priority: false, statusCheck: false };
+type PolicyField =
+  | "first" | "standard" | "priority" | "statusCheck"
+  | "firstBasis" | "standardBasis" | "priorityBasis";
+const CLEAN: Record<PolicyField, boolean> = {
+  first: false, standard: false, priority: false, statusCheck: false,
+  firstBasis: false, standardBasis: false, priorityBasis: false,
+};
+
+const BASIS_OPTIONS = [
+  { value: "Continuous", label: "Continuous" },
+  { value: "StaffedHours", label: "Staffed hours" },
+] as const;
+
+const GENERIC_COPY = "We couldn't save your response policy. Check your entries and try again.";
+const ERROR_COPY: Record<string, string> = {
+  "KeepResponsePolicy.StaffedTimingRequiresWeeklyInterval":
+    "Add at least one open day in Business Hours & Closures before switching a target to staffed hours.",
+  "KeepResponsePolicy.StaffedHoursTargetUnreachable":
+    "Your scheduled hours don't provide enough open time to meet that target. Shorten the target or add open hours.",
+  "KeepSetup.PolicyValidation": "Response times must be whole numbers greater than zero.",
+};
+
+// ApiError.message is just "API 422 /path" and is never shown; unknown codes use the generic copy.
+function saveErrorCopy(code: string | undefined): string {
+  return (code && ERROR_COPY[code]) || GENERIC_COPY;
+}
 
 interface PolicySectionProps {
   setup: KeepSetupResult;
@@ -18,6 +42,9 @@ export function PolicySection({ setup }: PolicySectionProps) {
   const [standardResponse, setStandardResponse] = useState(String(p.standardResponseTargetMinutes));
   const [priorityResponse, setPriorityResponse] = useState(String(p.priorityResponseTargetMinutes));
   const [statusCheck, setStatusCheck] = useState(String(p.statusCheckThresholdDays));
+  const [firstBasis, setFirstBasis] = useState(p.firstResponseTimingBasis ?? "");
+  const [standardBasis, setStandardBasis] = useState(p.standardResponseTimingBasis ?? "");
+  const [priorityBasis, setPriorityBasis] = useState(p.priorityResponseTimingBasis ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -30,14 +57,29 @@ export function PolicySection({ setup }: PolicySectionProps) {
 
   const settingsVersion = setup.settingsVersion;
   const hasVersion = typeof settingsVersion === "string" && settingsVersion.length > 0;
+  // Never default a missing basis to Continuous (ADR-506): the save is blocked until settings reload.
+  const hasBases = Boolean(
+    p.firstResponseTimingBasis && p.standardResponseTimingBasis && p.priorityResponseTimingBasis,
+  );
+  const canSave = hasVersion && hasBases;
   const anyDirty = Object.values(dirty).some(Boolean);
+  // Advisory only: the server's 422 stays authoritative (concurrent calendar changes).
+  const staffedWithoutSchedule =
+    [firstBasis, standardBasis, priorityBasis].includes("StaffedHours") &&
+    setup.calendar !== undefined && setup.calendar.weeklyIntervals.length === 0;
 
   useEffect(() => {
     if (!dirty.first) setFirstResponse(String(p.firstResponseTargetMinutes));
     if (!dirty.standard) setStandardResponse(String(p.standardResponseTargetMinutes));
     if (!dirty.priority) setPriorityResponse(String(p.priorityResponseTargetMinutes));
     if (!dirty.statusCheck) setStatusCheck(String(p.statusCheckThresholdDays));
-  }, [p.firstResponseTargetMinutes, p.standardResponseTargetMinutes, p.priorityResponseTargetMinutes, p.statusCheckThresholdDays, dirty]);
+    if (!dirty.firstBasis) setFirstBasis(p.firstResponseTimingBasis ?? "");
+    if (!dirty.standardBasis) setStandardBasis(p.standardResponseTimingBasis ?? "");
+    if (!dirty.priorityBasis) setPriorityBasis(p.priorityResponseTimingBasis ?? "");
+  }, [
+    p.firstResponseTargetMinutes, p.standardResponseTargetMinutes, p.priorityResponseTargetMinutes, p.statusCheckThresholdDays,
+    p.firstResponseTimingBasis, p.standardResponseTimingBasis, p.priorityResponseTimingBasis, dirty,
+  ]);
 
   function edit(field: PolicyField, set: (value: string) => void, value: string) {
     set(value);
@@ -63,8 +105,8 @@ export function PolicySection({ setup }: PolicySectionProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
-    if (!hasVersion) {
-      setError("Settings version isn't available. Refresh settings, then try again.");
+    if (!canSave) {
+      setError("Settings aren't fully loaded. Refresh settings, then try again.");
       return;
     }
     setSubmitting(true);
@@ -77,7 +119,10 @@ export function PolicySection({ setup }: PolicySectionProps) {
         standardResponseTargetMinutes: Number(standardResponse),
         priorityResponseTargetMinutes: Number(priorityResponse),
         statusCheckThresholdDays: Number(statusCheck),
-        settingsVersion,
+        firstResponseTimingBasis: firstBasis,
+        standardResponseTimingBasis: standardBasis,
+        priorityResponseTimingBasis: priorityBasis,
+        settingsVersion: settingsVersion as string,
       });
       queryClient.setQueryData(["setup"], updated);
       setDirty(CLEAN);
@@ -88,7 +133,7 @@ export function PolicySection({ setup }: PolicySectionProps) {
         // Stale save: never retried automatically; the draft stays as typed.
         setConflict(true);
       } else if (err instanceof ApiError) {
-        setError(err.message);
+        setError(saveErrorCopy(err.code));
       } else {
         setError("Something went wrong. Please try again.");
       }
@@ -109,6 +154,9 @@ export function PolicySection({ setup }: PolicySectionProps) {
       <p className="text-sm text-[var(--ophalo-muted)] mb-4">
         Set the response targets your team works toward. The defaults work well for most service businesses — come back and adjust once you've seen how requests flow.
       </p>
+      <p className="text-sm text-[var(--ophalo-muted)] mb-4">
+        Continuous counts every hour. Staffed hours counts only the time your business is open, set in Business Hours &amp; Closures.
+      </p>
       <form onSubmit={handleSubmit} className="space-y-5 max-w-lg">
         <div>
           <label className="block text-sm font-medium text-[var(--ophalo-ink)] mb-0.5">
@@ -123,6 +171,17 @@ export function PolicySection({ setup }: PolicySectionProps) {
             required
             className="keep-field w-36"
           />
+          <select
+            aria-label="First response timing"
+            value={firstBasis}
+            onChange={(e) => edit("firstBasis", setFirstBasis, e.target.value)}
+            className="keep-field mt-2 w-44"
+          >
+            {firstBasis === "" && <option value="" disabled>—</option>}
+            {BASIS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-[var(--ophalo-ink)] mb-0.5">
@@ -137,6 +196,17 @@ export function PolicySection({ setup }: PolicySectionProps) {
             required
             className="keep-field w-36"
           />
+          <select
+            aria-label="Standard reply timing"
+            value={standardBasis}
+            onChange={(e) => edit("standardBasis", setStandardBasis, e.target.value)}
+            className="keep-field mt-2 w-44"
+          >
+            {standardBasis === "" && <option value="" disabled>—</option>}
+            {BASIS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-[var(--ophalo-ink)] mb-0.5">
@@ -151,6 +221,20 @@ export function PolicySection({ setup }: PolicySectionProps) {
             required
             className="keep-field w-36"
           />
+          <select
+            aria-label="Priority reply timing"
+            value={priorityBasis}
+            onChange={(e) => edit("priorityBasis", setPriorityBasis, e.target.value)}
+            className="keep-field mt-2 w-44"
+          >
+            {priorityBasis === "" && <option value="" disabled>—</option>}
+            {BASIS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-[var(--ophalo-muted)]">
+            Priority is a response tier, not on-call or emergency coverage. Keep doesn't route or notify after hours.
+          </p>
         </div>
         <div>
           <label className="block text-sm font-medium text-[var(--ophalo-ink)] mb-0.5">
@@ -167,6 +251,12 @@ export function PolicySection({ setup }: PolicySectionProps) {
           />
         </div>
 
+        {staffedWithoutSchedule && (
+          <p role="status" className="text-sm text-[var(--ophalo-muted)]">
+            Staffed hours needs at least one open day. Add your hours in Business Hours &amp; Closures.
+          </p>
+        )}
+
         {conflict && (
           <p role="alert" className="text-sm text-[var(--ophalo-danger)]">
             Someone else changed these settings, so your save wasn't applied. Refresh settings to load the latest version, then review your changes and save again.
@@ -175,6 +265,11 @@ export function PolicySection({ setup }: PolicySectionProps) {
         {!conflict && !hasVersion && (
           <p role="alert" className="text-sm text-[var(--ophalo-danger)]">
             Settings version isn't available. Refresh settings to continue.
+          </p>
+        )}
+        {!conflict && hasVersion && !hasBases && (
+          <p role="alert" className="text-sm text-[var(--ophalo-danger)]">
+            Current timing settings aren't available. Refresh settings to continue.
           </p>
         )}
         {refreshed && anyDirty && (
@@ -187,10 +282,10 @@ export function PolicySection({ setup }: PolicySectionProps) {
         )}
 
         <div className="flex items-center gap-3">
-          <KeepButton type="submit" variant="primary" disabled={submitting || !hasVersion}>
+          <KeepButton type="submit" variant="primary" disabled={submitting || !canSave}>
             {submitting ? "Saving…" : "Save policy"}
           </KeepButton>
-          {(conflict || !hasVersion) && (
+          {(conflict || !canSave) && (
             <KeepButton type="button" variant="secondary" onClick={handleRefresh} disabled={refreshing}>
               {refreshing ? "Refreshing…" : "Refresh settings"}
             </KeepButton>
