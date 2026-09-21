@@ -113,7 +113,7 @@ export const mockSetup: KeepSetupResult = {
       opensAt: "08:00",
       closesAt: "17:00",
     })),
-    closureDates: [],
+    closures: [],
   },
 };
 

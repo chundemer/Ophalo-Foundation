@@ -37,7 +37,7 @@ function setupWith(overrides: Partial<KeepSetupResult> = {}): KeepSetupResult {
     settingsVersion: "v1",
     calendar: {
       weeklyIntervals: [{ weekday: "Monday", opensAt: "08:00", closesAt: "17:00" }],
-      closureDates: ["2026-12-25"],
+      closures: [{ date: "2026-12-25", reason: null }],
     },
     ...overrides,
   };
@@ -91,7 +91,7 @@ describe("CalendarSection", () => {
           { weekday: "Monday", opensAt: "08:00", closesAt: "17:00" },
           { weekday: "Tuesday", opensAt: "09:00", closesAt: "17:00" },
         ],
-        closureDates: ["2026-12-25"],
+        closures: [{ date: "2026-12-25", reason: null }],
         settingsVersion: "v1",
       }),
     );
@@ -118,6 +118,107 @@ describe("CalendarSection", () => {
     expect(screen.getByText("No closures scheduled.")).toBeInTheDocument();
   });
 
+  describe("closure reasons (ADR-507)", () => {
+    const withReason = () =>
+      setupWith({
+        calendar: {
+          weeklyIntervals: [{ weekday: "Monday", opensAt: "08:00", closesAt: "17:00" }],
+          closures: [
+            { date: "2026-12-25", reason: "Christmas" },
+            { date: "2026-11-26", reason: null },
+          ],
+        },
+      });
+
+    it("shows stored reasons, sorted by date, in editable inputs", async () => {
+      mockGetSetup.mockResolvedValue(withReason());
+      renderSection();
+
+      expect(await screen.findByLabelText("Reason for 2026-12-25")).toHaveValue("Christmas");
+      expect(screen.getByLabelText("Reason for 2026-11-26")).toHaveValue("");
+      const items = screen.getAllByRole("listitem").map((li) => li.textContent);
+      expect(items[0]).toContain("2026-11-26");
+      expect(items[1]).toContain("2026-12-25");
+    });
+
+    it("adds a closure with an optional reason, showing a counter capped at 60", async () => {
+      const user = userEvent.setup();
+      mockUpdateCalendar.mockResolvedValue(setupWith({ settingsVersion: "v2" }));
+      renderSection();
+      await screen.findByLabelText("Closure date");
+
+      const reason = screen.getByLabelText("Closure reason (optional)");
+      expect(reason).toHaveAttribute("maxLength", "60");
+      await user.type(screen.getByLabelText("Closure date"), "2026-11-26");
+      await user.type(reason, "  Thanksgiving ");
+      expect(screen.getByText("15/60")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Add closure" }));
+      expect(screen.getByLabelText("Reason for 2026-11-26")).toHaveValue("  Thanksgiving ");
+      expect(reason).toHaveValue("");
+      expect(screen.getByText("0/60")).toBeInTheDocument();
+
+      await user.click(saveButton());
+      await waitFor(() =>
+        expect(mockUpdateCalendar).toHaveBeenCalledWith({
+          weeklyIntervals: [{ weekday: "Monday", opensAt: "08:00", closesAt: "17:00" }],
+          closures: [
+            { date: "2026-11-26", reason: "Thanksgiving" },
+            { date: "2026-12-25", reason: null },
+          ],
+          settingsVersion: "v1",
+        }),
+      );
+    });
+
+    it("edits and clears a reason, sending the trimmed value or null", async () => {
+      const user = userEvent.setup();
+      mockGetSetup.mockResolvedValue(withReason());
+      mockUpdateCalendar.mockResolvedValue(withReason());
+      renderSection();
+
+      const christmas = await screen.findByLabelText("Reason for 2026-12-25");
+      expect(saveButton()).toBeDisabled();
+      await user.clear(christmas);
+      await user.type(christmas, " Annual training ");
+      await user.type(screen.getByLabelText("Reason for 2026-11-26"), "   ");
+      await user.click(saveButton());
+
+      await waitFor(() =>
+        expect(mockUpdateCalendar).toHaveBeenCalledWith({
+          weeklyIntervals: [{ weekday: "Monday", opensAt: "08:00", closesAt: "17:00" }],
+          closures: [
+            { date: "2026-11-26", reason: null },
+            { date: "2026-12-25", reason: "Annual training" },
+          ],
+          settingsVersion: "v1",
+        }),
+      );
+
+      await user.clear(christmas);
+      await user.click(saveButton());
+      await waitFor(() => expect(mockUpdateCalendar).toHaveBeenCalledTimes(2));
+      expect(mockUpdateCalendar.mock.calls[1][0].closures).toEqual([
+        { date: "2026-11-26", reason: null },
+        { date: "2026-12-25", reason: null },
+      ]);
+    });
+
+    it("keeps an edited reason on a 409 (reason-only stale save)", async () => {
+      const user = userEvent.setup();
+      mockGetSetup.mockResolvedValue(withReason());
+      mockUpdateCalendar.mockRejectedValue(new ApiError(409, "KeepResponsePolicy.SettingsVersionMismatch", "API 409"));
+      renderSection();
+
+      const christmas = await screen.findByLabelText("Reason for 2026-12-25");
+      await user.type(christmas, " Eve");
+      await user.click(saveButton());
+
+      expect(await screen.findByText(/Settings were updated by another user/)).toBeInTheDocument();
+      expect(screen.getByLabelText("Reason for 2026-12-25")).toHaveValue("Christmas Eve");
+      expect(mockUpdateCalendar).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("blocks saving when closing is not after opening", async () => {
     const user = userEvent.setup();
     renderSection();
@@ -135,6 +236,7 @@ describe("CalendarSection", () => {
     ["StaffedHoursTargetUnreachable", "Your scheduled hours do not provide enough open time to satisfy your configured SLA response target."],
     ["KeepResponsePolicy.DuplicateWeekday", "Each weekday can only have one open window."],
     ["KeepResponsePolicy.DuplicateClosureDate", "That closure date is already added."],
+    ["KeepSetup.ClosureReasonValidation", "A closure reason must be a single line of at most 60 characters."],
     ["KeepSetup.CalendarValidation", "We couldn't save your business hours. Check your entries and try again."],
     ["KeepResponsePolicy.OverlappingClosureChange", "We couldn't save your business hours. Check your entries and try again."],
   ])("maps %s to friendly copy, never the generic API message", async (code, copy) => {

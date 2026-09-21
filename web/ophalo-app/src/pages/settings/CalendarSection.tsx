@@ -6,6 +6,8 @@ import { KeepButton } from "../../components/keep/KeepButton";
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 const DEFAULT_OPENS_AT = "09:00";
 const DEFAULT_CLOSES_AT = "17:00";
+// ADR-507: UTF-16 length, the same unit as the server's check and the input's maxLength.
+const MAX_REASON_LENGTH = 60;
 
 interface DayDraft {
   open: boolean;
@@ -13,10 +15,17 @@ interface DayDraft {
   closesAt: string;
 }
 
+interface ClosureDraft {
+  date: string;
+  reason: string; // "" = no reason
+}
+
 interface CalendarDraft {
   days: Record<string, DayDraft>;
-  closures: string[];
+  closures: ClosureDraft[];
 }
+
+const byDate = (a: ClosureDraft, b: ClosureDraft) => a.date.localeCompare(b.date);
 
 function draftFromCalendar(calendar: KeepSetupCalendarResult): CalendarDraft {
   const days: Record<string, DayDraft> = {};
@@ -26,7 +35,10 @@ function draftFromCalendar(calendar: KeepSetupCalendarResult): CalendarDraft {
       ? { open: true, opensAt: interval.opensAt, closesAt: interval.closesAt }
       : { open: false, opensAt: DEFAULT_OPENS_AT, closesAt: DEFAULT_CLOSES_AT };
   }
-  return { days, closures: [...calendar.closureDates].sort() };
+  return {
+    days,
+    closures: calendar.closures.map((c) => ({ date: c.date, reason: c.reason ?? "" })).sort(byDate),
+  };
 }
 
 function calendarFromDraft(draft: CalendarDraft): KeepSetupCalendarResult {
@@ -36,7 +48,7 @@ function calendarFromDraft(draft: CalendarDraft): KeepSetupCalendarResult {
       opensAt: draft.days[weekday].opensAt,
       closesAt: draft.days[weekday].closesAt,
     })),
-    closureDates: [...draft.closures].sort(),
+    closures: [...draft.closures].sort(byDate).map((c) => ({ date: c.date, reason: c.reason.trim() || null })),
   };
 }
 
@@ -58,6 +70,7 @@ const ERROR_COPY: Record<string, string> = {
     "Your scheduled hours do not provide enough open time to satisfy your configured SLA response target.",
   "KeepResponsePolicy.DuplicateWeekday": "Each weekday can only have one open window.",
   "KeepResponsePolicy.DuplicateClosureDate": "That closure date is already added.",
+  "KeepSetup.ClosureReasonValidation": "A closure reason must be a single line of at most 60 characters.",
 };
 
 // Unrecognised codes (KeepSetup.CalendarValidation, OverlappingClosureChange, …) fall back to the
@@ -74,6 +87,7 @@ export function CalendarSection({ setup }: { setup: KeepSetupResult }) {
   // Set after the first edit since the last save; the sync effect never overwrites an edited draft.
   const [dirty, setDirty] = useState(false);
   const [newClosure, setNewClosure] = useState("");
+  const [newReason, setNewReason] = useState("");
   const [closureError, setClosureError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,18 +128,24 @@ export function CalendarSection({ setup }: { setup: KeepSetupResult }) {
 
   function addClosure() {
     if (!draft || !newClosure) return;
-    if (draft.closures.includes(newClosure)) {
+    if (draft.closures.some((c) => c.date === newClosure)) {
       setClosureError("That closure date is already added.");
       return;
     }
     setClosureError(null);
-    edit({ ...draft, closures: [...draft.closures, newClosure].sort() });
+    edit({ ...draft, closures: [...draft.closures, { date: newClosure, reason: newReason }].sort(byDate) });
     setNewClosure("");
+    setNewReason("");
+  }
+
+  function setClosureReason(date: string, reason: string) {
+    if (!draft) return;
+    edit({ ...draft, closures: draft.closures.map((c) => (c.date === date ? { ...c, reason } : c)) });
   }
 
   function removeClosure(date: string) {
     if (!draft) return;
-    edit({ ...draft, closures: draft.closures.filter((d) => d !== date) });
+    edit({ ...draft, closures: draft.closures.filter((c) => c.date !== date) });
   }
 
   async function handleRefresh() {
@@ -259,6 +279,18 @@ export function CalendarSection({ setup }: { setup: KeepSetupResult }) {
               }}
               className="keep-field w-44"
             />
+            <input
+              type="text"
+              aria-label="Closure reason (optional)"
+              placeholder="Reason (optional)"
+              maxLength={MAX_REASON_LENGTH}
+              value={newReason}
+              onChange={(e) => setNewReason(e.target.value)}
+              className="keep-field w-64"
+            />
+            <span className="text-xs text-[var(--ophalo-muted)]" aria-hidden="true">
+              {newReason.length}/{MAX_REASON_LENGTH}
+            </span>
             <KeepButton type="button" variant="secondary" onClick={addClosure} disabled={!newClosure}>
               Add closure
             </KeepButton>
@@ -272,9 +304,18 @@ export function CalendarSection({ setup }: { setup: KeepSetupResult }) {
             <p className="mt-3 text-sm text-[var(--ophalo-muted)]">No closures scheduled.</p>
           ) : (
             <ul className="mt-3 space-y-1.5">
-              {draft.closures.map((date) => (
-                <li key={date} className="flex items-center gap-3 text-sm text-[var(--ophalo-ink)]">
+              {draft.closures.map(({ date, reason }) => (
+                <li key={date} className="flex flex-wrap items-center gap-3 text-sm text-[var(--ophalo-ink)]">
                   <span>{date}</span>
+                  <input
+                    type="text"
+                    aria-label={`Reason for ${date}`}
+                    placeholder="Reason (optional)"
+                    maxLength={MAX_REASON_LENGTH}
+                    value={reason}
+                    onChange={(e) => setClosureReason(date, e.target.value)}
+                    className="keep-field w-64"
+                  />
                   <KeepButton
                     type="button"
                     variant="secondary"

@@ -43,8 +43,8 @@ export interface KeepSetupWeeklyIntervalResult {
 
 export interface KeepSetupCalendarResult {
   weeklyIntervals: KeepSetupWeeklyIntervalResult[];
-  /** YYYY-MM-DD, account-local. */
-  closureDates: string[];
+  /** Full-day closures: `date` is YYYY-MM-DD, account-local; `reason` is an internal note (max 60). */
+  closures: { date: string; reason: string | null }[];
 }
 
 export interface KeepSetupResult {
