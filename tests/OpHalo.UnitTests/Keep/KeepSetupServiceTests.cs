@@ -48,7 +48,7 @@ public class KeepSetupServiceTests
 
         var result = await sut.UpdateCalendarAsync(
             [new KeepSetupWeeklyIntervalInput("monday", "08:00", "17:30")],
-            ["2026-12-26", "2027-01-01"],
+            [new KeepSetupClosureInput("2026-12-26", null), new KeepSetupClosureInput("2027-01-01", null)],
             expectedSettingsVersion: null);
 
         Assert.True(result.IsSuccess);
@@ -77,7 +77,8 @@ public class KeepSetupServiceTests
         var persistence = HappyPersistence();
         var policy = PolicyFor(persistence);
 
-        var result = await BuildSut(persistence, policy).UpdateCalendarAsync([], ["2026-12-25", "2026-12-25"], "v");
+        var result = await BuildSut(persistence, policy).UpdateCalendarAsync(
+            [], [new KeepSetupClosureInput("2026-12-25", null), new KeepSetupClosureInput("2026-12-25", "x")], "v");
 
         Assert.Equal(KeepResponsePolicyErrors.DuplicateClosureDate, result.Error);
         Assert.False(policy.Called);
@@ -95,7 +96,7 @@ public class KeepSetupServiceTests
         var policy = PolicyFor(persistence);
 
         var result = await BuildSut(persistence, policy).UpdateCalendarAsync(
-            [new KeepSetupWeeklyIntervalInput(weekday, opens, closes)], [closure], "v");
+            [new KeepSetupWeeklyIntervalInput(weekday, opens, closes)], [new KeepSetupClosureInput(closure, null)], "v");
 
         Assert.Equal("KeepSetup.CalendarValidation", result.Error.Code);
         Assert.False(policy.Called);
@@ -107,6 +108,122 @@ public class KeepSetupServiceTests
         var persistence = HappyPersistence();
         var result = await BuildSut(persistence).UpdateCalendarAsync(null, null, "v");
         Assert.Equal("KeepSetup.CalendarValidation", result.Error.Code);
+    }
+
+    // ── ADR-507 closure reasons (GAP-100 batch 7b) ───────────────────────────
+
+    private static KeepSetupWeeklyIntervalInput[] Monday() => [new("Monday", "08:00", "17:00")];
+
+    [Fact]
+    public async Task UpdateCalendar_SendsOnlyNewDatesAndChangedReasons_AndPreservesUnchangedOnes()
+    {
+        var persistence = HappyPersistence();
+        persistence.Calendar = new KeepCalendarSnapshot([], [
+            new KeepCalendarClosureSnapshot(new DateOnly(2026, 11, 26), "Thanksgiving"),
+            new KeepCalendarClosureSnapshot(new DateOnly(2026, 12, 24), "Eve"),
+            new KeepCalendarClosureSnapshot(new DateOnly(2026, 12, 25), "Christmas"),
+            new KeepCalendarClosureSnapshot(new DateOnly(2026, 12, 31), null)]);
+        var policy = PolicyFor(persistence);
+
+        var result = await BuildSut(persistence, policy).UpdateCalendarAsync(
+            Monday(),
+            [
+                new KeepSetupClosureInput("2026-11-26", "  Thanksgiving  "), // unchanged after trim
+                new KeepSetupClosureInput("2026-12-24", "Early close"),      // reason changed
+                new KeepSetupClosureInput("2026-12-25", "   "),              // cleared
+                new KeepSetupClosureInput("2027-01-01", "New Year"),         // new
+                // 2026-12-31 removed
+            ],
+            "v");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+        [
+            (new DateOnly(2026, 12, 24), (string?)"Early close"),
+            (new DateOnly(2026, 12, 25), null),
+            (new DateOnly(2027, 1, 1), "New Year"),
+        ], policy.LastAdd.Select(c => (c.Date, c.Reason)));
+        Assert.Equal([new DateOnly(2026, 12, 31)], policy.LastRemove);
+    }
+
+    [Fact]
+    public async Task UpdateCalendar_UnchangedClosures_SendNothing()
+    {
+        var persistence = HappyPersistence();
+        persistence.Calendar = new KeepCalendarSnapshot([], [
+            new KeepCalendarClosureSnapshot(new DateOnly(2026, 12, 25), "Christmas")]);
+        var policy = PolicyFor(persistence);
+
+        var result = await BuildSut(persistence, policy).UpdateCalendarAsync(
+            Monday(), [new KeepSetupClosureInput("2026-12-25", "Christmas")], "v");
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(policy.LastAdd);
+        Assert.Empty(policy.LastRemove);
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("Ünïcode – Día de Acción de Gracias 🦃")]
+    public async Task UpdateCalendar_AcceptsOrdinaryUnicodeReasons(string reason)
+    {
+        var persistence = HappyPersistence();
+        var policy = PolicyFor(persistence);
+
+        var result = await BuildSut(persistence, policy).UpdateCalendarAsync(
+            Monday(), [new KeepSetupClosureInput("2026-12-25", reason)], "v");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(reason, Assert.Single(policy.LastAdd).Reason);
+    }
+
+    [Fact]
+    public async Task UpdateCalendar_ReasonLengthBoundary_Is60AfterTrimUtf16()
+    {
+        var persistence = HappyPersistence();
+        var policy = PolicyFor(persistence);
+        var sut = BuildSut(persistence, policy);
+
+        var ok = await sut.UpdateCalendarAsync(
+            Monday(), [new KeepSetupClosureInput("2026-12-25", " " + new string('x', 60) + " ")], "v");
+        var tooLong = await sut.UpdateCalendarAsync(
+            Monday(), [new KeepSetupClosureInput("2026-12-26", new string('x', 61))], "v");
+
+        Assert.True(ok.IsSuccess);
+        Assert.Equal("KeepSetup.ClosureReasonValidation", tooLong.Error.Code);
+    }
+
+    [Theory]
+    [InlineData("line one\nline two")]
+    [InlineData("carriage\rreturn")]
+    [InlineData("tab\there")]
+    [InlineData("nul\0byte")]
+    [InlineData("bell\u0007")]
+    public async Task UpdateCalendar_InvalidReason_ReturnsReasonValidationWithoutWriting(string reason)
+    {
+        var persistence = HappyPersistence();
+        var policy = PolicyFor(persistence);
+
+        var result = await BuildSut(persistence, policy).UpdateCalendarAsync(
+            Monday(), [new KeepSetupClosureInput("2026-12-25", reason)], "v");
+
+        Assert.Equal("KeepSetup.ClosureReasonValidation", result.Error.Code);
+        Assert.False(policy.Called);
+    }
+
+    [Fact]
+    public async Task GetSetup_returns_closure_reasons()
+    {
+        var persistence = HappyPersistence();
+        persistence.Calendar = new KeepCalendarSnapshot([], [
+            new KeepCalendarClosureSnapshot(new DateOnly(2026, 12, 25), "Christmas"),
+            new KeepCalendarClosureSnapshot(new DateOnly(2026, 11, 26), null)]);
+
+        var result = await BuildSut(persistence).GetSetupAsync();
+
+        Assert.Equal(
+            [("2026-11-26", (string?)null), ("2026-12-25", "Christmas")],
+            result.Value.Calendar.Closures.Select(c => (c.Date, c.Reason)));
     }
 
     // ── UpdatePolicyAsync (6a-1) ─────────────────────────────────────────────
@@ -294,7 +411,7 @@ public class KeepSetupServiceTests
         Assert.Equal("Continuous", result.Value.ResponsePolicy.StandardResponseTimingBasis);
         Assert.Equal("Continuous", result.Value.ResponsePolicy.PriorityResponseTimingBasis);
         Assert.Empty(result.Value.Calendar.WeeklyIntervals);
-        Assert.Empty(result.Value.Calendar.ClosureDates);
+        Assert.Empty(result.Value.Calendar.Closures);
         Assert.False(string.IsNullOrEmpty(result.Value.SettingsVersion));
     }
 
@@ -324,7 +441,7 @@ public class KeepSetupServiceTests
         Assert.Equal(
             [("Monday", "08:00", "16:45"), ("Tuesday", "08:30", "17:00")],
             first.Value.Calendar.WeeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)));
-        Assert.Equal(["2026-12-25"], first.Value.Calendar.ClosureDates);
+        Assert.Equal([("2026-12-25", (string?)null)], first.Value.Calendar.Closures.Select(c => (c.Date, c.Reason)));
 
         persistence.Calendar = new KeepCalendarSnapshot([], []);
         var second = await sut.GetSetupAsync();

@@ -8,5 +8,5 @@ namespace OpHalo.Api.Keep;
 /// </summary>
 public sealed record UpdateCalendarBody(
     IReadOnlyList<KeepSetupWeeklyIntervalInput>? WeeklyIntervals,
-    IReadOnlyList<string>? ClosureDates,
+    IReadOnlyList<KeepSetupClosureInput>? Closures,
     string? SettingsVersion);

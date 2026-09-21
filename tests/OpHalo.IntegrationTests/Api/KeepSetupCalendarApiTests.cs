@@ -80,7 +80,7 @@ public sealed class KeepSetupCalendarApiTests : IClassFixture<KeepApiWebFactory>
     public async Task Put_Unauthenticated_Returns401()
     {
         var response = await _client.PutAsJsonAsync("/keep/setup/calendar",
-            new { WeeklyIntervals = Monday(), ClosureDates = Array.Empty<string>(), SettingsVersion = "x" });
+            new { WeeklyIntervals = Monday(), Closures = Array.Empty<object>(), SettingsVersion = "x" });
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -95,7 +95,7 @@ public sealed class KeepSetupCalendarApiTests : IClassFixture<KeepApiWebFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var after = (await response.Content.ReadFromJsonAsync<KeepSetupResult>(JsonOptions))!;
         Assert.Equal("Monday", Assert.Single(after.Calendar.WeeklyIntervals).Weekday);
-        Assert.Equal(["2026-12-25"], after.Calendar.ClosureDates);
+        Assert.Equal([("2026-12-25", (string?)null)], after.Calendar.Closures.Select(c => (c.Date, c.Reason)));
         Assert.NotEqual(before.SettingsVersion, after.SettingsVersion);
     }
 
@@ -203,6 +203,97 @@ public sealed class KeepSetupCalendarApiTests : IClassFixture<KeepApiWebFactory>
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    // --- ADR-507 closure reasons (GAP-100 batch 7b) ---
+
+    private static object Closure(string date, string? reason) => new { Date = date, Reason = reason };
+
+    [Fact]
+    public async Task Put_ClosureReason_RoundTripsThroughGetAndCanBeChangedAndCleared()
+    {
+        var cookie = await _factory.SeedSessionAsync(_ownerUserId, _accountId);
+
+        var v0 = (await GetSetupAsync(cookie)).SettingsVersion;
+        var put = await PutClosuresAsync(cookie, Monday(), [Closure("2026-11-26", "  Thanksgiving Day ")], v0);
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        var afterPut = (await put.Content.ReadFromJsonAsync<KeepSetupResult>(JsonOptions))!;
+        Assert.Equal([("2026-11-26", (string?)"Thanksgiving Day")], afterPut.Calendar.Closures.Select(c => (c.Date, c.Reason)));
+
+        var got = await GetSetupAsync(cookie);
+        Assert.Equal(afterPut.SettingsVersion, got.SettingsVersion);
+        Assert.Equal("Thanksgiving Day", Assert.Single(got.Calendar.Closures).Reason);
+
+        var changed = await PutClosuresAsync(cookie, Monday(), [Closure("2026-11-26", "Annual training")], got.SettingsVersion);
+        var afterChange = (await changed.Content.ReadFromJsonAsync<KeepSetupResult>(JsonOptions))!;
+        Assert.Equal("Annual training", Assert.Single(afterChange.Calendar.Closures).Reason);
+        Assert.NotEqual(got.SettingsVersion, afterChange.SettingsVersion);
+
+        var cleared = await PutClosuresAsync(cookie, Monday(), [Closure("2026-11-26", "   ")], afterChange.SettingsVersion);
+        var afterClear = (await cleared.Content.ReadFromJsonAsync<KeepSetupResult>(JsonOptions))!;
+        Assert.Null(Assert.Single(afterClear.Calendar.Closures).Reason);
+        Assert.NotEqual(afterChange.SettingsVersion, afterClear.SettingsVersion);
+    }
+
+    [Fact]
+    public async Task Put_ReasonOnlyChange_WithStaleVersion_Returns409_AndKeepsTheStoredReason()
+    {
+        var cookie = await _factory.SeedSessionAsync(_ownerUserId, _accountId);
+        var v0 = (await GetSetupAsync(cookie)).SettingsVersion;
+        var first = await PutClosuresAsync(cookie, Monday(), [Closure("2026-11-26", "A")], v0);
+        var stale = (await first.Content.ReadFromJsonAsync<KeepSetupResult>(JsonOptions))!.SettingsVersion;
+        var second = await PutClosuresAsync(cookie, Monday(), [Closure("2026-11-26", "B")], stale);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+
+        var response = await PutClosuresAsync(cookie, Monday(), [Closure("2026-11-26", "C")], stale);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("B", Assert.Single((await GetSetupAsync(cookie)).Calendar.Closures).Reason);
+    }
+
+    [Theory]
+    [InlineData("line one\nline two")]
+    [InlineData("tab\there")]
+    public async Task Put_InvalidReason_Returns400_AndWritesNothing(string reason)
+    {
+        var cookie = await _factory.SeedSessionAsync(_ownerUserId, _accountId);
+        var before = await GetSetupAsync(cookie);
+
+        var response = await PutClosuresAsync(cookie, Monday(), [Closure("2026-11-26", reason)], before.SettingsVersion);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var after = await GetSetupAsync(cookie);
+        Assert.Empty(after.Calendar.Closures);
+        Assert.Equal(before.SettingsVersion, after.SettingsVersion);
+    }
+
+    [Fact]
+    public async Task Put_TooLongReason_Returns400_AndSixtyCharactersIsAccepted()
+    {
+        var cookie = await _factory.SeedSessionAsync(_ownerUserId, _accountId);
+        var v = (await GetSetupAsync(cookie)).SettingsVersion;
+
+        var tooLong = await PutClosuresAsync(cookie, Monday(), [Closure("2026-11-26", new string('x', 61))], v);
+        var ok = await PutClosuresAsync(cookie, Monday(), [Closure("2026-11-26", new string('x', 60))], v);
+
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+    }
+
+    [Fact]
+    public async Task Put_LegacyDatesOnlyBody_IsRejectedAs400()
+    {
+        var cookie = await _factory.SeedSessionAsync(_ownerUserId, _accountId);
+        using var request = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/calendar");
+        request.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        request.Content = JsonContent.Create(new
+        {
+            WeeklyIntervals = Monday(), ClosureDates = new[] { "2026-12-25" }, SettingsVersion = "x"
+        });
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -216,15 +307,19 @@ public sealed class KeepSetupCalendarApiTests : IClassFixture<KeepApiWebFactory>
         return (await response.Content.ReadFromJsonAsync<KeepSetupResult>(JsonOptions))!;
     }
 
-    private async Task<HttpResponseMessage> PutAsync(
-        string cookie, object[] intervals, string[] closures, string? version)
+    private Task<HttpResponseMessage> PutAsync(
+        string cookie, object[] intervals, string[] closures, string? version) =>
+        PutClosuresAsync(cookie, intervals, closures.Select(d => (object)new { Date = d, Reason = (string?)null }).ToArray(), version);
+
+    private async Task<HttpResponseMessage> PutClosuresAsync(
+        string cookie, object[] intervals, object[] closures, string? version)
     {
         using var request = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/calendar");
         request.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
         request.Content = JsonContent.Create(new
         {
             WeeklyIntervals = intervals,
-            ClosureDates    = closures,
+            Closures        = closures,
             SettingsVersion = version
         });
         return await _client.SendAsync(request);

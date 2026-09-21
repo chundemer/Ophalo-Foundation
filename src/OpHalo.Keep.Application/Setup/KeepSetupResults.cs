@@ -26,11 +26,17 @@ public sealed record KeepSetupPolicyResult(
 
 /// <summary>
 /// Weekly intervals are same-day <c>HH:mm</c> local times; closures are account-local
-/// <c>YYYY-MM-DD</c> dates (ADR-506). A weekday with no interval is closed.
+/// <c>YYYY-MM-DD</c> dates with an optional internal reason (ADR-506, ADR-507). A weekday with
+/// no interval is closed.
 /// </summary>
 public sealed record KeepSetupCalendarResult(
     IReadOnlyList<KeepSetupWeeklyIntervalResult> WeeklyIntervals,
-    IReadOnlyList<string> ClosureDates);
+    IReadOnlyList<KeepSetupClosureResult> Closures);
+
+public sealed record KeepSetupClosureResult(string Date, string? Reason);
+
+/// <summary>Closure as submitted by a calendar save: <c>YYYY-MM-DD</c> date and optional reason (ADR-507).</summary>
+public sealed record KeepSetupClosureInput(string Date, string? Reason);
 
 public sealed record KeepSetupWeeklyIntervalResult(string Weekday, string OpensAt, string ClosesAt);
 

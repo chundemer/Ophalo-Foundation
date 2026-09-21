@@ -203,7 +203,7 @@ public sealed class KeepSetupPolicyApiTests : IClassFixture<KeepApiWebFactory>, 
         request.Content = JsonContent.Create(new
         {
             WeeklyIntervals = new[] { new { Weekday = "Monday", OpensAt = "00:00", ClosesAt = "23:59" } },
-            ClosureDates    = Array.Empty<string>(),
+            Closures        = Array.Empty<object>(),
             SettingsVersion = version
         });
         return request;

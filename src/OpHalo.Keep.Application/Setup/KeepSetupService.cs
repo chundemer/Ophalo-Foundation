@@ -29,6 +29,12 @@ public sealed class KeepSetupService(
         "KeepSetup.CalendarValidation",
         "Calendar must list weekly intervals as weekday names with HH:mm times and closures as YYYY-MM-DD dates.");
 
+    private const int MaxClosureReasonLength = 60;
+
+    private static readonly Error ClosureReasonValidation = Error.Create(
+        "KeepSetup.ClosureReasonValidation",
+        "A closure reason must be a single line of at most 60 characters.");
+
     private static readonly Error PolicyValidation = Error.Create(
         "KeepSetup.PolicyValidation",
         "Policy durations must be positive and timing bases must be Continuous or StaffedHours.");
@@ -158,11 +164,11 @@ public sealed class KeepSetupService(
     /// </summary>
     public async Task<Result<KeepSetupResult>> UpdateCalendarAsync(
         IReadOnlyList<KeepSetupWeeklyIntervalInput>? weeklyIntervals,
-        IReadOnlyList<string>? closureDates,
+        IReadOnlyList<KeepSetupClosureInput>? closures,
         string? expectedSettingsVersion,
         CancellationToken ct = default)
     {
-        var parsed = ParseCalendar(weeklyIntervals, closureDates);
+        var parsed = ParseCalendar(weeklyIntervals, closures);
         if (parsed.IsFailure) return Result<KeepSetupResult>.Failure(parsed.Error);
         var (intervals, desiredClosures) = parsed.Value;
 
@@ -170,30 +176,31 @@ public sealed class KeepSetupService(
         var auth = await AuthorizeAsync(ct);
         if (auth.IsFailure) return Result<KeepSetupResult>.Failure(auth.Error);
 
-        if (desiredClosures.Distinct().Count() != desiredClosures.Count)
+        if (desiredClosures.Select(c => c.Date).Distinct().Count() != desiredClosures.Count)
             return Result<KeepSetupResult>.Failure(KeepResponsePolicyErrors.DuplicateClosureDate);
 
         var current = await persistence.GetCalendarAsync(currentUser.AccountId, ct);
-        var currentClosures = current.Closures.Select(c => c.Date).ToHashSet();
-        var desiredSet = desiredClosures.ToHashSet();
-        // Dates-only surface (ADR-507 7b changes this): only new dates are sent, with no reason;
-        // existing dates are omitted so their stored reason is preserved.
-        var toAdd = desiredClosures.Where(d => !currentClosures.Contains(d))
-            .Select(d => new KeepCalendarClosureSnapshot(d)).ToList();
-        var toRemove = current.Closures.Select(c => c.Date).Where(d => !desiredSet.Contains(d)).ToList();
+        var currentByDate = current.Closures.ToDictionary(c => c.Date);
+        var desiredDates = desiredClosures.Select(c => c.Date).ToHashSet();
+        // Only new dates and changed reasons are sent, so a no-op stays silent (ADR-507).
+        var toSet = desiredClosures
+            .Where(c => !currentByDate.TryGetValue(c.Date, out var stored)
+                        || !string.Equals(stored.Reason, c.Reason, StringComparison.Ordinal))
+            .ToList();
+        var toRemove = current.Closures.Select(c => c.Date).Where(d => !desiredDates.Contains(d)).ToList();
 
         var write = await responsePolicyService.UpdateCalendarAsync(
-            intervals, toAdd, toRemove, expectedSettingsVersion, ct);
+            intervals, toSet, toRemove, expectedSettingsVersion, ct);
         if (write.IsFailure) return Result<KeepSetupResult>.Failure(write.Error);
 
         return await GetSetupAsync(ct);
     }
 
-    private static Result<(List<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> Intervals, List<DateOnly> Closures)>
-        ParseCalendar(IReadOnlyList<KeepSetupWeeklyIntervalInput>? weeklyIntervals, IReadOnlyList<string>? closureDates)
+    private static Result<(List<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> Intervals, List<KeepCalendarClosureSnapshot> Closures)>
+        ParseCalendar(IReadOnlyList<KeepSetupWeeklyIntervalInput>? weeklyIntervals, IReadOnlyList<KeepSetupClosureInput>? closureInputs)
     {
-        var invalid = Result<(List<(DayOfWeek, TimeOnly, TimeOnly)>, List<DateOnly>)>.Failure(CalendarValidation);
-        if (weeklyIntervals is null || closureDates is null) return invalid;
+        var invalid = Result<(List<(DayOfWeek, TimeOnly, TimeOnly)>, List<KeepCalendarClosureSnapshot>)>.Failure(CalendarValidation);
+        if (weeklyIntervals is null || closureInputs is null) return invalid;
 
         var intervals = new List<(DayOfWeek, TimeOnly, TimeOnly)>();
         foreach (var i in weeklyIntervals)
@@ -208,15 +215,23 @@ public sealed class KeepSetupService(
             intervals.Add((weekday, opens, closes));
         }
 
-        var closures = new List<DateOnly>();
-        foreach (var d in closureDates)
+        var closures = new List<KeepCalendarClosureSnapshot>();
+        foreach (var c in closureInputs)
         {
-            if (!DateOnly.TryParseExact(d, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            if (c is null
+                || !DateOnly.TryParseExact(c.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
                 return invalid;
-            closures.Add(date);
+
+            // ADR-507: trim, empty -> null, else single line, no control characters, UTF-16 length <= 60.
+            var reason = c.Reason?.Trim();
+            if (string.IsNullOrEmpty(reason)) reason = null;
+            else if (reason.Length > MaxClosureReasonLength || reason.Any(char.IsControl))
+                return Result<(List<(DayOfWeek, TimeOnly, TimeOnly)>, List<KeepCalendarClosureSnapshot>)>.Failure(ClosureReasonValidation);
+
+            closures.Add(new KeepCalendarClosureSnapshot(date, reason));
         }
 
-        return Result<(List<(DayOfWeek, TimeOnly, TimeOnly)>, List<DateOnly>)>.Success((intervals, closures));
+        return Result<(List<(DayOfWeek, TimeOnly, TimeOnly)>, List<KeepCalendarClosureSnapshot>)>.Success((intervals, closures));
     }
 
     private async Task<KeepSetupResult> BuildResultAsync(
@@ -266,7 +281,8 @@ public sealed class KeepSetupService(
                 .ToList(),
             calendar.Closures
                 .OrderBy(c => c.Date)
-                .Select(c => c.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+                .Select(c => new KeepSetupClosureResult(
+                    c.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), c.Reason))
                 .ToList());
 
     private async Task<Result> AuthorizeAsync(CancellationToken ct)

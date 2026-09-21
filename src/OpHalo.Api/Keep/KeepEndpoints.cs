@@ -136,7 +136,7 @@ public static class KeepEndpoints
         app.MapPut("/keep/setup/calendar", async (UpdateCalendarBody body, KeepSetupService service, CancellationToken ct) =>
         {
             var result = await service.UpdateCalendarAsync(
-                body.WeeklyIntervals, body.ClosureDates, body.SettingsVersion, ct);
+                body.WeeklyIntervals, body.Closures, body.SettingsVersion, ct);
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
