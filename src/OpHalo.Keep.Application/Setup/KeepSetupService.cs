@@ -176,7 +176,10 @@ public sealed class KeepSetupService(
         var current = await persistence.GetCalendarAsync(currentUser.AccountId, ct);
         var currentClosures = current.Closures.Select(c => c.Date).ToHashSet();
         var desiredSet = desiredClosures.ToHashSet();
-        var toAdd = desiredClosures.Where(d => !currentClosures.Contains(d)).ToList();
+        // Dates-only surface (ADR-507 7b changes this): only new dates are sent, with no reason;
+        // existing dates are omitted so their stored reason is preserved.
+        var toAdd = desiredClosures.Where(d => !currentClosures.Contains(d))
+            .Select(d => new KeepCalendarClosureSnapshot(d)).ToList();
         var toRemove = current.Closures.Select(c => c.Date).Where(d => !desiredSet.Contains(d)).ToList();
 
         var write = await responsePolicyService.UpdateCalendarAsync(

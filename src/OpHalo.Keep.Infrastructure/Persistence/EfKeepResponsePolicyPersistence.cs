@@ -221,7 +221,7 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         Guid actorAccountUserId,
         string actorDisplayName,
         IReadOnlyList<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> weeklyIntervals,
-        IReadOnlyList<DateOnly> closureDatesToAdd,
+        IReadOnlyList<KeepCalendarClosureSnapshot> closuresToSet,
         IReadOnlyList<DateOnly> closureDatesToRemove,
         string? expectedSettingsVersion,
         DateTime occurredAtUtc,
@@ -229,11 +229,12 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
     {
         if (weeklyIntervals.Select(i => i.Weekday).Distinct().Count() != weeklyIntervals.Count)
             return Result.Failure(KeepResponsePolicyErrors.DuplicateWeekday);
-        if (closureDatesToAdd.Distinct().Count() != closureDatesToAdd.Count)
+        var closureDatesToSet = closuresToSet.Select(c => c.Date).ToList();
+        if (closureDatesToSet.Distinct().Count() != closureDatesToSet.Count)
             return Result.Failure(KeepResponsePolicyErrors.DuplicateClosureDate);
         if (closureDatesToRemove.Distinct().Count() != closureDatesToRemove.Count)
             return Result.Failure(KeepResponsePolicyErrors.DuplicateClosureDate);
-        if (closureDatesToAdd.Intersect(closureDatesToRemove).Any())
+        if (closureDatesToSet.Intersect(closureDatesToRemove).Any())
             return Result.Failure(KeepResponsePolicyErrors.OverlappingClosureChange);
 
         await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
@@ -282,7 +283,7 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             var prospectiveClosures = existingClosures
                 .Select(c => c.ClosureDate)
                 .Except(closureDatesToRemove)
-                .Union(closureDatesToAdd)
+                .Union(closureDatesToSet)
                 .ToList();
 
             foreach (var minutes in staffedTargets)
@@ -293,7 +294,7 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         }
 
         ApplyWeeklyIntervalDiff(accountId, actorAccountUserId, actorDisplayName, existingIntervals, weeklyIntervals, occurredAtUtc);
-        ApplyClosureDiff(accountId, actorAccountUserId, actorDisplayName, existingClosures, closureDatesToAdd, closureDatesToRemove, occurredAtUtc);
+        ApplyClosureDiff(accountId, actorAccountUserId, actorDisplayName, existingClosures, closuresToSet, closureDatesToRemove, occurredAtUtc);
 
         try
         {
@@ -391,16 +392,31 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         Guid actorAccountUserId,
         string actorDisplayName,
         List<KeepCalendarClosure> existingClosures,
-        IReadOnlyList<DateOnly> closureDatesToAdd,
+        IReadOnlyList<KeepCalendarClosureSnapshot> closuresToSet,
         IReadOnlyList<DateOnly> closureDatesToRemove,
         DateTime occurredAtUtc)
     {
-        foreach (var date in closureDatesToAdd)
+        // ADR-507 §audit: one event per changed date, changed values only; a no-op is silent.
+        foreach (var (date, reason) in closuresToSet)
         {
-            if (existingClosures.Any(c => c.ClosureDate == date)) continue;
-            dbContext.Set<KeepCalendarClosure>().Add(KeepCalendarClosure.Create(accountId, date));
+            var existing = existingClosures.FirstOrDefault(c => c.ClosureDate == date);
+            string content;
+            if (existing is null)
+            {
+                dbContext.Set<KeepCalendarClosure>().Add(KeepCalendarClosure.Create(accountId, date, reason));
+                content = reason is null
+                    ? $"{date:yyyy-MM-dd}: absent -> closed"
+                    : $"{date:yyyy-MM-dd}: absent -> closed; reason: unset -> {QuoteReason(reason)}";
+            }
+            else
+            {
+                if (string.Equals(existing.Label, reason, StringComparison.Ordinal)) continue;
+                var previous = existing.Label;
+                existing.SetLabel(reason);
+                content = $"{date:yyyy-MM-dd}: reason: {QuoteOrUnset(previous)} -> {QuoteOrUnset(reason)}";
+            }
             AddAuditEvent(KeepSettingsAuditEvent.CreateClosureChanged(
-                accountId, actorAccountUserId, actorDisplayName, $"{date:yyyy-MM-dd}: absent -> closed", occurredAtUtc));
+                accountId, actorAccountUserId, actorDisplayName, content, occurredAtUtc));
         }
 
         foreach (var date in closureDatesToRemove)
@@ -408,10 +424,18 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             var toRemove = existingClosures.FirstOrDefault(c => c.ClosureDate == date);
             if (toRemove is null) continue;
             dbContext.Set<KeepCalendarClosure>().Remove(toRemove);
+            var content = toRemove.Label is null
+                ? $"{date:yyyy-MM-dd}: closed -> absent"
+                : $"{date:yyyy-MM-dd}: closed -> absent; reason: {QuoteReason(toRemove.Label)} -> unset";
             AddAuditEvent(KeepSettingsAuditEvent.CreateClosureChanged(
-                accountId, actorAccountUserId, actorDisplayName, $"{date:yyyy-MM-dd}: closed -> absent", occurredAtUtc));
+                accountId, actorAccountUserId, actorDisplayName, content, occurredAtUtc));
         }
     }
+
+    private static string QuoteReason(string reason) =>
+        "\"" + reason.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+
+    private static string QuoteOrUnset(string? reason) => reason is null ? "unset" : QuoteReason(reason);
 
     private void AddAuditEvent(KeepSettingsAuditEvent evt) => dbContext.Set<KeepSettingsAuditEvent>().Add(evt);
 

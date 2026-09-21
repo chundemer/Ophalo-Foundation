@@ -65,7 +65,7 @@ public sealed class KeepResponsePolicyPersistenceRaceTests : IClassFixture<KeepA
         var taskB = persistenceB.UpdateCalendarAsync(
             accountId, ownerId, "Owner",
             weeklyIntervals: [],
-            closureDatesToAdd: [],
+            closuresToSet: [],
             closureDatesToRemove: [],
             expectedSettingsVersion: raceVersion,
             occurredAtUtc: now,

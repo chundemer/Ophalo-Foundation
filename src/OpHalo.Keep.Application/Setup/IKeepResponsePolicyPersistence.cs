@@ -43,7 +43,7 @@ public interface IKeepResponsePolicyPersistence
         Guid actorAccountUserId,
         string actorDisplayName,
         IReadOnlyList<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> weeklyIntervals,
-        IReadOnlyList<DateOnly> closureDatesToAdd,
+        IReadOnlyList<KeepCalendarClosureSnapshot> closuresToSet,
         IReadOnlyList<DateOnly> closureDatesToRemove,
         string? expectedSettingsVersion,
         DateTime occurredAtUtc,

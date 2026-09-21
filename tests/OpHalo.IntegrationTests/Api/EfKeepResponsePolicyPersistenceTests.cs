@@ -42,7 +42,7 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
                 (DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0)),
                 (DayOfWeek.Monday, new TimeOnly(13, 0), new TimeOnly(17, 0)),
             ],
-            closureDatesToAdd: [],
+            closuresToSet: [],
             closureDatesToRemove: [],
             expectedSettingsVersion: await CurrentSettingsVersionAsync(_factory, accountId),
             occurredAtUtc: DateTime.UtcNow,
@@ -62,7 +62,7 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
         var result = await persistence.UpdateCalendarAsync(
             accountId, ownerId, "Owner",
             weeklyIntervals: [],
-            closureDatesToAdd: [new DateOnly(2026, 12, 25), new DateOnly(2026, 12, 25)],
+            closuresToSet: [new DateOnly(2026, 12, 25), new DateOnly(2026, 12, 25)],
             closureDatesToRemove: [],
             expectedSettingsVersion: await CurrentSettingsVersionAsync(_factory, accountId),
             occurredAtUtc: DateTime.UtcNow,
@@ -82,7 +82,7 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
         var result = await persistence.UpdateCalendarAsync(
             accountId, ownerId, "Owner",
             weeklyIntervals: [],
-            closureDatesToAdd: [new DateOnly(2026, 12, 25)],
+            closuresToSet: [new DateOnly(2026, 12, 25)],
             closureDatesToRemove: [new DateOnly(2026, 12, 25)],
             expectedSettingsVersion: await CurrentSettingsVersionAsync(_factory, accountId),
             occurredAtUtc: DateTime.UtcNow,
@@ -198,12 +198,12 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
     private async Task<OpHalo.SharedKernel.Results.Result> WriteCalendarAsync(
         Guid accountId, Guid ownerId,
         IReadOnlyList<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> intervals,
-        IReadOnlyList<DateOnly> add, IReadOnlyList<DateOnly> remove, string? version)
+        IReadOnlyList<KeepCalendarClosureSnapshot> set, IReadOnlyList<DateOnly> remove, string? version)
     {
         await using var scope = _factory.CreateScope();
         var persistence = scope.ServiceProvider.GetRequiredService<IKeepResponsePolicyPersistence>();
         return await persistence.UpdateCalendarAsync(
-            accountId, ownerId, "Owner", intervals, add, remove, version, DateTime.UtcNow, CancellationToken.None);
+            accountId, ownerId, "Owner", intervals, set, remove, version, DateTime.UtcNow, CancellationToken.None);
     }
 
     [Fact]
@@ -479,5 +479,79 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         db.Set<KeepCalendarWeeklyInterval>().Add(KeepCalendarWeeklyInterval.Create(accountId, weekday, opensAt, closesAt));
         await db.SaveChangesAsync();
+    }
+
+    // --- ADR-507 closure reasons (GAP-100 batch 7a-2) ---
+
+    private static KeepCalendarClosureSnapshot Closure(string date, string? reason) =>
+        new(DateOnly.Parse(date), reason);
+
+    private async Task<List<string?>> ClosureAuditAsync(Guid accountId) =>
+        (await AuditEventsAsync(accountId))
+            .Where(e => e.EventType == KeepSettingsAuditEventType.ClosureChanged)
+            .OrderBy(e => e.OccurredAtUtc).ThenBy(e => e.Id)
+            .Select(e => e.Content).ToList();
+
+    private async Task<string?> StoredLabelAsync(Guid accountId, string date)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var d = DateOnly.Parse(date);
+        return await db.Set<KeepCalendarClosure>().AsNoTracking()
+            .Where(c => c.AccountId == accountId && c.ClosureDate == d).Select(c => c.Label).SingleAsync();
+    }
+
+    [Fact]
+    public async Task Closure_reason_lifecycle_writes_the_exact_adr_507_audit_forms_and_noop_is_silent()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("closure-reason-lifecycle");
+        async Task<OpHalo.SharedKernel.Results.Result> Write(
+            IReadOnlyList<KeepCalendarClosureSnapshot> set, IReadOnlyList<DateOnly> remove) =>
+            await WriteCalendarAsync(accountId, ownerId, [], set, remove,
+                await CurrentSettingsVersionAsync(_factory, accountId));
+
+        Assert.True((await Write([Closure("2026-11-26", "Thanksgiving \"Day\" \\")], [])).IsSuccess);
+        Assert.True((await Write([Closure("2026-12-25", null)], [])).IsSuccess);
+        var afterAdds = await CurrentSettingsVersionAsync(_factory, accountId);
+
+        // No-op (same reason, same date without reason): no event, no version change.
+        Assert.True((await Write([Closure("2026-11-26", "Thanksgiving \"Day\" \\"), Closure("2026-12-25", null)], [])).IsSuccess);
+        Assert.Equal(afterAdds, await CurrentSettingsVersionAsync(_factory, accountId));
+        Assert.Equal(2, (await ClosureAuditAsync(accountId)).Count);
+
+        Assert.True((await Write([Closure("2026-11-26", "Annual training")], [])).IsSuccess);
+        Assert.NotEqual(afterAdds, await CurrentSettingsVersionAsync(_factory, accountId));
+        Assert.True((await Write([Closure("2026-11-26", null)], [])).IsSuccess);
+        Assert.Null(await StoredLabelAsync(accountId, "2026-11-26"));
+        Assert.True((await Write([Closure("2026-12-25", "Holiday")], [])).IsSuccess);
+        Assert.True((await Write([], [DateOnly.Parse("2026-12-25")])).IsSuccess);
+        Assert.True((await Write([], [DateOnly.Parse("2026-11-26")])).IsSuccess);
+
+        var contents = await ClosureAuditAsync(accountId);
+        Assert.Equal(
+        [
+            "2026-11-26: absent -> closed; reason: unset -> \"Thanksgiving \\\"Day\\\" \\\\\"",
+            "2026-12-25: absent -> closed",
+            "2026-11-26: reason: \"Thanksgiving \\\"Day\\\" \\\\\" -> \"Annual training\"",
+            "2026-11-26: reason: \"Annual training\" -> unset",
+            "2026-12-25: reason: unset -> \"Holiday\"",
+            "2026-12-25: closed -> absent; reason: \"Holiday\" -> unset",
+            "2026-11-26: closed -> absent",
+        ], contents);
+    }
+
+    [Fact]
+    public async Task Closure_reason_only_change_with_a_stale_version_is_rejected_and_writes_nothing()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("closure-reason-stale");
+        Assert.True((await WriteCalendarAsync(accountId, ownerId, [], [Closure("2026-11-26", "A")], [],
+            await CurrentSettingsVersionAsync(_factory, accountId))).IsSuccess);
+        var stale = await CurrentSettingsVersionAsync(_factory, accountId);
+        Assert.True((await WriteCalendarAsync(accountId, ownerId, [], [Closure("2026-11-26", "B")], [], stale)).IsSuccess);
+
+        var result = await WriteCalendarAsync(accountId, ownerId, [], [Closure("2026-11-26", "C")], [], stale);
+
+        Assert.Equal(KeepResponsePolicyErrors.SettingsVersionMismatch, result.Error);
+        Assert.Equal("B", await StoredLabelAsync(accountId, "2026-11-26"));
     }
 }

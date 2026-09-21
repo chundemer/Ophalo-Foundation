@@ -53,7 +53,7 @@ public class KeepSetupServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.Null(policy.LastExpectedVersion);
-        Assert.Equal([new DateOnly(2027, 1, 1)], policy.LastAdd);
+        Assert.Equal([new KeepCalendarClosureSnapshot(new DateOnly(2027, 1, 1), null)], policy.LastAdd);
         Assert.Equal([new DateOnly(2026, 12, 25)], policy.LastRemove);
         Assert.Equal((DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(17, 30)), Assert.Single(policy.LastIntervals));
     }
@@ -434,7 +434,7 @@ public class KeepSetupServiceTests
         public bool Called { get; private set; }
         public string? LastExpectedVersion { get; private set; }
         public IReadOnlyList<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> LastIntervals { get; private set; } = [];
-        public IReadOnlyList<DateOnly> LastAdd { get; private set; } = [];
+        public IReadOnlyList<KeepCalendarClosureSnapshot> LastAdd { get; private set; } = [];
         public IReadOnlyList<DateOnly> LastRemove { get; private set; } = [];
 
         public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid id, CancellationToken ct) => Task.FromResult(UserSnapshot);
@@ -444,13 +444,13 @@ public class KeepSetupServiceTests
         public Task<Result> UpdateCalendarAsync(
             Guid accountId, Guid actorAccountUserId, string actorDisplayName,
             IReadOnlyList<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> weeklyIntervals,
-            IReadOnlyList<DateOnly> closureDatesToAdd, IReadOnlyList<DateOnly> closureDatesToRemove,
+            IReadOnlyList<KeepCalendarClosureSnapshot> closuresToSet, IReadOnlyList<DateOnly> closureDatesToRemove,
             string? expectedSettingsVersion, DateTime occurredAtUtc, CancellationToken ct)
         {
             Called = true;
             LastExpectedVersion = expectedSettingsVersion;
             LastIntervals = weeklyIntervals;
-            LastAdd = closureDatesToAdd;
+            LastAdd = closuresToSet;
             LastRemove = closureDatesToRemove;
             return Task.FromResult(Failure is { } e ? Result.Failure(e) : Result.Success());
         }

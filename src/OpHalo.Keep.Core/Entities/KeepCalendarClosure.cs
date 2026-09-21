@@ -24,4 +24,7 @@ public sealed class KeepCalendarClosure : BaseEntity
             Label = label
         };
     }
+
+    /// <summary>Sets or clears (null) the internal reason. Caller normalizes and bounds it (ADR-507).</summary>
+    public void SetLabel(string? label) => Label = label;
 }
