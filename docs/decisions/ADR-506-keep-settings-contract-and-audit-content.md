@@ -4,6 +4,10 @@
 **Date:** 2026-09-20
 **Related:** ADR-501, ADR-505, GAP-100 batches 4–6
 
+> **Amended by [ADR-507](ADR-507-closure-labels-and-object-calendar-contract.md):** calendar
+> closures are object entries with an optional internal reason, and reason changes participate in
+> the opaque settings version and closure audit diff.
+
 ## Context
 
 GAP-100 batch 4 supplies the governed application operations and append-only settings-audit

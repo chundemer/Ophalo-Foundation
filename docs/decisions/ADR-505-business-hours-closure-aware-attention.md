@@ -4,6 +4,10 @@
 **Date:** 2026-09-17
 **Related:** ADR-124, ADR-374, ADR-451, ADR-489, ADR-490; GAP-100, DEF-025, DEF-037
 
+> **Amended by [ADR-507](ADR-507-closure-labels-and-object-calendar-contract.md):** V1 closures
+> carry an optional internal reason and use an object-only settings contract. All clock semantics in
+> this decision remain unchanged: the account-local date, not the reason, determines closed time.
+
 ## Context
 
 Keep currently records account response targets and absolute UTC deadlines, but has no business
