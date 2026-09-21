@@ -8,6 +8,7 @@ using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.PublicIntake;
+using OpHalo.Keep.Application.ResponseTiming;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
@@ -22,10 +23,10 @@ public class KeepPublicIntakeServiceTests
 
     // --- ADR-505 first-response deadline (slice 8) ------------------------------
 
-    private static KeepIntakeResponseSnapshot StaffedSnapshot(
+    private static KeepResponseTimingSnapshot StaffedSnapshot(
         string timeZoneId, int minutes, params (DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)[] intervals) =>
-        new(minutes, ResponseTimingBasis.StaffedHours,
-            new KeepIntakeStaffedCalendar(
+        new(minutes, ResponseTimingBasis.StaffedHours, 240, ResponseTimingBasis.Continuous, 60, ResponseTimingBasis.Continuous,
+            new KeepResponseTimingCalendar(
                 timeZoneId,
                 intervals.Select(i => new OpHalo.Keep.Application.Setup.KeepWeeklyIntervalSnapshot(i.Weekday, i.OpensAt, i.ClosesAt)).ToList(),
                 []));
@@ -45,7 +46,7 @@ public class KeepPublicIntakeServiceTests
     public async Task Execute_continuous_uses_the_snapshot_target()
     {
         var p = HappyPathPersistence();
-        p.SnapshotToReturn = new(120, ResponseTimingBasis.Continuous, null);
+        p.SnapshotToReturn = new(120, ResponseTimingBasis.Continuous, 240, ResponseTimingBasis.Continuous, 60, ResponseTimingBasis.Continuous, null);
 
         await BuildSut(p).ExecuteAsync(ValidCommand(p));
 
@@ -120,7 +121,7 @@ public class KeepPublicIntakeServiceTests
     public async Task Execute_staffed_snapshot_without_calendar_accepts_request_with_no_deadline_and_logs_error()
     {
         var p = HappyPathPersistence();
-        p.SnapshotToReturn = new(60, ResponseTimingBasis.StaffedHours, null);
+        p.SnapshotToReturn = new(60, ResponseTimingBasis.StaffedHours, 240, ResponseTimingBasis.Continuous, 60, ResponseTimingBasis.Continuous, null);
         var logger = new CapturingLogger();
 
         var result = await BuildSut(p, logger: logger).ExecuteAsync(ValidCommand(p));
@@ -134,7 +135,7 @@ public class KeepPublicIntakeServiceTests
     public async Task Execute_non_positive_target_accepts_request_with_no_deadline_and_logs_error()
     {
         var p = HappyPathPersistence();
-        p.SnapshotToReturn = new(0, ResponseTimingBasis.Continuous, null);
+        p.SnapshotToReturn = new(0, ResponseTimingBasis.Continuous, 240, ResponseTimingBasis.Continuous, 60, ResponseTimingBasis.Continuous, null);
         var logger = new CapturingLogger();
 
         var result = await BuildSut(p, logger: logger).ExecuteAsync(ValidCommand(p));
@@ -183,6 +184,7 @@ public class KeepPublicIntakeServiceTests
         persistence ??= HappyPathPersistence();
         return new CreateKeepPublicIntakeService(
             persistence,
+            new FakeResponseTiming(persistence),
             new KeepTokenService(),
             new FakeAccountAccessPolicy(posture),
             new FakeFeatureAccessPolicy(featureEnabled),
@@ -949,6 +951,12 @@ public class KeepPublicIntakeServiceTests
         public bool IsVerified => isAuthenticated;
     }
 
+    private sealed class FakeResponseTiming(FakeIntakePersistence source) : IKeepResponseTimingSnapshotPersistence
+    {
+        public Task<KeepResponseTimingSnapshot> GetResponseTimingSnapshotAsync(Guid accountId, CancellationToken ct) =>
+            Task.FromResult(source.SnapshotToReturn);
+    }
+
     private sealed class FakeIntakePersistence : IKeepIntakePersistence
     {
         public string RawToken { get; set; } = string.Empty;
@@ -976,11 +984,12 @@ public class KeepPublicIntakeServiceTests
             Guid accountId, string canonicalPhone, CancellationToken ct) =>
             Task.FromResult(CustomerResults.Count > 0 ? CustomerResults.Dequeue() : ExistingCustomer);
 
-        public KeepIntakeResponseSnapshot SnapshotToReturn { get; set; } =
-            new(KeepResponsePolicyDefaults.FirstResponseTargetMinutes, ResponseTimingBasis.Continuous, null);
-
-        public Task<KeepIntakeResponseSnapshot> GetFirstResponseSnapshotAsync(Guid accountId, CancellationToken ct) =>
-            Task.FromResult(SnapshotToReturn);
+        // Read by FakeResponseTiming: tests configure timing through the persistence fake they already hold.
+        public KeepResponseTimingSnapshot SnapshotToReturn { get; set; } =
+            new(KeepResponsePolicyDefaults.FirstResponseTargetMinutes, ResponseTimingBasis.Continuous,
+                KeepResponsePolicyDefaults.StandardResponseTargetMinutes, ResponseTimingBasis.Continuous,
+                KeepResponsePolicyDefaults.PriorityResponseTargetMinutes, ResponseTimingBasis.Continuous,
+                null);
 
         public Task<KeepPublicIntakeInfo?> GetPublicIdentityByTokenHashAsync(string tokenHash, CancellationToken ct) =>
             Task.FromResult<KeepPublicIntakeInfo?>(null);

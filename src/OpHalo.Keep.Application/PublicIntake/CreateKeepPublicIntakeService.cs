@@ -4,20 +4,20 @@ using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Application.Auth;
 using OpHalo.Keep.Application.Abstractions;
+using OpHalo.Keep.Application.ResponseTiming;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Application.Validation;
 using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities;
-using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
-using OpHalo.SharedKernel.Time;
 
 namespace OpHalo.Keep.Application.PublicIntake;
 
 public sealed class CreateKeepPublicIntakeService(
     IKeepIntakePersistence persistence,
+    IKeepResponseTimingSnapshotPersistence responseTiming,
     KeepTokenService tokenService,
     IAccountAccessPolicy accessPolicy,
     IFeatureAccessPolicy featurePolicy,
@@ -158,8 +158,9 @@ public sealed class CreateKeepPublicIntakeService(
         if (!featurePolicy.IsEnabled(snapshot.Plan, FeatureKeys.Keep.PublicIntake))
             return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
 
-        var responseSnapshot = await persistence.GetFirstResponseSnapshotAsync(accountId, ct);
-        var (firstResponseDueAtUtc, deadlineFailure) = ResolveFirstResponseDeadline(responseSnapshot, nowUtc);
+        var responseSnapshot = await responseTiming.GetResponseTimingSnapshotAsync(accountId, ct);
+        var (firstResponseDueAtUtc, deadlineFailure) =
+            KeepResponseDeadlineResolver.Resolve(responseSnapshot, KeepResponseTarget.First, nowUtc);
 
         var customer = await persistence.FindCustomerByCanonicalPhoneAsync(accountId, v.CanonicalPhone, ct);
         if (customer is null)
@@ -216,36 +217,5 @@ public sealed class CreateKeepPublicIntakeService(
 
         throw new InvalidOperationException(
             $"Failed to commit public intake after {MaxAttempts} attempts.");
-    }
-
-    /// <summary>
-    /// ADR-505: one UTC deadline from the snapshot, or a null deadline plus a failure label. Never
-    /// substitutes a continuous deadline for a failed staffed-hours calculation.
-    /// </summary>
-    private static (DateTime? DeadlineUtc, string? Failure) ResolveFirstResponseDeadline(
-        KeepIntakeResponseSnapshot snapshot, DateTime nowUtc)
-    {
-        var intervals = Array.Empty<(DayOfWeek, TimeOnly, TimeOnly)>();
-        IReadOnlyCollection<DateOnly> closures = [];
-        var timeZone = TimeZoneInfo.Utc;
-
-        if (snapshot.TimingBasis == ResponseTimingBasis.StaffedHours)
-        {
-            if (snapshot.Calendar is null)
-                return (null, "CalendarUnavailable");
-            if (!TimeZoneId.TryResolve(snapshot.Calendar.TimeZoneId, out timeZone))
-                return (null, "InvalidTimeZone");
-
-            intervals = snapshot.Calendar.WeeklyIntervals
-                .Select(i => (i.Weekday, i.OpensAt, i.ClosesAt))
-                .ToArray();
-            closures = snapshot.Calendar.ClosureDates;
-        }
-
-        return BusinessClock.TryCalculate(
-            nowUtc, snapshot.TargetMinutes, snapshot.TimingBasis, intervals, closures, timeZone,
-            out var deadlineUtc, out var failure)
-            ? (deadlineUtc, null)
-            : (null, failure.ToString());
     }
 }

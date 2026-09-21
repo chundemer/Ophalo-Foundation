@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
-using OpHalo.Keep.Application.PublicIntake;
+using OpHalo.Keep.Application.ResponseTiming;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using Xunit;
@@ -10,15 +10,16 @@ using Xunit;
 namespace OpHalo.IntegrationTests.Api;
 
 /// <summary>
-/// ADR-505 slice 8: <see cref="IKeepIntakePersistence.GetFirstResponseSnapshotAsync"/> against real
-/// PostgreSQL — canonical defaults with no policy row, the policy-only Continuous path, and the
-/// staffed-hours read (timezone, weekly intervals, closures) inside its RepeatableRead transaction.
+/// ADR-505: <see cref="IKeepResponseTimingSnapshotPersistence"/> against real PostgreSQL —
+/// canonical 60/240/60 defaults with no policy row, the policy-only all-Continuous path, and the
+/// staffed-hours read (timezone, weekly intervals, closures) inside its RepeatableRead transaction
+/// whenever any of the three targets is staffed.
 /// </summary>
-public sealed class KeepIntakeResponseSnapshotPersistenceTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
+public sealed class KeepResponseTimingSnapshotPersistenceTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
     private readonly KeepApiWebFactory _factory;
 
-    public KeepIntakeResponseSnapshotPersistenceTests(KeepApiWebFactory factory) => _factory = factory;
+    public KeepResponseTimingSnapshotPersistenceTests(KeepApiWebFactory factory) => _factory = factory;
 
     public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
 
@@ -31,8 +32,12 @@ public sealed class KeepIntakeResponseSnapshotPersistenceTests : IClassFixture<K
 
         var snapshot = await ReadAsync(accountId);
 
-        Assert.Equal(KeepResponsePolicyDefaults.FirstResponseTargetMinutes, snapshot.TargetMinutes);
-        Assert.Equal(ResponseTimingBasis.Continuous, snapshot.TimingBasis);
+        Assert.Equal(KeepResponsePolicyDefaults.FirstResponseTargetMinutes, snapshot.FirstResponseTargetMinutes);
+        Assert.Equal(KeepResponsePolicyDefaults.StandardResponseTargetMinutes, snapshot.StandardResponseTargetMinutes);
+        Assert.Equal(KeepResponsePolicyDefaults.PriorityResponseTargetMinutes, snapshot.PriorityResponseTargetMinutes);
+        Assert.Equal(ResponseTimingBasis.Continuous, snapshot.FirstResponseTimingBasis);
+        Assert.Equal(ResponseTimingBasis.Continuous, snapshot.StandardResponseTimingBasis);
+        Assert.Equal(ResponseTimingBasis.Continuous, snapshot.PriorityResponseTimingBasis);
         Assert.Null(snapshot.Calendar);
     }
 
@@ -45,8 +50,8 @@ public sealed class KeepIntakeResponseSnapshotPersistenceTests : IClassFixture<K
 
         var snapshot = await ReadAsync(accountId);
 
-        Assert.Equal(90, snapshot.TargetMinutes);
-        Assert.Equal(ResponseTimingBasis.Continuous, snapshot.TimingBasis);
+        Assert.Equal(90, snapshot.FirstResponseTargetMinutes);
+        Assert.Equal(ResponseTimingBasis.Continuous, snapshot.FirstResponseTimingBasis);
         Assert.Null(snapshot.Calendar);
     }
 
@@ -59,9 +64,9 @@ public sealed class KeepIntakeResponseSnapshotPersistenceTests : IClassFixture<K
 
         var snapshot = await ReadAsync(accountId);
 
-        Assert.Equal(45, snapshot.TargetMinutes);
-        Assert.Equal(ResponseTimingBasis.StaffedHours, snapshot.TimingBasis);
-        var calendar = Assert.IsType<KeepIntakeStaffedCalendar>(snapshot.Calendar);
+        Assert.Equal(45, snapshot.FirstResponseTargetMinutes);
+        Assert.Equal(ResponseTimingBasis.StaffedHours, snapshot.FirstResponseTimingBasis);
+        var calendar = Assert.IsType<KeepResponseTimingCalendar>(snapshot.Calendar);
         Assert.Equal("Australia/Sydney", calendar.TimeZoneId);
         Assert.Equal(
             [DayOfWeek.Monday, DayOfWeek.Friday],
@@ -81,24 +86,45 @@ public sealed class KeepIntakeResponseSnapshotPersistenceTests : IClassFixture<K
 
         var snapshot = await ReadAsync(accountA);
 
-        Assert.Equal(ResponseTimingBasis.Continuous, snapshot.TimingBasis);
+        Assert.Equal(ResponseTimingBasis.Continuous, snapshot.FirstResponseTimingBasis);
         Assert.Null(snapshot.Calendar);
     }
 
-    private async Task<KeepIntakeResponseSnapshot> ReadAsync(Guid accountId)
+    [Theory]
+    [InlineData(ResponseTimingBasis.Continuous, ResponseTimingBasis.StaffedHours, ResponseTimingBasis.Continuous)]
+    [InlineData(ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous, ResponseTimingBasis.StaffedHours)]
+    public async Task Calendar_is_loaded_when_only_the_standard_or_priority_target_is_staffed(
+        ResponseTimingBasis first, ResponseTimingBasis standard, ResponseTimingBasis priority)
     {
-        await using var scope = _factory.CreateScope();
-        var persistence = scope.ServiceProvider.GetRequiredService<IKeepIntakePersistence>();
-        return await persistence.GetFirstResponseSnapshotAsync(accountId, CancellationToken.None);
+        var accountId = await SeedAccountAsync($"snap-any-{standard}-{priority}");
+        await SeedPolicyAsync(accountId, 60, first, standard, priority);
+        await SeedCalendarAsync(accountId);
+
+        var snapshot = await ReadAsync(accountId);
+
+        Assert.Equal(first, snapshot.FirstResponseTimingBasis);
+        Assert.Equal(standard, snapshot.StandardResponseTimingBasis);
+        Assert.Equal(priority, snapshot.PriorityResponseTimingBasis);
+        Assert.NotNull(snapshot.Calendar);
     }
 
-    private async Task SeedPolicyAsync(Guid accountId, int firstMinutes, ResponseTimingBasis firstBasis)
+    private async Task<KeepResponseTimingSnapshot> ReadAsync(Guid accountId)
+    {
+        await using var scope = _factory.CreateScope();
+        var persistence = scope.ServiceProvider.GetRequiredService<IKeepResponseTimingSnapshotPersistence>();
+        return await persistence.GetResponseTimingSnapshotAsync(accountId, CancellationToken.None);
+    }
+
+    private async Task SeedPolicyAsync(
+        Guid accountId, int firstMinutes, ResponseTimingBasis firstBasis,
+        ResponseTimingBasis standardBasis = ResponseTimingBasis.Continuous,
+        ResponseTimingBasis priorityBasis = ResponseTimingBasis.Continuous)
     {
         await using var scope = _factory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         var policy = KeepResponsePolicy.Create(accountId, firstMinutes, 240, 60, 5);
         policy.UpdateTargetsAndTimingBasis(
-            firstMinutes, 240, 60, 5, firstBasis, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous);
+            firstMinutes, 240, 60, 5, firstBasis, standardBasis, priorityBasis);
         db.Set<KeepResponsePolicy>().Add(policy);
         await db.SaveChangesAsync();
     }

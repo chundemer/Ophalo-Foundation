@@ -4,6 +4,7 @@ using OpHalo.Keep.Application.Notifications;
 using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Requests;
+using OpHalo.Keep.Application.ResponseTiming;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Application.Setup;
 using OpHalo.Keep.Core.Domain;
@@ -18,6 +19,7 @@ public static class KeepServiceCollectionExtensions
     public static IServiceCollection AddKeepServices(this IServiceCollection services)
     {
         services.AddScoped<IKeepIntakePersistence, KeepIntakePersistence>();
+        services.AddScoped<IKeepResponseTimingSnapshotPersistence, EfKeepResponseTimingSnapshotPersistence>();
         services.AddScoped<IKeepIntakeSetupPersistence, KeepIntakeSetupPersistence>();
         services.AddScoped<IKeepSetupPersistence, EfKeepSetupPersistence>();
         services.AddScoped<IKeepResponsePolicyPersistence, EfKeepResponsePolicyPersistence>();
