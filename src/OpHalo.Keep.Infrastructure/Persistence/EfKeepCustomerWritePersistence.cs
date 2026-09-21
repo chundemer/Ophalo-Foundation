@@ -13,11 +13,6 @@ public sealed class EfKeepCustomerWritePersistence(OpHaloDbContext dbContext) : 
         await dbContext.Set<KeepRequest>()
             .FirstOrDefaultAsync(r => r.Id == requestId, ct);
 
-    public async Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct) =>
-        await dbContext.Set<KeepResponsePolicy>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
-
     public async Task<KeepRequestCommitResult> CommitAsync(KeepRequest request, KeepRequestEvent newEvent, CancellationToken ct)
     {
         dbContext.Set<KeepRequestEvent>().Add(newEvent);

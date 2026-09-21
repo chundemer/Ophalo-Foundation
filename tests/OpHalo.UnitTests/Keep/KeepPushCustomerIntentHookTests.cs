@@ -462,9 +462,6 @@ public class KeepPushCustomerIntentHookTests
         public Task<KeepRequest?> GetRequestForUpdateAsync(Guid requestId, CancellationToken ct) =>
             Task.FromResult<KeepRequest?>(request);
 
-        public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct) =>
-            Task.FromResult<KeepResponsePolicy?>(null);
-
         public Task<KeepRequestCommitResult> CommitAsync(KeepRequest r, KeepRequestEvent e, CancellationToken ct) =>
             Task.FromResult(KeepRequestCommitResult.Committed);
 

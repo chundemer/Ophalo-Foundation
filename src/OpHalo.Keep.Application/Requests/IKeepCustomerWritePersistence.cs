@@ -23,12 +23,6 @@ public interface IKeepCustomerWritePersistence
     Task<KeepRequest?> GetRequestForUpdateAsync(Guid requestId, CancellationToken ct);
 
     /// <summary>
-    /// Returns the account's Keep response policy, or null if none has been configured.
-    /// AddCustomerMessageService falls back to pilot defaults when null.
-    /// </summary>
-    Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct);
-
-    /// <summary>
     /// Saves the mutated request and the new event atomically in a single SaveChangesAsync.
     /// Rotates <see cref="KeepRequest.ConcurrencyVersion"/> immediately before SaveChangesAsync.
     /// Returns <see cref="KeepRequestCommitResult.Committed"/> on success or
