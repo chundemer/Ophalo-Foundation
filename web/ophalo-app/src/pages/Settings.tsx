@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type AccountRole } from "../lib/apiClient";
+import { CalendarSection } from "./settings/CalendarSection";
 import { CompanySection, draftFromSetup, type ProfileDraft } from "./settings/CompanySection";
 import { PolicySection } from "./settings/PolicySection";
 import { PublicLinkSection } from "./settings/PublicLinkSection";
 import { TeamSection } from "./settings/TeamSection";
 
-type SettingsTab = "public-profile" | "policy" | "team";
+type SettingsTab = "public-profile" | "policy" | "calendar" | "team";
 
-function initialTab(section?: "public-profile" | "policy" | "team"): SettingsTab {
+function initialTab(section?: "public-profile" | "policy" | "calendar" | "team"): SettingsTab {
   if (section === "policy") return "policy";
+  if (section === "calendar") return "calendar";
   if (section === "team") return "team";
   return "public-profile";
 }
@@ -17,6 +19,7 @@ function initialTab(section?: "public-profile" | "policy" | "team"): SettingsTab
 const TABS: Array<{ id: SettingsTab; label: string }> = [
   { id: "public-profile", label: "Public Link & Profile" },
   { id: "policy", label: "Response Policy" },
+  { id: "calendar", label: "Business Hours & Closures" },
   { id: "team", label: "Team" },
 ];
 
@@ -30,7 +33,7 @@ export function Settings({
   onNavigateSection,
 }: {
   callerRole: AccountRole;
-  scrollToSection?: "public-profile" | "policy" | "team";
+  scrollToSection?: "public-profile" | "policy" | "calendar" | "team";
   onNavigateSection?: (section: SettingsTab) => void;
 }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => initialTab(scrollToSection));
@@ -62,7 +65,7 @@ export function Settings({
     if (draftIsUnedited) setProfileDraft(draftFromSetup(setup));
   }
 
-  const needsSetup = activeTab === "public-profile" || activeTab === "policy";
+  const needsSetup = activeTab === "public-profile" || activeTab === "policy" || activeTab === "calendar";
 
   return (
     <div className="flex-1 min-w-0 flex flex-col">
@@ -137,6 +140,8 @@ export function Settings({
             </div>
           ) : setup && activeTab === "policy" ? (
             <PolicySection setup={setup} />
+          ) : setup && activeTab === "calendar" ? (
+            <CalendarSection setup={setup} />
           ) : null}
         </div>
       </div>

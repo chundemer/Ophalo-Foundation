@@ -603,6 +603,7 @@ describe("App — phone navigation carries Price Book and Business Settings (ADR
     expect(menu.getByRole("button", { name: "Price Book" })).toBeInTheDocument();
     expect(menu.getByRole("button", { name: "Company Profile & Public Link" })).toBeInTheDocument();
     expect(menu.getByRole("button", { name: "Response Policy (SLAs)" })).toBeInTheDocument();
+    expect(menu.getByRole("button", { name: "Business Hours & Closures" })).toBeInTheDocument();
     expect(menu.getByRole("button", { name: "Team Seats & Permissions" })).toBeInTheDocument();
     expect(menu.queryByText(/Account Administration/i)).not.toBeInTheDocument();
   });
@@ -695,6 +696,14 @@ describe("App — V2 top-nav shell covers Settings", () => {
 
     await user.click(screen.getByRole("tab", { name: "Team" }));
     expect(window.location.hash).toBe("#/settings?section=team");
+  });
+
+  it("opens the Business Hours & Closures tab from its direct URL", async () => {
+    window.location.hash = "#/settings?section=calendar";
+    renderApp();
+
+    const tab = await screen.findByRole("tab", { name: "Business Hours & Closures" });
+    expect(tab).toHaveAttribute("aria-selected", "true");
   });
 });
 

@@ -43,7 +43,7 @@ type AppRoute =
   | { page: "requests" }
   // GAP-038 / BL149: the content-only Help & Updates surface, `#/help`, no params. All roles.
   | { page: "help" }
-  | { page: "settings"; section?: "public-profile" | "policy" | "team" }
+  | { page: "settings"; section?: "public-profile" | "policy" | "calendar" | "team" }
   | { page: "pricebook"; tab?: "items" | "assemblies" | "nudges" }
   | { page: "pricebook-item"; catalogItemId: string; returnToAssembly?: string; returnToAssemblyReason?: "price" | "margin" }
   | { page: "pricebook-assembly"; offeringAssemblyId: string }
@@ -84,7 +84,7 @@ export function getRouteFromLocation(): AppRoute {
     const section = new URLSearchParams(hashQuery ?? "").get("section");
     return {
       page: "settings",
-      section: section === "public-profile" || section === "policy" || section === "team" ? section : undefined,
+      section: section === "public-profile" || section === "policy" || section === "calendar" || section === "team" ? section : undefined,
     };
   }
   // Checked before the generic item-detail pattern below — its broader `(.+)` would otherwise
@@ -290,7 +290,7 @@ function AppShell() {
     setCaptureOpen(true);
   }
 
-  function navigateToSettings(section?: "public-profile" | "policy" | "team") {
+  function navigateToSettings(section?: "public-profile" | "policy" | "calendar" | "team") {
     navigate({ page: "settings", section });
   }
 

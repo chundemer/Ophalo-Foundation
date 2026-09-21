@@ -107,6 +107,14 @@ export const mockSetup: KeepSetupResult = {
     statusCheckThresholdDays: 3,
   },
   settingsVersion: "mock-settings-v1",
+  calendar: {
+    weeklyIntervals: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map((weekday) => ({
+      weekday,
+      opensAt: "08:00",
+      closesAt: "17:00",
+    })),
+    closureDates: [],
+  },
 };
 
 export const mockMembers: ListMembersResponse = {

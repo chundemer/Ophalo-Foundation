@@ -226,6 +226,9 @@ export function installMockApi(): void {
       settingsVersion: `${settingsVersion}+`,
     });
 
+  api.updateCalendar = ({ settingsVersion, ...calendar }) =>
+    delay({ ...mockSetup, calendar, settingsVersion: `${settingsVersion}+` });
+
   // Members
   api.listMembers = () => delay({ ...mockMembers, members: [...mockMembers.members] });
   api.inviteMember = () => delay({ status: "invited" });

@@ -108,6 +108,7 @@ import type {
   AccountRole,
   MeResponse,
   OnboardingChecklist,
+  KeepSetupCalendarResult,
   KeepSetupPolicyResult,
   KeepSetupResult,
   SeatUsage,
@@ -269,6 +270,7 @@ export type {
   AccountRole,
   MeResponse,
   OnboardingChecklist,
+  KeepSetupCalendarResult,
   KeepSetupPolicyResult,
   KeepSetupResult,
   SeatUsage,
@@ -780,6 +782,11 @@ export const api = {
     settingsVersion: string;
   }) =>
     apiFetch<KeepSetupResult>("/keep/setup/policy", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  updateCalendar: (body: KeepSetupCalendarResult & { settingsVersion: string }) =>
+    apiFetch<KeepSetupResult>("/keep/setup/calendar", {
       method: "PUT",
       body: JSON.stringify(body),
     }),

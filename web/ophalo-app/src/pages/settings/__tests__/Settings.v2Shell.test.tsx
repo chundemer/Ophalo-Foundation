@@ -103,6 +103,7 @@ describe("Settings — V2 shell", () => {
     expect(tabs.map((t) => t.textContent)).toEqual([
       "Public Link & Profile",
       "Response Policy",
+      "Business Hours & Closures",
       "Team",
     ]);
     expect(tablist).toBeInTheDocument();

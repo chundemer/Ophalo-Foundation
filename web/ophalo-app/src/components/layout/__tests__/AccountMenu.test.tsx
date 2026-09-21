@@ -23,13 +23,14 @@ function renderMenu(overrides: Partial<React.ComponentProps<typeof AccountMenu>>
 }
 
 describe("getBusinessSettingsSections", () => {
-  it("returns the three sections for Owner and Admin, nothing for Operator/Viewer", () => {
+  it("returns the four sections for Owner and Admin, nothing for Operator/Viewer", () => {
     expect(getBusinessSettingsSections("owner").map((s) => s.id)).toEqual([
       "public-profile",
       "policy",
+      "calendar",
       "team",
     ]);
-    expect(getBusinessSettingsSections("admin")).toHaveLength(3);
+    expect(getBusinessSettingsSections("admin")).toHaveLength(4);
     expect(getBusinessSettingsSections("operator")).toEqual([]);
     expect(getBusinessSettingsSections("viewer")).toEqual([]);
   });
@@ -75,6 +76,17 @@ describe("AccountMenu", () => {
     await user.click(screen.getByRole("menuitem", { name: "Response Policy (SLAs)" }));
 
     expect(onNavigateSection).toHaveBeenCalledWith("policy");
+  });
+
+  it("routes the Business Hours & Closures entry to the calendar section", async () => {
+    const user = userEvent.setup();
+    const onNavigateSection = vi.fn();
+    renderMenu({ onNavigateSection });
+
+    await user.click(screen.getByRole("button", { name: /account menu/i }));
+    await user.click(screen.getByRole("menuitem", { name: "Business Hours & Closures" }));
+
+    expect(onNavigateSection).toHaveBeenCalledWith("calendar");
   });
 
   it("omits the Business Settings group for Operator/Viewer (empty sections)", async () => {

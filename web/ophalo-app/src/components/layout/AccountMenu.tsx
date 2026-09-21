@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Building2, ChevronDown, Clock, HelpCircle, LogOut, MessageSquare, Users } from "lucide-react";
+import { Building2, CalendarClock, ChevronDown, Clock, HelpCircle, LogOut, MessageSquare, Users } from "lucide-react";
 
 // ADR-499: the authenticated shell separates operating workspaces (Requests / Price Book pills)
 // from account- and business-level concerns. This menu owns the latter — workspace identity, the
@@ -9,7 +9,7 @@ import { Building2, ChevronDown, Clock, HelpCircle, LogOut, MessageSquare, Users
 // opens on Enter/Space/ArrowDown, Escape closes and restores focus to the trigger, and
 // ArrowUp/ArrowDown/Home/End move between items while open.
 
-export type BusinessSettingsSectionId = "public-profile" | "policy" | "team";
+export type BusinessSettingsSectionId = "public-profile" | "policy" | "calendar" | "team";
 
 export interface BusinessSettingsSection {
   id: BusinessSettingsSectionId;
@@ -25,6 +25,7 @@ export function getBusinessSettingsSections(
   return [
     { id: "public-profile", label: "Company Profile & Public Link" },
     { id: "policy", label: "Response Policy (SLAs)" },
+    { id: "calendar", label: "Business Hours & Closures" },
     { id: "team", label: "Team Seats & Permissions" },
   ];
 }
@@ -32,6 +33,7 @@ export function getBusinessSettingsSections(
 const SECTION_ICON: Record<BusinessSettingsSectionId, typeof Building2> = {
   "public-profile": Building2,
   policy: Clock,
+  calendar: CalendarClock,
   team: Users,
 };
 

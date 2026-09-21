@@ -33,6 +33,20 @@ export interface KeepSetupPolicyResult {
   statusCheckThresholdDays: number;
 }
 
+export interface KeepSetupWeeklyIntervalResult {
+  /** English weekday name, e.g. "Monday". */
+  weekday: string;
+  /** HH:mm, account-local. */
+  opensAt: string;
+  closesAt: string;
+}
+
+export interface KeepSetupCalendarResult {
+  weeklyIntervals: KeepSetupWeeklyIntervalResult[];
+  /** YYYY-MM-DD, account-local. */
+  closureDates: string[];
+}
+
 export interface KeepSetupResult {
   businessName: string;
   timeZone: string;
@@ -46,6 +60,8 @@ export interface KeepSetupResult {
   // cap (nine test fixtures build this type); writers guard for a nonempty value at runtime. A
   // dedicated slice tightens this to required and updates the fixtures.
   settingsVersion?: string;
+  // Optional for the same fixture-cap reason as settingsVersion; consumers guard at runtime.
+  calendar?: KeepSetupCalendarResult;
 }
 
 export interface SeatUsage {
