@@ -137,6 +137,7 @@ public sealed class SentryUnhandledCaptureFactory : WebApplicationFactory<Progra
 /// GAP-039 / ADR-495: proof that an actual unhandled failure is observed by the Sentry boundary
 /// (redacted) while the API's existing 500/empty-body contract is unchanged.
 /// </summary>
+[Collection(SentrySdkCollection.Name)]
 public sealed class SentryUnhandledCaptureTests(SentryUnhandledCaptureFactory factory)
     : IClassFixture<SentryUnhandledCaptureFactory>
 {
@@ -168,7 +169,8 @@ public sealed class SentryUnhandledCaptureTests(SentryUnhandledCaptureFactory fa
     {
         for (var attempt = 0; attempt < 50; attempt++)
         {
-            var match = factory.Transport.Payloads.FirstOrDefault(p => p.Contains("\"type\":\"event\""));
+            var match = factory.Transport.Payloads.FirstOrDefault(p =>
+                p.Contains("\"type\":\"event\"") && p.Contains("InvalidOperationException"));
             if (match is not null)
                 return match;
             await Task.Delay(100);
@@ -177,4 +179,15 @@ public sealed class SentryUnhandledCaptureTests(SentryUnhandledCaptureFactory fa
         Assert.Fail("No Sentry event envelope was recorded within the timeout.");
         return string.Empty;
     }
+}
+
+/// <summary>
+/// The Sentry SDK owns process-global state. The capture-host test must not overlap the many
+/// other WebApplicationFactory lifecycles in this assembly, which can initialize or dispose that
+/// state while its request is in flight.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class SentrySdkCollection
+{
+    public const string Name = "Sentry SDK";
 }
