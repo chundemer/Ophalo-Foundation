@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Constants;
@@ -41,6 +42,10 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     private Guid _smsRequestVersion;
     private Guid _inboundRequestId;
     private Guid _inboundRequestVersion;
+    private Guid _inboundStaffedRequestId;
+    private Guid _inboundStaffedRequestVersion;
+    private Guid _inboundNoCalendarRequestId;
+    private Guid _inboundNoCalendarRequestVersion;
     private Guid _customerPageRequestId;
     private Guid _customerPageRequestVersion;
     private string _customerPageToken = string.Empty;
@@ -191,6 +196,11 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
 
         (_inboundRequestId, _inboundRequestVersion) = await SeedRequestAsync(
             db, _accountId, customer.Id, "EC-INB", "ec_inb_token", now);
+
+        (_inboundStaffedRequestId, _inboundStaffedRequestVersion) = await SeedRequestAsync(
+            db, _accountId, customer.Id, "EC-ISF", "ec_isf_token", now);
+        (_inboundNoCalendarRequestId, _inboundNoCalendarRequestVersion) = await SeedRequestAsync(
+            db, _accountId, customer.Id, "EC-INC", "ec_inc_token", now);
 
         _customerPageToken = "ec_page_token";
         (_customerPageRequestId, _customerPageRequestVersion) = await SeedRequestAsync(
@@ -512,6 +522,94 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         // Inbound follow-up raises business-waiting attention.
         Assert.Equal("waiting",  body.GetProperty("attentionLevel").GetString());
         Assert.Equal("business", body.GetProperty("waitingDirection").GetString());
+    }
+
+    // GAP-100 slice 11 / ADR-505: an inbound follow-up contact stamps the Standard business-clock
+    // deadline. The account is Australia/Sydney; the class shares one account, so the policy (and
+    // any calendar rows) are seeded per test and removed afterwards.
+    [Fact]
+    public async Task PostExternalContact_Inbound_FollowUp_StaffedHours_StampsBusinessClockDeadline()
+    {
+        await SetStandardStaffedHoursAsync(withCalendar: true);
+        try
+        {
+            var before = DateTime.UtcNow;
+            var response = await AuthRequest(_ownerCookie, _inboundStaffedRequestVersion).PostAsJsonAsync(
+                $"/keep/requests/{_inboundStaffedRequestId}/external-contact",
+                new { direction = "inbound", channel = "phone", requiresBusinessFollowUp = true, summary = "Customer called." });
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var dbReq = await LoadRequestAsync(_inboundStaffedRequestId);
+            Assert.Equal(AttentionLevel.Waiting, dbReq.AttentionLevel);
+            Assert.NotNull(dbReq.NextAttentionAtUtc);
+
+            // 240 target minutes against one open hour per local day needs several open days:
+            // far past a continuous now + 240 minutes, and inside the 09:00-10:00 local window.
+            Assert.True(dbReq.NextAttentionAtUtc > before.AddDays(1));
+            var local = TimeZoneInfo.ConvertTimeFromUtc(
+                dbReq.NextAttentionAtUtc!.Value, TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney"));
+            Assert.InRange(local.TimeOfDay, TimeSpan.FromHours(9), TimeSpan.FromHours(10));
+        }
+        finally
+        {
+            await ClearResponseTimingAsync();
+        }
+    }
+
+    [Fact]
+    public async Task PostExternalContact_Inbound_FollowUp_ClockFailure_LogsContactWithNoDeadline()
+    {
+        // Staffed hours with no weekly interval: the resolver fails closed (never continuous).
+        await SetStandardStaffedHoursAsync(withCalendar: false);
+        try
+        {
+            var response = await AuthRequest(_ownerCookie, _inboundNoCalendarRequestVersion).PostAsJsonAsync(
+                $"/keep/requests/{_inboundNoCalendarRequestId}/external-contact",
+                new { direction = "inbound", channel = "phone", requiresBusinessFollowUp = true, summary = "Customer called." });
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var dbReq = await LoadRequestAsync(_inboundNoCalendarRequestId);
+            Assert.Equal(AttentionLevel.Waiting, dbReq.AttentionLevel);
+            Assert.Equal(WaitingDirection.Business, dbReq.WaitingDirection);
+            Assert.Null(dbReq.NextAttentionAtUtc);
+        }
+        finally
+        {
+            await ClearResponseTimingAsync();
+        }
+    }
+
+    private async Task<KeepRequest> LoadRequestAsync(Guid requestId)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        return await db.Set<KeepRequest>().AsNoTracking().SingleAsync(r => r.Id == requestId);
+    }
+
+    private async Task SetStandardStaffedHoursAsync(bool withCalendar)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var policy = KeepResponsePolicy.Create(_accountId, 60, 240, 60, 5);
+        policy.UpdateTargetsAndTimingBasis(
+            60, 240, 60, 5,
+            ResponseTimingBasis.Continuous, ResponseTimingBasis.StaffedHours, ResponseTimingBasis.Continuous);
+        db.Set<KeepResponsePolicy>().Add(policy);
+        if (withCalendar)
+            foreach (var day in Enum.GetValues<DayOfWeek>())
+                db.Set<KeepCalendarWeeklyInterval>().Add(
+                    KeepCalendarWeeklyInterval.Create(_accountId, day, new TimeOnly(9, 0), new TimeOnly(10, 0)));
+        await db.SaveChangesAsync();
+    }
+
+    private async Task ClearResponseTimingAsync()
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        await db.Set<KeepCalendarWeeklyInterval>().Where(i => i.AccountId == _accountId).ExecuteDeleteAsync();
+        await db.Set<KeepResponsePolicy>().Where(p => p.AccountId == _accountId).ExecuteDeleteAsync();
     }
 
     // =========================================================================

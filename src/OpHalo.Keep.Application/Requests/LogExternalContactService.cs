@@ -1,8 +1,10 @@
+using Microsoft.Extensions.Logging;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
+using OpHalo.Keep.Application.ResponseTiming;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
@@ -29,7 +31,9 @@ public sealed class LogExternalContactService(
     IUserAccessPolicy userAccessPolicy,
     IAccountAccessPolicy accountAccessPolicy,
     IFeatureAccessPolicy featurePolicy,
-    IClock clock)
+    IKeepResponseTimingSnapshotPersistence responseTiming,
+    IClock clock,
+    ILogger<LogExternalContactService> logger)
 {
     private static readonly Error Unauthorized =
         Error.Create("auth.unauthorized", "Authentication required.");
@@ -135,6 +139,7 @@ public sealed class LogExternalContactService(
         // --- Domain mutation ---
         var nowUtc = clock.UtcNow;
         Result<Core.Entities.KeepRequestEvent> domainResult;
+        string? deadlineFailure = null;
 
         if (direction == ExternalContactDirection.Outbound)
         {
@@ -166,15 +171,28 @@ public sealed class LogExternalContactService(
         }
         else
         {
-            var policy = await operatePersistence.GetResponsePolicyAsync(currentUser.AccountId, ct);
-            var standardMinutes = policy?.StandardResponseTargetMinutes ?? KeepResponsePolicyDefaults.StandardResponseTargetMinutes;
+            // ADR-505: only a follow-up-required inbound contact can raise a Standard obligation, so
+            // only it needs the timing snapshot. A request already waiting on the business never
+            // calls the resolver (the domain preserves its existing deadline).
+            var timing = command.RequiresBusinessFollowUp == true
+                ? await responseTiming.GetResponseTimingSnapshotAsync(currentUser.AccountId, ct)
+                : null;
+
+            DateTime? ResolveStandardDeadline()
+            {
+                var (deadlineUtc, failure) = KeepResponseDeadlineResolver.Resolve(
+                    timing ?? throw new InvalidOperationException("Response timing snapshot was not loaded."),
+                    KeepResponseTarget.Standard, nowUtc);
+                deadlineFailure = failure;
+                return deadlineUtc;
+            }
 
             domainResult = request.LogInboundExternalContact(
                 channel.Value,
                 command.RequiresBusinessFollowUp!.Value,
                 command.Summary ?? string.Empty,
                 currentUser.UserId, actorDisplayName,
-                standardMinutes, nowUtc);
+                ResolveStandardDeadline, nowUtc);
         }
 
         if (domainResult.IsFailure)
@@ -184,6 +202,13 @@ public sealed class LogExternalContactService(
         switch (commitResult)
         {
             case KeepRequestCommitResult.Committed:
+                // ADR-505: a controlled clock failure never blocks the staff contact log or falls
+                // back to continuous timing; attention is still raised with no deadline and flagged
+                // for operators. Ids, target, and reason only: never the contact summary.
+                if (deadlineFailure is not null)
+                    logger.LogError(
+                        "Inbound contact response deadline not stamped: account {AccountId}, request {RequestId}, target {Target}, reason {Reason}",
+                        currentUser.AccountId, request.Id, KeepResponseTarget.Standard, deadlineFailure);
                 break;
             case KeepRequestCommitResult.Conflict:
                 return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);

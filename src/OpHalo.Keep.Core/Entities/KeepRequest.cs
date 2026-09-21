@@ -941,14 +941,39 @@ public sealed class KeepRequest : BaseEntity
         int standardResponseTargetMinutes,
         DateTime nowUtc)
     {
+        if (standardResponseTargetMinutes <= 0)
+            throw new ArgumentException("standardResponseTargetMinutes must be positive.", nameof(standardResponseTargetMinutes));
+
+        return LogInboundExternalContact(
+            channel, requiresBusinessFollowUp, summary, actorAccountUserId, actorDisplayName,
+            () => nowUtc.AddMinutes(standardResponseTargetMinutes), nowUtc);
+    }
+
+    /// <summary>
+    /// ADR-505 overload for a caller that resolves the Standard response deadline (business-clock
+    /// aware). <paramref name="standardDeadlineFor"/> is called at most once, and only when a
+    /// customer-to-business flip or fresh attention is actually raised (never for an
+    /// already-business-waiting request, a no-follow-up contact, or a validation failure). It stamps
+    /// its result literally: null means intentionally no deadline (attention is still raised),
+    /// never a duration-derived value.
+    /// </summary>
+    public Result<KeepRequestEvent> LogInboundExternalContact(
+        CommunicationChannel channel,
+        bool requiresBusinessFollowUp,
+        string summary,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        Func<DateTime?> standardDeadlineFor,
+        DateTime nowUtc)
+    {
+        ArgumentNullException.ThrowIfNull(standardDeadlineFor);
+
         if (nowUtc == default)
             throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
         if (actorAccountUserId == Guid.Empty)
             throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
         if (string.IsNullOrWhiteSpace(actorDisplayName))
             throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
-        if (standardResponseTargetMinutes <= 0)
-            throw new ArgumentException("standardResponseTargetMinutes must be positive.", nameof(standardResponseTargetMinutes));
 
         if (IsTerminal)
             return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
@@ -974,7 +999,7 @@ public sealed class KeepRequest : BaseEntity
                 AttentionReason = Enums.AttentionReason.CustomerMessage;
                 PriorityBand = Enums.PriorityBand.Standard;
                 AttentionSinceUtc = nowUtc;
-                NextAttentionAtUtc = nowUtc.AddMinutes(standardResponseTargetMinutes);
+                NextAttentionAtUtc = standardDeadlineFor();
             }
             else if (AttentionLevel == AttentionLevel.None)
             {
@@ -984,7 +1009,7 @@ public sealed class KeepRequest : BaseEntity
                 AttentionReason = Enums.AttentionReason.CustomerMessage;
                 PriorityBand = Enums.PriorityBand.Standard;
                 AttentionSinceUtc = nowUtc;
-                NextAttentionAtUtc = nowUtc.AddMinutes(standardResponseTargetMinutes);
+                NextAttentionAtUtc = standardDeadlineFor();
             }
             else if (WaitingDirection == WaitingDirection.Business)
             {

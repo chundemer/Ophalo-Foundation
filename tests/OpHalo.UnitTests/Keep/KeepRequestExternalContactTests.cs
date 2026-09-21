@@ -1298,4 +1298,119 @@ public class KeepRequestExternalContactTests
         Assert.True(result.IsSuccess);
         Assert.Equal(confirmAt, request.LastBusinessActivityAt);
     }
+
+    // -------------------------------------------------------------------
+    // LogInboundExternalContact — deadline delegate overload (ADR-505 / GAP-100 slice 11)
+    // -------------------------------------------------------------------
+
+    static readonly DateTime ClockDeadline = new(2026, 6, 19, 15, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void Inbound_deadline_overload_fresh_attention_stamps_delegate_result_once()
+    {
+        var request = NewCustomerRequest();
+        var calls = 0;
+
+        var result = request.LogInboundExternalContact(
+            CommunicationChannel.Phone, requiresBusinessFollowUp: true, summary: "Customer called",
+            ActorId, ActorName, () => { calls++; return ClockDeadline; }, Now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, calls);
+        Assert.Equal(AttentionLevel.Waiting, request.AttentionLevel);
+        Assert.Equal(ClockDeadline, request.NextAttentionAtUtc);
+    }
+
+    [Fact]
+    public void Inbound_deadline_overload_flip_stamps_delegate_result_once()
+    {
+        var request = NewCustomerRequest();
+        typeof(KeepRequest).GetProperty("AttentionLevel")!.SetValue(request, AttentionLevel.Waiting);
+        typeof(KeepRequest).GetProperty("WaitingDirection")!.SetValue(request, WaitingDirection.Customer);
+        var calls = 0;
+
+        var result = request.LogInboundExternalContact(
+            CommunicationChannel.Phone, requiresBusinessFollowUp: true, summary: "Customer called back",
+            ActorId, ActorName, () => { calls++; return ClockDeadline; }, Now.AddHours(2));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, calls);
+        Assert.Equal(WaitingDirection.Business, request.WaitingDirection);
+        Assert.Equal(ClockDeadline, request.NextAttentionAtUtc);
+    }
+
+    [Fact]
+    public void Inbound_deadline_overload_null_result_raises_attention_with_no_deadline()
+    {
+        var request = NewCustomerRequest();
+
+        var result = request.LogInboundExternalContact(
+            CommunicationChannel.Phone, requiresBusinessFollowUp: true, summary: "Customer called",
+            ActorId, ActorName, () => null, Now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(AttentionLevel.Waiting, request.AttentionLevel);
+        Assert.Equal(WaitingDirection.Business, request.WaitingDirection);
+        Assert.Null(request.NextAttentionAtUtc);
+    }
+
+    [Fact]
+    public void Inbound_deadline_overload_already_business_waiting_never_calls_delegate_and_keeps_deadline()
+    {
+        var request = NewCustomerRequest();
+        RaiseBusinessWaiting(request, since: Now.AddHours(-3));
+        var existingDeadline = request.NextAttentionAtUtc;
+        var calls = 0;
+
+        var result = request.LogInboundExternalContact(
+            CommunicationChannel.Phone, requiresBusinessFollowUp: true, summary: "Customer called again",
+            ActorId, ActorName, () => { calls++; return ClockDeadline; }, Now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, calls);
+        Assert.Equal(existingDeadline, request.NextAttentionAtUtc);
+    }
+
+    [Fact]
+    public void Inbound_deadline_overload_no_follow_up_or_validation_failure_never_calls_delegate()
+    {
+        var calls = 0;
+        Func<DateTime?> spy = () => { calls++; return ClockDeadline; };
+
+        var noFollowUp = NewCustomerRequest();
+        Assert.True(noFollowUp.LogInboundExternalContact(
+            CommunicationChannel.Phone, requiresBusinessFollowUp: false, summary: "FYI",
+            ActorId, ActorName, spy, Now).IsSuccess);
+        Assert.Equal(AttentionLevel.None, noFollowUp.AttentionLevel);
+
+        var badChannel = NewCustomerRequest();
+        Assert.False(badChannel.LogInboundExternalContact(
+            CommunicationChannel.InApp, requiresBusinessFollowUp: true, summary: "x",
+            ActorId, ActorName, spy, Now).IsSuccess);
+
+        var noSummary = NewCustomerRequest();
+        Assert.False(noSummary.LogInboundExternalContact(
+            CommunicationChannel.Phone, requiresBusinessFollowUp: true, summary: " ",
+            ActorId, ActorName, spy, Now).IsSuccess);
+
+        var terminal = NewCustomerRequest();
+        terminal.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now);
+        terminal.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, ActorName, Now);
+        Assert.False(terminal.LogInboundExternalContact(
+            CommunicationChannel.Phone, requiresBusinessFollowUp: true, summary: "x",
+            ActorId, ActorName, spy, Now.AddMinutes(1)).IsSuccess);
+
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
+    public void Inbound_legacy_overload_still_rejects_non_positive_minutes_and_null_delegate_is_rejected()
+    {
+        var request = NewCustomerRequest();
+
+        Assert.Throws<ArgumentException>(() => request.LogInboundExternalContact(
+            CommunicationChannel.Phone, true, "x", ActorId, ActorName, 0, Now));
+        Assert.Throws<ArgumentNullException>(() => request.LogInboundExternalContact(
+            CommunicationChannel.Phone, true, "x", ActorId, ActorName, (Func<DateTime?>)null!, Now));
+    }
 }
