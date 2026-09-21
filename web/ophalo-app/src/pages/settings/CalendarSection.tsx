@@ -64,9 +64,9 @@ const CONFLICT_COPY = "Settings were updated by another user. Refresh to load cu
 const GENERIC_COPY = "We couldn't save your business hours. Check your entries and try again.";
 
 const ERROR_COPY: Record<string, string> = {
-  LastWeeklyIntervalRequired: "At least one weekly open window is required while staffed-hours timing is active.",
-  StaffedTimingRequiresWeeklyInterval: "Cannot switch to staffed hours without at least one open weekly window.",
-  StaffedHoursTargetUnreachable:
+  "KeepResponsePolicy.LastWeeklyIntervalRequired": "At least one weekly open window is required while staffed-hours timing is active.",
+  "KeepResponsePolicy.StaffedTimingRequiresWeeklyInterval": "Cannot switch to staffed hours without at least one open weekly window.",
+  "KeepResponsePolicy.StaffedHoursTargetUnreachable":
     "Your scheduled hours do not provide enough open time to satisfy your configured SLA response target.",
   "KeepResponsePolicy.DuplicateWeekday": "Each weekday can only have one open window.",
   "KeepResponsePolicy.DuplicateClosureDate": "That closure date is already added.",

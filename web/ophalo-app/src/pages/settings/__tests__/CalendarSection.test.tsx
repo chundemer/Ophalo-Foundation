@@ -231,9 +231,9 @@ describe("CalendarSection", () => {
   });
 
   it.each([
-    ["LastWeeklyIntervalRequired", "At least one weekly open window is required while staffed-hours timing is active."],
-    ["StaffedTimingRequiresWeeklyInterval", "Cannot switch to staffed hours without at least one open weekly window."],
-    ["StaffedHoursTargetUnreachable", "Your scheduled hours do not provide enough open time to satisfy your configured SLA response target."],
+    ["KeepResponsePolicy.LastWeeklyIntervalRequired", "At least one weekly open window is required while staffed-hours timing is active."],
+    ["KeepResponsePolicy.StaffedTimingRequiresWeeklyInterval", "Cannot switch to staffed hours without at least one open weekly window."],
+    ["KeepResponsePolicy.StaffedHoursTargetUnreachable", "Your scheduled hours do not provide enough open time to satisfy your configured SLA response target."],
     ["KeepResponsePolicy.DuplicateWeekday", "Each weekday can only have one open window."],
     ["KeepResponsePolicy.DuplicateClosureDate", "That closure date is already added."],
     ["KeepSetup.ClosureReasonValidation", "A closure reason must be a single line of at most 60 characters."],
@@ -250,9 +250,25 @@ describe("CalendarSection", () => {
     expect(screen.queryByText(/API 422/)).not.toBeInTheDocument();
   });
 
+  it.each([
+    "LastWeeklyIntervalRequired",
+    "StaffedTimingRequiresWeeklyInterval",
+    "StaffedHoursTargetUnreachable",
+  ])("does not match the unprefixed code %s (the backend always sends KeepResponsePolicy.*)", async (code) => {
+    const user = userEvent.setup();
+    mockUpdateCalendar.mockRejectedValue(new ApiError(422, code, "API 422 /keep/setup/calendar"));
+    renderSection();
+    await user.click(await screen.findByRole("switch", { name: "Open on Tuesday" }));
+    await user.click(saveButton());
+
+    expect(
+      await screen.findByText("We couldn't save your business hours. Check your entries and try again."),
+    ).toBeInTheDocument();
+  });
+
   it("keeps the draft on 409 and refresh reloads without discarding edits", async () => {
     const user = userEvent.setup();
-    mockUpdateCalendar.mockRejectedValue(new ApiError(409, "SettingsVersionMismatch", "API 409"));
+    mockUpdateCalendar.mockRejectedValue(new ApiError(409, "KeepResponsePolicy.SettingsVersionMismatch", "API 409"));
     renderSection();
     await user.click(await screen.findByRole("switch", { name: "Open on Tuesday" }));
     await user.click(saveButton());
