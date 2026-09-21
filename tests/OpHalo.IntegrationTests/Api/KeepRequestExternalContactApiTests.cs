@@ -46,6 +46,8 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     private Guid _inboundStaffedRequestVersion;
     private Guid _inboundNoCalendarRequestId;
     private Guid _inboundNoCalendarRequestVersion;
+    private Guid _viewerIndependenceRequestId;
+    private Guid _viewerIndependenceRequestVersion;
     private Guid _customerPageRequestId;
     private Guid _customerPageRequestVersion;
     private string _customerPageToken = string.Empty;
@@ -201,6 +203,9 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
             db, _accountId, customer.Id, "EC-ISF", "ec_isf_token", now);
         (_inboundNoCalendarRequestId, _inboundNoCalendarRequestVersion) = await SeedRequestAsync(
             db, _accountId, customer.Id, "EC-INC", "ec_inc_token", now);
+
+        (_viewerIndependenceRequestId, _viewerIndependenceRequestVersion) = await SeedRequestAsync(
+            db, _accountId, customer.Id, "EC-VWI", "ec_vwi_token", now);
 
         _customerPageToken = "ec_page_token";
         (_customerPageRequestId, _customerPageRequestVersion) = await SeedRequestAsync(
@@ -574,6 +579,57 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
             Assert.Equal(AttentionLevel.Waiting, dbReq.AttentionLevel);
             Assert.Equal(WaitingDirection.Business, dbReq.WaitingDirection);
             Assert.Null(dbReq.NextAttentionAtUtc);
+        }
+        finally
+        {
+            await ClearResponseTimingAsync();
+        }
+    }
+
+    // GAP-100 acceptance: the deadline state is server-authored and viewer-independent. No viewer
+    // timezone reaches the read path (the account timezone only feeds the write-side calculation),
+    // so every viewer and surface sees the same UTC instant, never a viewer- or account-local value.
+    [Fact]
+    public async Task InboundStaffedHoursDeadline_IsIdenticalAcrossViewersAndListAndDetail()
+    {
+        await SetStandardStaffedHoursAsync(withCalendar: true);
+        try
+        {
+            var post = await AuthRequest(_ownerCookie, _viewerIndependenceRequestVersion).PostAsJsonAsync(
+                $"/keep/requests/{_viewerIndependenceRequestId}/external-contact",
+                new { direction = "inbound", channel = "phone", requiresBusinessFollowUp = true, summary = "Customer called." });
+            Assert.Equal(HttpStatusCode.OK, post.StatusCode);
+
+            var stored = (await LoadRequestAsync(_viewerIndependenceRequestId)).NextAttentionAtUtc;
+            Assert.NotNull(stored);
+
+            var deadlines = new List<string>();
+            var overdueFlags = new List<bool>();
+            foreach (var cookie in new[] { _ownerCookie, _adminCookie })
+            {
+                var detail = await AuthRequest(cookie).GetAsync($"/keep/requests/{_viewerIndependenceRequestId}");
+                Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+                var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+                deadlines.Add(detailBody.GetProperty("nextAttentionAtUtc").GetString()!);
+                deadlines.Add(detailBody.GetProperty("effectiveAttention").GetProperty("dueAtUtc").GetString()!);
+
+                var list = await AuthRequest(cookie).GetAsync("/keep/requests");
+                Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+                var listBody = await list.Content.ReadFromJsonAsync<JsonElement>();
+                var row = listBody.GetProperty("requests").EnumerateArray()
+                    .Single(r => r.GetProperty("id").GetGuid() == _viewerIndependenceRequestId);
+                deadlines.Add(row.GetProperty("attention").GetProperty("nextAttentionAtUtc").GetString()!);
+                deadlines.Add(row.GetProperty("ranking").GetProperty("dueAtUtc").GetString()!);
+                overdueFlags.Add(row.GetProperty("ranking").GetProperty("isOverdue").GetBoolean());
+            }
+
+            // Two viewers x (detail attention, detail effective, list attention, list ranking).
+            Assert.Equal(8, deadlines.Count);
+            Assert.Single(deadlines.Distinct());
+            Assert.Single(overdueFlags.Distinct());
+            Assert.EndsWith("Z", deadlines[0]);
+            Assert.Equal(stored!.Value, DateTime.Parse(
+                deadlines[0], null, System.Globalization.DateTimeStyles.RoundtripKind));
         }
         finally
         {
