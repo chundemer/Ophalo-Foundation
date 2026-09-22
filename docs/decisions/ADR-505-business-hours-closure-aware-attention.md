@@ -153,6 +153,13 @@ persisted provenance data.
   weekend/closure skips, repeat-message escalation, policy snapshot behavior, timezone changes,
   both DST transitions, the five-year configuration bound, both priority-escalation `min` outcomes,
   and identical state for viewers in different device timezones.
+- Production writers must stamp deadlines only through the explicit-deadline or delegate overloads
+  on `KeepRequest` (`CreateFromCustomerIntake`, `AddCustomerMessage`, `SubmitFeedback`,
+  `LogInboundExternalContact`). The four duration-based overloads remain solely as test-seed and
+  compatibility overloads. `KeepDeadlineOverloadGuardTests` (architecture tests) enforces this by
+  reading method IL in the Keep.Application, Keep.Infrastructure, Api, and Worker assemblies; it
+  asserts exactly four duration overloads exist and carries a positive control. Known limit: it
+  cannot see calls made through reflection, reflection-built delegates, or expression trees.
 
 ## Deferred
 
