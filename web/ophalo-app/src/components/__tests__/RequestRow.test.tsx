@@ -230,6 +230,41 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(screen.getByRole("button", { name: "Close request" })).toBeInTheDocument();
   });
 
+  // DEF-037 (locked 2026-09-22): dedicated-queue-only, restrained, no urgency wording.
+  it("shows the restrained status-check row text only when showStatusCheckCue is set", () => {
+    const row = buildRow({
+      statusCheck: { isDue: true, sinceUtc: "2026-07-01T00:00:00Z", dueAtUtc: "2026-07-06T00:00:00Z", ageDays: 5, exclusionReason: null },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} showStatusCheckCue timeZone="UTC" />);
+
+    expect(screen.getByText(/No meaningful activity since/)).toBeInTheDocument();
+    expect(screen.queryByText(/needs a status check/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/overdue/i)).not.toBeInTheDocument();
+  });
+
+  it("never shows the status-check row text outside the dedicated queue, even when statusCheck is present", () => {
+    const row = buildRow({
+      statusCheck: { isDue: true, sinceUtc: "2026-07-01T00:00:00Z", dueAtUtc: "2026-07-06T00:00:00Z", ageDays: 5, exclusionReason: null },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    expect(screen.queryByText(/No meaningful activity since/)).not.toBeInTheDocument();
+  });
+
+  it("shows no status-check row text when isDue is false, even with a non-null sinceUtc", () => {
+    // Proves the gate is isDue, not just sinceUtc presence — robust if a wrong/excluded row
+    // somehow reaches this component outside its dedicated queue.
+    const row = buildRow({
+      statusCheck: { isDue: false, sinceUtc: "2026-07-01T00:00:00Z", dueAtUtc: null, ageDays: 2, exclusionReason: null },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} showStatusCheckCue timeZone="UTC" />);
+
+    expect(screen.queryByText(/No meaningful activity since/)).not.toBeInTheDocument();
+  });
+
   it("renders at most two quick action buttons even when three permitted actions exist", () => {
     const row = buildRow({
       status: "in_progress",

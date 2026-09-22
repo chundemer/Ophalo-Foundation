@@ -318,6 +318,7 @@ export const mockViewCounts: KeepRequestViewCounts = {
   needsAttention: 1,
   feedbackReview: 1,
   readyToClose: 0,
+  needsStatusCheck: 0,
 };
 
 // ---------------------------------------------------------------------------

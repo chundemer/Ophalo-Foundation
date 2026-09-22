@@ -519,6 +519,17 @@ export interface KeepRequestTimingInfo {
   hasFuturePlannedFor: boolean;
 }
 
+// DEF-037: server-authoritative "needs status check" quiet-review metadata. dueAtUtc/sinceUtc
+// are account-local instants already resolved server-side (GAP-100 boundary) — the client
+// renders them as-is via the shared businessTime.ts helpers and never recomputes the date.
+export interface KeepRequestStatusCheckInfo {
+  isDue: boolean;
+  sinceUtc: string | null;
+  dueAtUtc: string | null;
+  ageDays: number | null;
+  exclusionReason: string | null;
+}
+
 export interface KeepRequestSummary {
   id: string;
   referenceCode: string;
@@ -562,6 +573,7 @@ export interface KeepRequestSummary {
   participation: KeepRequestParticipationInfo;
   actions: KeepRequestActionsInfo;
   timing?: KeepRequestTimingInfo;
+  statusCheck?: KeepRequestStatusCheckInfo;
 }
 
 export interface KeepRequestViewCounts {
@@ -572,6 +584,7 @@ export interface KeepRequestViewCounts {
   needsAttention: number;
   feedbackReview: number;
   readyToClose: number;
+  needsStatusCheck: number;
 }
 
 export interface KeepRequestPageInfo {
@@ -620,6 +633,7 @@ export type RequestView =
   | "assigned_to_me"
   | "needs_attention"
   | "watching"
+  | "needs_status_check"
   | "ready_to_close"
   | "feedback_review"
   | "closed_history"

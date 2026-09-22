@@ -7,6 +7,7 @@ export type TabId =
   | "assigned_to_me"
   | "needs_attention"
   | "watching"
+  | "needs_status_check"
   | "ready_to_close"
   | "feedback_review"
   | "available_work"
@@ -30,6 +31,9 @@ const ALL_TABS: TabDef[] = [
   { id: "assigned_to_me", label: "My Work",          view: "assigned_to_me",   roles: ["owner", "admin", "operator"] },
   { id: "available_work", label: "Available Work",   view: "available",        roles: ["operator"] },
   { id: "watching",       label: "Watching",         view: "watching",         roles: ["owner", "admin", "operator"] },
+  // DEF-037: quiet server-authored review signal — every role sees only their own server
+  // scope (AccountWide for owner/admin, MyWork for operator), same as Watching.
+  { id: "needs_status_check", label: "Needs Status Check", view: "needs_status_check", roles: ["owner", "admin", "operator"] },
   { id: "ready_to_close", label: "Ready to Close",   view: "ready_to_close",   roles: ["owner", "admin"] },
   { id: "feedback_review",label: "Feedback Review",  view: "feedback_review",  roles: ["owner", "admin"] },
   { id: "actual_work_review", label: "Actual Work Review", view: "actual_work_review", roles: ["owner", "admin"] },
@@ -43,11 +47,13 @@ const PRIMARY_TAB_IDS: Partial<Record<AccountRole, TabId[]>> = {
   operator: ["assigned_to_me", "needs_attention", "available_work"],
 };
 
-// UI-004 amendment: Watching is the only Views member, for both roles.
+// UI-004 amendment (2026-09-22, DEF-037): Watching plus Needs Status Check, same roles —
+// both are quiet personal-monitoring views, distinct from Office Review's owner/admin
+// operational-decision queues below.
 const SECONDARY_VIEW_IDS: Partial<Record<AccountRole, TabId[]>> = {
-  owner: ["watching"],
-  admin: ["watching"],
-  operator: ["watching"],
+  owner: ["watching", "needs_status_check"],
+  admin: ["watching", "needs_status_check"],
+  operator: ["watching", "needs_status_check"],
 };
 
 // UI-004 amendment: Office Review members — Owner/Admin only.
@@ -88,6 +94,8 @@ export function getQueueSubtitle(tabId: TabId, role: AccountRole): string | null
       return "Requests with customer promises needing attention now.";
     case "watching":
       return "Requests you're watching.";
+    case "needs_status_check":
+      return "Active work with no recent activity — a quiet reminder to check in, not a customer promise.";
     case "ready_to_close":
       return "Resolved work ready for owner/admin closeout.";
     case "feedback_review":
@@ -113,6 +121,10 @@ export const EMPTY_STATE: Record<TabId, { heading: string; detail: string }> = {
   watching: {
     heading: "Not watching anything",
     detail: "Requests you are watching will appear here.",
+  },
+  needs_status_check: {
+    heading: "Nothing needs a status check",
+    detail: "Active requests with no recent activity will appear here.",
   },
   ready_to_close: {
     heading: "Nothing ready to close",
@@ -223,6 +235,7 @@ export function countForTab(
     case "assigned_to_me":  return counts.assignedToMe;
     case "needs_attention": return counts.needsAttention;
     case "watching":        return counts.watching;
+    case "needs_status_check": return counts.needsStatusCheck;
     case "ready_to_close":  return counts.readyToClose;
     case "feedback_review": return counts.feedbackReview;
     case "available_work":  return null;

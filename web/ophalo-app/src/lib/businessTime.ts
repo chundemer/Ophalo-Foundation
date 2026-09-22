@@ -46,6 +46,18 @@ export function formatInstant(isoUtc: string, timeZone: string | null): string {
 }
 
 /**
+ * DEF-037: account-local date only (no hour/minute), same zone-aware pattern as `formatInstant`
+ * above but for quiet row-metadata text (e.g. "No meaningful activity since Aug 13") where a
+ * full timestamp would be noise. `timeZone: null` falls back to UTC, unlabeled — this is display
+ * text, not a data field, so no "UTC" suffix is added.
+ */
+export function accountLocalDate(isoUtc: string | null, timeZone: string | null): string | null {
+  if (!isoUtc) return null;
+  const zone = timeZone ?? "UTC";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: zone }).format(new Date(isoUtc));
+}
+
+/**
  * GAP-092: "just now" / "Xm ago" / "Xh ago" are elapsed durations — timezone-invariant, computed
  * from UTC milliseconds — but the >24h fallback renders an absolute calendar date, which must be
  * business-zone-aware (including which year counts as "this year"). Same UTC-fallback labeling as

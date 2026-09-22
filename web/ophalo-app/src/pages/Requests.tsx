@@ -577,6 +577,7 @@ export function Requests({
         onActionClick={handleActionClick}
         onShareClick={setShareModalTarget}
         showCloseoutCue={!presentAsHistory && activeTab.id === "ready_to_close"}
+        showStatusCheckCue={!presentAsHistory && activeTab.id === "needs_status_check"}
         paneMode={paneMode}
         selected={row.id === selectedRequestId}
         timeZone={businessTimeZone}

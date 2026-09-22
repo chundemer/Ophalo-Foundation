@@ -3,7 +3,7 @@ import { AlertTriangle, Clock, MessageSquare, ChevronRight, UserRound, CheckCirc
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
 import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../lib/requestStatus";
-import { isDateOnlyToday } from "../lib/businessTime";
+import { isDateOnlyToday, accountLocalDate } from "../lib/businessTime";
 
 // Build 087 §4 action labels/dispatch — server-authoritative codes only.
 const ACTION_FOCUS_MAP: Record<string, string> = {
@@ -355,6 +355,10 @@ interface RequestRowProps {
   onActionClick?: (row: KeepRequestSummary, action: KeepQuickAction) => void;
   onShareClick?: (row: KeepRequestSummary) => void;
   showCloseoutCue?: boolean;
+  // DEF-037: gates the quiet "No meaningful activity since [date]" row text — dedicated-queue-
+  // only by design (locked 2026-09-22): never rendered outside the Needs Status Check tab, even
+  // when row.statusCheck is present (it's serialized on every row, every view).
+  showStatusCheckCue?: boolean;
   // UI-001 post-Step-4 density refinement (build-log 134 §2, locked 2026-08-21): the Queue pane
   // is a scan-and-select surface — the quick-action footer (Update customer page/Contact customer/etc.) is
   // hidden so more rows fit; the row stays fully selectable and keeps its server-authorized
@@ -370,7 +374,7 @@ interface RequestRowProps {
   timeZone?: string | null;
 }
 
-export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onShareClick, showCloseoutCue, paneMode = false, selected = false, timeZone = null }: RequestRowProps) {
+export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onShareClick, showCloseoutCue, showStatusCheckCue, paneMode = false, selected = false, timeZone = null }: RequestRowProps) {
   const [expanded, setExpanded] = useState(false);
   const { collapsed: collapsedSummary, showToggle: summaryTruncated } = buildCollapsedSummary(row.originalSummary.fullText);
   const lastTouch = relativeTime(row.lastBusinessActivityAtUtc ?? row.updatedAtUtc);
@@ -416,6 +420,18 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
       {row.pendingFinancialReviewCount === 1
         ? "1 visit needs financial review"
         : `${row.pendingFinancialReviewCount} visits need financial review`}
+    </span>
+  ) : null;
+
+  // DEF-037: restrained, dedicated-queue-only. No urgency styling (not an overdue/SLA badge) —
+  // it's a quiet reminder, not a customer promise; the tab itself already establishes the
+  // context, so the copy omits any "needs a status check" suffix (locked 2026-09-22). Gated on
+  // statusCheck.isDue, not just sinceUtc presence, so the row stays correct even if a
+  // non-due/excluded row somehow reaches this component outside its dedicated queue.
+  const statusCheckSinceDate = accountLocalDate(row.statusCheck?.sinceUtc ?? null, timeZone);
+  const statusCheckCue = showStatusCheckCue === true && row.statusCheck?.isDue === true && statusCheckSinceDate ? (
+    <span className="text-[var(--ophalo-muted)]">
+      No meaningful activity since {statusCheckSinceDate}
     </span>
   ) : null;
 
@@ -542,10 +558,11 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
         // server-authoritative Owner/Admin financial-review cue renders here too — directly
         // beneath the Next: / action-signal line, same tiny amber dot + muted text, still no
         // badge, rail, link, button, ranking, or attention change.
-        (actionSignalLine || row.pendingFinancialReviewCount > 0) && (
+        (actionSignalLine || row.pendingFinancialReviewCount > 0 || statusCheckCue) && (
           <div className="keep-row-meta flex flex-col gap-0.5 px-4 pt-1 pb-3">
             {actionSignalLine && <div className="flex items-center gap-1">{actionSignalLine}</div>}
             {financialReviewCue}
+            {statusCheckCue}
           </div>
         )
       ) : (
@@ -588,6 +605,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
             </span>
           )}
           {financialReviewCue}
+          {statusCheckCue}
         </div>
       )}
 

@@ -4,6 +4,8 @@ import {
   getSecondaryViewsForRole,
   getOfficeReviewMembersForRole,
   countForTab,
+  getQueueSubtitle,
+  EMPTY_STATE,
 } from "../requestsWorkspace";
 import { mockViewCounts } from "../../mocks/fixtures";
 
@@ -27,10 +29,11 @@ describe("getTabsForRole", () => {
     expect(tabs.map((t) => t.label)).toEqual(["My Work", "Needs Attention", "Available Work"]);
   });
 
-  it("never includes Watching, Ready to Close, Feedback Review, or Actual Work Review", () => {
+  it("never includes Watching, Needs Status Check, Ready to Close, Feedback Review, or Actual Work Review", () => {
     for (const role of ["owner", "admin", "operator"] as const) {
       const ids = getTabsForRole(role).map((t) => t.id);
       expect(ids).not.toContain("watching");
+      expect(ids).not.toContain("needs_status_check");
       expect(ids).not.toContain("ready_to_close");
       expect(ids).not.toContain("feedback_review");
       expect(ids).not.toContain("actual_work_review");
@@ -39,9 +42,12 @@ describe("getTabsForRole", () => {
 });
 
 describe("getSecondaryViewsForRole", () => {
-  it("returns only Watching, for both roles", () => {
-    expect(getSecondaryViewsForRole("owner").map((t) => t.id)).toEqual(["watching"]);
-    expect(getSecondaryViewsForRole("operator").map((t) => t.id)).toEqual(["watching"]);
+  // DEF-037 (locked 2026-09-22): Needs Status Check joins Watching in Secondary Views, for all
+  // three roles — not Office Review, which stays an owner/admin decision-queue group.
+  it("returns Watching and Needs Status Check, for all three roles", () => {
+    for (const role of ["owner", "admin", "operator"] as const) {
+      expect(getSecondaryViewsForRole(role).map((t) => t.id)).toEqual(["watching", "needs_status_check"]);
+    }
   });
 });
 
@@ -79,5 +85,26 @@ describe("countForTab", () => {
   it("sources Watching from server view counts", () => {
     const [watching] = getSecondaryViewsForRole("owner");
     expect(countForTab(watching, mockViewCounts)).toBe(mockViewCounts.watching);
+  });
+
+  // DEF-037: authoritative server count, not null/no-count like the pre-count design — the
+  // server computes it via the same shared predicate the queue itself uses.
+  it("sources Needs Status Check from server view counts", () => {
+    const [, needsStatusCheck] = getSecondaryViewsForRole("owner");
+    expect(countForTab(needsStatusCheck, mockViewCounts)).toBe(mockViewCounts.needsStatusCheck);
+  });
+});
+
+describe("getQueueSubtitle — needs_status_check", () => {
+  it("describes it as a quiet reminder, not an overdue promise", () => {
+    const subtitle = getQueueSubtitle("needs_status_check", "owner");
+    expect(subtitle).toMatch(/no recent activity/i);
+    expect(subtitle).not.toMatch(/overdue/i);
+  });
+});
+
+describe("EMPTY_STATE — needs_status_check", () => {
+  it("has a calm, non-alarming empty state", () => {
+    expect(EMPTY_STATE.needs_status_check.heading).toBe("Nothing needs a status check");
   });
 });

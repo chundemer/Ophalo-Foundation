@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { businessTodayDateOnly, isDateOnlyToday, isDateOnlyPast, formatInstant, formatRelativeOrInstant } from "../businessTime";
+import { businessTodayDateOnly, isDateOnlyToday, isDateOnlyPast, formatInstant, formatRelativeOrInstant, accountLocalDate } from "../businessTime";
 
 // GAP-092 1a: every assertion uses an injected reference date — never the real clock — so these
 // stay deterministic regardless of when or where the suite runs.
@@ -52,6 +52,27 @@ describe("formatInstant", () => {
 
   it("renders an explicit UTC-labeled fallback when the zone is unresolved", () => {
     expect(formatInstant("2026-09-03T11:30:00Z", null)).toBe("Sep 3, 2026, 11:30 AM UTC");
+  });
+});
+
+describe("accountLocalDate", () => {
+  it("renders the calendar date in the resolved business zone, date only", () => {
+    // 2026-09-03T11:30:00Z is Sep 3 in America/Los_Angeles (PDT, UTC-7).
+    expect(accountLocalDate("2026-09-03T11:30:00Z", "America/Los_Angeles")).toBe("Sep 3");
+  });
+
+  it("crosses the UTC calendar-day boundary in a zone ahead of UTC", () => {
+    // 2026-09-03T23:30:00Z is Sep 4 in Australia/Sydney (AEST, UTC+10) — proves it doesn't
+    // just slice the UTC date string.
+    expect(accountLocalDate("2026-09-03T23:30:00Z", "Australia/Sydney")).toBe("Sep 4");
+  });
+
+  it("falls back to UTC, unlabeled, when the zone is unresolved", () => {
+    expect(accountLocalDate("2026-09-03T11:30:00Z", null)).toBe("Sep 3");
+  });
+
+  it("returns null for a null instant", () => {
+    expect(accountLocalDate(null, "America/Los_Angeles")).toBeNull();
   });
 });
 
