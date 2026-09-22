@@ -5,9 +5,9 @@ scope, sequencing, gates, and deferrals. Locked decisions are in
 [decision-index](decisions/decision-index.md); completed-work evidence is in `docs/build-log/`.
 
 **Updated 2026-09-22.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
-GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, GAP-048, GAP-049, GAP-092, and
-GAP-100 are complete. DEF-037 is the active item (server-correctness slice code-complete, awaiting
-review — see below). The canonical scope, order, gates, and deferrals are in the
+GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, GAP-048, GAP-049, GAP-092,
+GAP-100, and DEF-037 are complete. The queued maintainability/refactor review (see below) is
+next, then DEF-063. The canonical scope, order, gates, and deferrals are in the
 [workboard](workboard.md).
 
 ## Start here — DEF-037
@@ -37,16 +37,18 @@ Next: the server-correctness slice is **done (`b7d5ef16`)** (6 files: new `Statu
 
 PWA placement (locked 2026-09-22; see workboard): Secondary Views alongside Watching, all three roles — not Office Review, which stays an owner/admin decision-queue group with no visibility amendment. Copy locked: tab "Needs Status Check"; row "No meaningful activity since [account-local date]" (no urgency suffix). An authoritative, role-scoped tab count is required at launch and must reuse the server status-check calculation rather than a client approximation.
 
-Backend count slice is **done (`302840c8`)** (4 files: `GetKeepRequestListResult.cs`, `GetKeepRequestListService.cs`, `KeepRequestListServiceTests.cs`, `KeepRequestListQueryApiTests.cs` — shared `IsNeedsStatusCheckDue` predicate used by both the row filter and the count so they cannot drift, `statusCheckLocalToday` threaded through row metadata too, no new persistence method; 2,105 unit, 17 architecture, 56 targeted list-API integration tests passing); details in the workboard. Next: the frontend badge-rendering slice (6 files, previously scoped): tab, row text, wiring the count.
+Backend count slice is **done (`302840c8`)** (4 files: `GetKeepRequestListResult.cs`, `GetKeepRequestListService.cs`, `KeepRequestListServiceTests.cs`, `KeepRequestListQueryApiTests.cs` — shared `IsNeedsStatusCheckDue` predicate used by both the row filter and the count so they cannot drift, `statusCheckLocalToday` threaded through row metadata too, no new persistence method; 2,105 unit, 17 architecture, 56 targeted list-API integration tests passing); details in the workboard.
 
-After DEF-037 is complete, schedule a **focused maintainability/refactor and quality review**; do not fold it into the active server-count/PWA work. Priority findings: (1) keep the account-local status-check membership/metadata/count calculation in one shared Application rule before any further consumer is added, so threshold, timezone, suppressors, and DST behavior cannot drift; (2) split `RequestRow.tsx`'s pure presentation/action-selection logic and replace its browser-local `shortDate` formatting with the established account-business-time helpers; (3) deduplicate the staffed-hours reachability validation shared by policy-save and closure-save paths in `EfKeepResponsePolicyPersistence`; (4) preflight mechanical decompositions of high-churn `RequestDetail.tsx` and endpoint-family `KeepEndpoints.cs`; (5) review explicit API response DTOs/contract tests, since endpoints returning service results directly can expose newly-added fields without a deliberate web-client contract change. Do not split `KeepRequest.cs`, API type contracts, migrations, fixtures, or large tests merely for line count; extract only coherent, reusable responsibilities. `ActualWorkComposer.tsx` merits its own later decomposition slice, not a drive-by change.
+Frontend badge-rendering slice is **done (`61e47430`)** (9 files: tab in Secondary Views for all three roles, authoritative count wiring, restrained row text gated on `isDue` not just `sinceUtc`, and a shared `accountLocalDate` helper extracted into `businessTime.ts`; `tsc --noEmit` clean, full suite 142 files / 1,321 tests passing); details in the workboard. **DEF-037 is complete.**
+
+DEF-037 is complete; schedule next a **focused maintainability/refactor and quality review**; do not fold it into new feature work. Priority findings: (1) keep the account-local status-check membership/metadata/count calculation in one shared Application rule before any further consumer is added, so threshold, timezone, suppressors, and DST behavior cannot drift; (2) split `RequestRow.tsx`'s pure presentation/action-selection logic and replace its browser-local `shortDate` formatting with the established account-business-time helpers; (3) deduplicate the staffed-hours reachability validation shared by policy-save and closure-save paths in `EfKeepResponsePolicyPersistence`; (4) preflight mechanical decompositions of high-churn `RequestDetail.tsx` and endpoint-family `KeepEndpoints.cs`; (5) review explicit API response DTOs/contract tests, since endpoints returning service results directly can expose newly-added fields without a deliberate web-client contract change. Do not split `KeepRequest.cs`, API type contracts, migrations, fixtures, or large tests merely for line count; extract only coherent, reusable responsibilities. `ActualWorkComposer.tsx` merits its own later decomposition slice, not a drive-by change.
 
 Quality/performance controls after DEF-037: the new needs-status-check count deliberately fetches/evaluates its narrowed candidate set in memory on every list call; this is accepted at pilot scale, but instrument/measure it once request volume makes it material and design a projected count query only with evidence. Keep targeted tests for each slice and full unit/architecture suites for each completed backend slice; reserve full integration runs for milestones, shared infrastructure/auth/persistence changes, and release gates. Record a flaky full-suite failure with its exact test and artifacts so it becomes a diagnosis item, never anonymous noise. Treat all newly introduced compiler/analyzer warnings as failures while any historic warning is explicitly baselined and queued for removal. Do not impose arbitrary file-length limits; require a preflight when a file acquires a new responsibility.
 
 ## Next several sessions
 
-1. Continue the workboard's foundation-first order: GAP-100, then DEF-037
-   needs-status-check resurfacing and DEF-063's Request Detail closeout warning.
+1. GAP-100 and DEF-037 are complete. Next: the queued maintainability/refactor review, then
+   DEF-063's Request Detail closeout warning (see the workboard's foundation-first order).
 2. Run the **Proposed Work & Commercial Quotes** decision session. Its first deliverable is a
    decision record, not code; use its workboard Decision Queue entry and the cited ADRs/build logs.
 3. Begin **GAP-069** only at the release-readiness trigger: about two weeks before Keep becomes the
