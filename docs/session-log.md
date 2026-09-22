@@ -28,6 +28,8 @@ clock, then one writer family at a time. Public intake is its own fork-worthy wr
 `CreateFromCustomerIntake` has 37 positional test call sites across 12 files. Keep ADR-451
 voicemail promises out of GAP-100; its calendar-aware replacement is recorded as DEF-097.
 
+GAP-100 status (2026-09-22): initial live Business Hours & Closures testing is complete. The Sentry capture-test isolation fix passed the full integration suite, 1,755/1,755 (2026-09-21). Record the remaining acceptance evidence, close GAP-100, then begin DEF-037 discovery/preflight.
+
 ## Next several sessions
 
 1. Continue the workboard's foundation-first order: GAP-100, then DEF-037
