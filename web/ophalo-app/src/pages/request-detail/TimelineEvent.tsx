@@ -8,6 +8,7 @@ import {
   formatDateOnly,
   FOLLOW_UP_REASON_LABELS,
 } from "./helpers";
+import { formatInstant } from "../../lib/businessTime";
 
 // Events shown in "Communication" filter (customer/business communication + lifecycle anchors)
 const COMMUNICATION_EVENT_TYPES = new Set([
@@ -140,14 +141,8 @@ function timelineEventSummary(event: KeepRequestEventItem): string | null {
   return null;
 }
 
-function formatAuditDateTime(isoUtc: string): string {
-  return new Date(isoUtc).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+function formatAuditDateTime(isoUtc: string, timeZone: string | null): string {
+  return formatInstant(isoUtc, timeZone);
 }
 
 interface TimelineEventProps {
@@ -179,7 +174,7 @@ export function TimelineEvent({ event, isFirst, compact = false, timeZone = null
             {content}
           </p>
         )}
-        <p className="mt-1 text-xs text-[var(--ophalo-muted)]">{actor} · {formatAuditDateTime(event.occurredAtUtc)}</p>
+        <p className="mt-1 text-xs text-[var(--ophalo-muted)]">{actor} · {formatAuditDateTime(event.occurredAtUtc, timeZone)}</p>
       </div>
     );
   }

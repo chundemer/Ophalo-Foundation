@@ -633,6 +633,17 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(screen.queryByText("Internal priority: Urgent")).not.toBeInTheDocument();
   });
 
+  it("renders ISO-instant row dates in the account timezone", () => {
+    const row = buildRow({
+      timing: { followUpOnDate: null, followUpOnReason: null, followUpOnNote: null, followUpOnLabel: null, hasFutureFollowUpOn: false, plannedForDate: "2026-08-29T02:00:00Z", plannedForLabel: null, hasFuturePlannedFor: true },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} timeZone="America/Los_Angeles" />);
+
+    // Aug 29 02:00 UTC is Aug 28 in the account's Pacific business timezone.
+    expect(screen.getByText("Planned Aug 28")).toBeInTheDocument();
+  });
+
   it("action-first queue redesign: the signal line is unmounted (not a field showing defaults) when no eligible signal exists", () => {
     const row = buildRow({
       businessPriority: "routine",

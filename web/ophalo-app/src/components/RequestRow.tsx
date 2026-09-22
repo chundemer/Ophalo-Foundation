@@ -86,18 +86,18 @@ function hasAction(row: KeepRequestSummary, code: string): boolean {
   return row.actions.quickActions.some((a) => a.code === code);
 }
 
-function shortDate(iso: string | null): string | null {
+function shortDate(iso: string | null, timeZone: string | null): string | null {
   if (!iso) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
     const [year, month, day] = iso.split("-").map(Number);
     return new Date(year, month - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return accountLocalDate(iso, timeZone);
 }
 
-function withDeadline(label: string, isOverdue: boolean, dueAtUtc: string | null): string {
+function withDeadline(label: string, isOverdue: boolean, dueAtUtc: string | null, timeZone: string | null): string {
   if (!isOverdue) return label;
-  const dateLabel = shortDate(dueAtUtc);
+  const dateLabel = shortDate(dueAtUtc, timeZone);
   return dateLabel ? `${label} · ${dateLabel}` : label;
 }
 
@@ -139,8 +139,8 @@ function resolveException(row: KeepRequestSummary, isCalmCloseout: boolean, time
     switch (group) {
       case "overdue_business_waiting": {
         const label = reason && ATTENTION_LABELS[reason]
-          ? withDeadline(ATTENTION_LABELS[reason], true, row.ranking.dueAtUtc)
-          : withDeadline("Response overdue", true, row.ranking.dueAtUtc);
+          ? withDeadline(ATTENTION_LABELS[reason], true, row.ranking.dueAtUtc, timeZone)
+          : withDeadline("Response overdue", true, row.ranking.dueAtUtc, timeZone);
         // An overdue response needs to be visible, but it is not itself a critical incident.
         // Reserve danger red for genuinely exceptional/critical states.
         return { key: group, label, tone: "attention", icon: reason === "call_requested" ? Phone : AlertTriangle };
@@ -162,8 +162,8 @@ function resolveException(row: KeepRequestSummary, isCalmCloseout: boolean, time
         // One phrase, not "Follow-up due today · Follow up today" — the server label already
         // reads naturally (e.g. "Follow up today"), so just append the date once.
         const label = dueToday
-          ? `${row.timing?.followUpOnLabel ?? "Follow-up due today"}${date ? ` · ${shortDate(date)}` : ""}`
-          : `Follow-up overdue${date ? ` · ${shortDate(date)}` : ""}`;
+          ? `${row.timing?.followUpOnLabel ?? "Follow-up due today"}${date ? ` · ${shortDate(date, timeZone)}` : ""}`
+          : `Follow-up overdue${date ? ` · ${shortDate(date, timeZone)}` : ""}`;
         return { key: group, label, tone: "attention", icon: Clock };
       }
       default:
@@ -339,9 +339,10 @@ function timingChipText(
   label: string,
   displayLabel: string | null | undefined,
   date: string | null | undefined,
+  timeZone: string | null,
 ): string | null {
   if (!date) return null;
-  const dateLabel = shortDate(date);
+  const dateLabel = shortDate(date, timeZone);
   if (!dateLabel) return null;
   return `${label}: ${displayLabel ? `${displayLabel} · ` : ""}${dateLabel}`;
 }
@@ -390,14 +391,14 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
   // Planned-for dates never become the exception (server ranking never promotes them), so they
   // always render here when present.
   const showFollowUpMeta = !isClosedOrCancelled && exception?.key !== "due_follow_up_on";
-  const followUpMeta = showFollowUpMeta ? timingChipText("Follow-up", row.timing?.followUpOnLabel, row.timing?.followUpOnDate) : null;
+  const followUpMeta = showFollowUpMeta ? timingChipText("Follow-up", row.timing?.followUpOnLabel, row.timing?.followUpOnDate, timeZone) : null;
 
   // Conditional combined action-signal line (locked 2026-08-24, queue redesign): at most one
   // compact line, capped at three signals, never a second cluster of status badges. Priority
   // shows only above Routine; planned date only when set; contact preference only when explicit
   // (never "No preference").
   const prioritySignal = row.businessPriority === "urgent" ? "Urgent" : row.businessPriority === "soon" ? "Soon" : null;
-  const plannedDateLabel = !isClosedOrCancelled ? shortDate(row.timing?.plannedForDate ?? null) : null;
+  const plannedDateLabel = !isClosedOrCancelled ? shortDate(row.timing?.plannedForDate ?? null, timeZone) : null;
   const contactSignal =
     row.contactPreference === "text_message" ? "Prefers text" :
     row.contactPreference === "phone_call" ? "Prefers call" :

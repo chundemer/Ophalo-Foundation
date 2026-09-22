@@ -70,4 +70,10 @@ describe("TimelineEvent — GAP-092 business-timezone-aware timestamp", () => {
 
     expect(screen.getByText("1h ago")).toBeInTheDocument();
   });
+
+  it("renders compact audit timestamps in the resolved business zone", () => {
+    render(<TimelineEvent event={event("2026-09-03T02:00:00Z")} isFirst compact timeZone="America/Los_Angeles" />);
+
+    expect(screen.getByText(/Christian Hundemer · Sep 2, 2026, 7:00 PM/)).toBeInTheDocument();
+  });
 });
