@@ -70,7 +70,7 @@ internal static class KeepRequestDetailMapper
         return new(
         RequestId: request.Id,
         ReferenceCode: request.ReferenceCode,
-        Status: MapStatus(request.Status),
+        Status: KeepRequestWireMappers.MapStatus(request.Status),
         Origin: MapOrigin(request.Origin),
         Source: MapSource(request.Source),
         NeedsShare: request.NeedsShare,
@@ -88,13 +88,13 @@ internal static class KeepRequestDetailMapper
         LastCustomerActivityAt: request.LastCustomerActivityAt,
         TerminatedAtUtc: request.TerminatedAtUtc,
         FollowUpOnDate:   request.FollowUpOnDate,
-        FollowUpOnReason: request.FollowUpReason.HasValue ? MapFollowUpReason(request.FollowUpReason.Value) : null,
+        FollowUpOnReason: request.FollowUpReason.HasValue ? KeepRequestWireMappers.MapFollowUpReason(request.FollowUpReason.Value) : null,
         FollowUpOnNote:   request.FollowUpNote,
         PlannedForDate:   request.PlannedForDate,
-        AttentionLevel: MapAttentionLevel(request.AttentionLevel),
-        WaitingDirection: MapWaitingDirection(request.WaitingDirection),
+        AttentionLevel: KeepRequestWireMappers.MapAttentionLevel(request.AttentionLevel),
+        WaitingDirection: KeepRequestWireMappers.MapWaitingDirection(request.WaitingDirection),
         AttentionReason: request.AttentionReason.HasValue
-            ? MapAttentionReason(request.AttentionReason.Value) : null,
+            ? KeepRequestWireMappers.MapAttentionReason(request.AttentionReason.Value) : null,
         EffectiveAttention: effectiveAttention,
         PriorityBand: MapPriorityBand(request.PriorityBand),
         AttentionSinceUtc: request.AttentionSinceUtc,
@@ -117,9 +117,9 @@ internal static class KeepRequestDetailMapper
         FeedbackReviewDueAtUtc: ComputeReviewDueAtUtc(request),
         CustomerPageLastViewedAtUtc: request.CustomerPageLastViewedAtUtc,
         CustomerPageViewedAfterLatestUpdate: ComputeViewedAfterLatestUpdate(request),
-        IntakeUrgency: MapIntakeUrgency(request.IntakeUrgency),
+        IntakeUrgency: KeepRequestWireMappers.MapIntakeUrgency(request.IntakeUrgency),
         BusinessPriority: MapBusinessPriority(request.BusinessPriority),
-        ContactPreference: MapContactPreference(request.ContactPreference),
+        ContactPreference: KeepRequestWireMappers.MapContactPreference(request.ContactPreference),
         ServiceAddressLine1: request.ServiceAddressLine1,
         ServiceAddressLine2: request.ServiceAddressLine2,
         ServiceCity: request.ServiceCity,
@@ -163,7 +163,7 @@ internal static class KeepRequestDetailMapper
             CanClassify:                 decision.CanClassify,
             CanRecordShareIntent:        decision.CanRecordShareIntent,
             CanCreateFollowUpRequest:    decision.CanCreateFollowUpRequest,
-            AllowedStatuses:             decision.AllowedStatuses.Select(MapStatus).ToList(),
+            AllowedStatuses:             decision.AllowedStatuses.Select(KeepRequestWireMappers.MapStatus).ToList(),
             PrimaryAction:               null,
             MarkWorkDoneSecondary:       null);
 
@@ -218,14 +218,6 @@ internal static class KeepRequestDetailMapper
         return FeedbackReviewPolicy.ComputeReviewDueAtUtc(request.FeedbackSubmittedAtUtc.Value);
     }
 
-    private static string MapIntakeUrgency(IntakeUrgency urgency) => urgency switch
-    {
-        IntakeUrgency.Routine => "routine",
-        IntakeUrgency.Soon    => "soon",
-        IntakeUrgency.Urgent  => "urgent",
-        _ => throw new InvalidOperationException($"Unknown IntakeUrgency: {urgency}")
-    };
-
     private static string? MapBusinessPriority(BusinessPriority? priority) => priority switch
     {
         null                       => null,
@@ -233,15 +225,6 @@ internal static class KeepRequestDetailMapper
         BusinessPriority.Soon      => "soon",
         BusinessPriority.Urgent    => "urgent",
         _ => throw new InvalidOperationException($"Unknown BusinessPriority: {priority}")
-    };
-
-    private static string MapContactPreference(ContactPreference preference) => preference switch
-    {
-        ContactPreference.NoPreference => "no_preference",
-        ContactPreference.TextMessage  => "text_message",
-        ContactPreference.PhoneCall    => "phone_call",
-        ContactPreference.Email        => "email",
-        _ => throw new InvalidOperationException($"Unknown ContactPreference: {preference}")
     };
 
     private static IReadOnlyList<ContactActionItem> BuildContactActions(
@@ -266,31 +249,6 @@ internal static class KeepRequestDetailMapper
         "third_party"                    => FollowUpReason.ThirdParty,
         "other"                          => FollowUpReason.Other,
         _                                => null
-    };
-
-    private static string MapFollowUpReason(FollowUpReason reason) => reason switch
-    {
-        FollowUpReason.Weather                      => "weather",
-        FollowUpReason.Parts                        => "parts",
-        FollowUpReason.CustomerDelay                => "customer_delay",
-        FollowUpReason.BusinessOperatorAvailability => "business_operator_availability",
-        FollowUpReason.ThirdParty                   => "third_party",
-        FollowUpReason.Other                        => "other",
-        _ => throw new InvalidOperationException($"Unknown FollowUpReason: {reason}")
-    };
-
-    internal static string MapStatus(KeepRequestStatus status) => status switch
-    {
-        KeepRequestStatus.Received        => "received",
-        KeepRequestStatus.Scheduled       => "scheduled",
-        KeepRequestStatus.InProgress      => "in_progress",
-        KeepRequestStatus.PendingCustomer => "pending_customer",
-        KeepRequestStatus.Resolved        => "resolved",
-        KeepRequestStatus.Closed          => "closed",
-        KeepRequestStatus.Cancelled       => "cancelled",
-        KeepRequestStatus.Spam            => "spam",
-        KeepRequestStatus.Test            => "test",
-        _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {status}")
     };
 
     private static KeepRequestParticipantItem MapParticipant(KeepParticipantProjection p) => new(
@@ -320,7 +278,7 @@ internal static class KeepRequestDetailMapper
             MapActorType(e.ActorType),
             e.ActorAccountUserId,
             e.ActorDisplayName,
-            e.StatusAfter.HasValue ? MapStatus(e.StatusAfter.Value) : null,
+            e.StatusAfter.HasValue ? KeepRequestWireMappers.MapStatus(e.StatusAfter.Value) : null,
             e.MessageIntent.HasValue ? MapMessageIntent(e.MessageIntent.Value) : null,
             e.CommunicationChannel.HasValue ? MapCommunicationChannel(e.CommunicationChannel.Value) : null,
             isContact && e.ExternalContactDirection.HasValue
@@ -340,7 +298,7 @@ internal static class KeepRequestDetailMapper
             isParticipation ? e.ParticipationInternalNote : null,
             isPlannedFor ? e.PlannedForDate : null,
             isFollowUpOn ? e.FollowUpOnDate : null,
-            isFollowUpOn && e.FollowUpOnReason.HasValue ? MapFollowUpReason(e.FollowUpOnReason.Value) : null,
+            isFollowUpOn && e.FollowUpOnReason.HasValue ? KeepRequestWireMappers.MapFollowUpReason(e.FollowUpOnReason.Value) : null,
             isFeedbackReceived ? e.FeedbackWasResolved : null,
             e.RelatedEventId);
     }
@@ -364,41 +322,6 @@ internal static class KeepRequestDetailMapper
         KeepRequestSource.Other        => "other",
         null                           => null,
         _                              => throw new InvalidOperationException($"Unknown KeepRequestSource: {source}")
-    };
-
-    private static string MapAttentionLevel(AttentionLevel level) => level switch
-    {
-        AttentionLevel.None           => "none",
-        AttentionLevel.Waiting        => "waiting",
-        AttentionLevel.NeedsAttention => "needs_attention",
-        AttentionLevel.Overdue        => "overdue",
-        _ => throw new InvalidOperationException($"Unknown AttentionLevel: {level}")
-    };
-
-    private static string MapWaitingDirection(WaitingDirection direction) => direction switch
-    {
-        WaitingDirection.None     => "none",
-        WaitingDirection.Business => "business",
-        WaitingDirection.Customer => "customer",
-        _ => throw new InvalidOperationException($"Unknown WaitingDirection: {direction}")
-    };
-
-    private static string MapAttentionReason(AttentionReason reason) => reason switch
-    {
-        AttentionReason.CustomerMessage       => "customer_message",
-        AttentionReason.UpdateRequest         => "update_request",
-        AttentionReason.ScheduleChangeRequest => "schedule_change_request",
-        AttentionReason.ChangeOrCancelRequest => "change_or_cancel_request",
-        AttentionReason.Complaint             => "complaint",
-        AttentionReason.FirstResponseDue      => "first_response_due",
-        AttentionReason.UnresolvedFeedback    => "unresolved_feedback",
-        AttentionReason.CallRequested         => "call_requested",
-        AttentionReason.TimingChangeRequested => "timing_change_requested",
-        AttentionReason.CancellationRequested => "cancellation_requested",
-        // Never persisted (never assigned on KeepRequest) — reachable only via ComputeEffectiveAttention's
-        // case 2 (due/overdue Follow Up On). Kept in this exhaustive switch because the enum is shared.
-        AttentionReason.FollowUpDue           => "follow_up_due",
-        _ => throw new InvalidOperationException($"Unknown AttentionReason: {reason}")
     };
 
     /// <summary>
@@ -428,8 +351,8 @@ internal static class KeepRequestDetailMapper
         if (request.AttentionLevel != AttentionLevel.None && request.AttentionReason.HasValue)
         {
             return new EffectiveAttentionResult(
-                Level: MapAttentionLevel(request.AttentionLevel),
-                Reason: MapAttentionReason(request.AttentionReason.Value),
+                Level: KeepRequestWireMappers.MapAttentionLevel(request.AttentionLevel),
+                Reason: KeepRequestWireMappers.MapAttentionReason(request.AttentionReason.Value),
                 DueAtUtc: request.NextAttentionAtUtc,
                 DueOnDate: null,
                 GuidanceKey: MapPersistedAttentionGuidanceKey(request.AttentionReason.Value));
@@ -445,7 +368,7 @@ internal static class KeepRequestDetailMapper
             var isOverdue = request.FollowUpOnDate.Value < today;
             return new EffectiveAttentionResult(
                 Level: isOverdue ? "overdue" : "needs_attention",
-                Reason: MapAttentionReason(AttentionReason.FollowUpDue),
+                Reason: KeepRequestWireMappers.MapAttentionReason(AttentionReason.FollowUpDue),
                 DueAtUtc: null,
                 DueOnDate: request.FollowUpOnDate.Value,
                 GuidanceKey: "resolve_follow_up");
@@ -459,7 +382,7 @@ internal static class KeepRequestDetailMapper
         {
             return new EffectiveAttentionResult(
                 Level: "overdue",
-                Reason: MapAttentionReason(AttentionReason.FirstResponseDue),
+                Reason: KeepRequestWireMappers.MapAttentionReason(AttentionReason.FirstResponseDue),
                 DueAtUtc: request.FirstResponseDueAtUtc,
                 DueOnDate: null,
                 GuidanceKey: "log_external_contact");

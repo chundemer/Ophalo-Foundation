@@ -327,7 +327,7 @@ public sealed class ActualWorkFinancialReadApiService(
         var totals = ActualWorkFinancialProjection.ProjectVisit(row.Visit.Lines, NoResolutions).Totals;
         return new ActualWorkReviewQueueEntry(
             row.Visit.Id, row.Visit.RequestId, row.ReferenceCode, row.CustomerName,
-            KeepRequestDetailMapper.MapStatus(row.RequestStatus),
+            KeepRequestWireMappers.MapStatus(row.RequestStatus),
             row.Visit.SubmittedAtUtc!.Value, totals.HasIncompleteFinancialData, totals.IncompleteLineCount,
             totals.TotalSalesPrice, totals.TotalStandardExpectedDirectCost, totals.TotalMargin);
     }

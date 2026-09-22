@@ -773,9 +773,9 @@ public sealed class GetKeepRequestListService(
         var isFollowUpOverdue = isDueOrOverdueFollowUpOn && r.FollowUpOnDate!.Value < today;
 
         var attention = new KeepRequestAttentionInfo(
-            AttentionLevel: MapAttentionLevel(r.AttentionLevel),
-            WaitingDirection: MapWaitingDirection(r.WaitingDirection),
-            AttentionReason: r.AttentionReason.HasValue ? MapAttentionReason(r.AttentionReason.Value) : null,
+            AttentionLevel: KeepRequestWireMappers.MapAttentionLevel(r.AttentionLevel),
+            WaitingDirection: KeepRequestWireMappers.MapWaitingDirection(r.WaitingDirection),
+            AttentionReason: r.AttentionReason.HasValue ? KeepRequestWireMappers.MapAttentionReason(r.AttentionReason.Value) : null,
             PriorityBand: r.PriorityBand == PriorityBand.Priority ? "priority" : "standard",
             AttentionSinceUtc: r.AttentionSinceUtc,
             NextAttentionAtUtc: r.NextAttentionAtUtc,
@@ -855,7 +855,7 @@ public sealed class GetKeepRequestListService(
         return new KeepRequestSummary(
             Id: r.Id,
             ReferenceCode: r.ReferenceCode,
-            Status: MapStatus(r.Status),
+            Status: KeepRequestWireMappers.MapStatus(r.Status),
             CurrentStatusText: r.CurrentStatusText,
             CustomerName: r.CustomerName,
             CustomerPhone: r.CustomerPhone,
@@ -885,9 +885,9 @@ public sealed class GetKeepRequestListService(
             ReadyToClose: readyToClose,
             NeedsShare: r.NeedsShare,
             Source: MapSource(r.Source),
-            IntakeUrgency: MapIntakeUrgency(r.IntakeUrgency),
+            IntakeUrgency: KeepRequestWireMappers.MapIntakeUrgency(r.IntakeUrgency),
             BusinessPriority: MapBusinessPriority(r.BusinessPriority),
-            ContactPreference: MapContactPreference(r.ContactPreference),
+            ContactPreference: KeepRequestWireMappers.MapContactPreference(r.ContactPreference),
             ServiceAddressLine1: r.ServiceAddressLine1,
             ServiceAddressLine2: r.ServiceAddressLine2,
             ServiceCity: r.ServiceCity,
@@ -1161,7 +1161,7 @@ public sealed class GetKeepRequestListService(
 
         return new KeepRequestTimingInfo(
             FollowUpOnDate: r.FollowUpOnDate,
-            FollowUpOnReason: r.FollowUpReason.HasValue ? MapFollowUpReason(r.FollowUpReason.Value) : null,
+            FollowUpOnReason: r.FollowUpReason.HasValue ? KeepRequestWireMappers.MapFollowUpReason(r.FollowUpReason.Value) : null,
             FollowUpOnNote: r.FollowUpNote,
             FollowUpOnLabel: followUpOnLabel,
             HasFutureFollowUpOn: hasFutureFollowUpOn,
@@ -1287,17 +1287,6 @@ public sealed class GetKeepRequestListService(
             : $"Follow up {date.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture)}";
     }
 
-    private static string MapFollowUpReason(FollowUpReason reason) => reason switch
-    {
-        FollowUpReason.Weather                      => "weather",
-        FollowUpReason.Parts                        => "parts",
-        FollowUpReason.CustomerDelay                => "customer_delay",
-        FollowUpReason.BusinessOperatorAvailability => "business_operator_availability",
-        FollowUpReason.ThirdParty                   => "third_party",
-        FollowUpReason.Other                        => "other",
-        _ => throw new InvalidOperationException($"Unknown FollowUpReason: {reason}")
-    };
-
     private static string? MapSource(KeepRequestSource? source) => source switch
     {
         null                          => null,
@@ -1310,14 +1299,6 @@ public sealed class GetKeepRequestListService(
         KeepRequestSource.PublicIntake => "public_intake",
         KeepRequestSource.Other        => "other",
         _ => throw new InvalidOperationException($"Unknown KeepRequestSource: {source}")
-    };
-
-    private static string MapIntakeUrgency(IntakeUrgency urgency) => urgency switch
-    {
-        IntakeUrgency.Routine => "routine",
-        IntakeUrgency.Soon    => "soon",
-        IntakeUrgency.Urgent  => "urgent",
-        _ => throw new InvalidOperationException($"Unknown IntakeUrgency: {urgency}")
     };
 
     private static string? MapBusinessPriority(BusinessPriority? priority) => priority switch
@@ -1334,64 +1315,6 @@ public sealed class GetKeepRequestListService(
         r.BusinessPriority.HasValue
             ? r.BusinessPriority.Value == BusinessPriority.Urgent
             : r.IntakeUrgency == IntakeUrgency.Urgent;
-
-    private static string MapContactPreference(ContactPreference preference) => preference switch
-    {
-        ContactPreference.NoPreference => "no_preference",
-        ContactPreference.TextMessage  => "text_message",
-        ContactPreference.PhoneCall    => "phone_call",
-        ContactPreference.Email        => "email",
-        _ => throw new InvalidOperationException($"Unknown ContactPreference: {preference}")
-    };
-
-    private static string MapStatus(KeepRequestStatus status) => status switch
-    {
-        KeepRequestStatus.Received       => "received",
-        KeepRequestStatus.Scheduled      => "scheduled",
-        KeepRequestStatus.InProgress     => "in_progress",
-        KeepRequestStatus.PendingCustomer => "pending_customer",
-        KeepRequestStatus.Resolved       => "resolved",
-        KeepRequestStatus.Closed         => "closed",
-        KeepRequestStatus.Cancelled      => "cancelled",
-        KeepRequestStatus.Spam           => "spam",
-        KeepRequestStatus.Test           => "test",
-        _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {status}")
-    };
-
-    private static string MapAttentionLevel(AttentionLevel level) => level switch
-    {
-        AttentionLevel.None         => "none",
-        AttentionLevel.Waiting      => "waiting",
-        AttentionLevel.NeedsAttention => "needs_attention",
-        AttentionLevel.Overdue      => "overdue",
-        _ => throw new InvalidOperationException($"Unknown AttentionLevel: {level}")
-    };
-
-    private static string MapWaitingDirection(WaitingDirection direction) => direction switch
-    {
-        WaitingDirection.None     => "none",
-        WaitingDirection.Business => "business",
-        WaitingDirection.Customer => "customer",
-        _ => throw new InvalidOperationException($"Unknown WaitingDirection: {direction}")
-    };
-
-    private static string MapAttentionReason(AttentionReason reason) => reason switch
-    {
-        AttentionReason.CustomerMessage       => "customer_message",
-        AttentionReason.UpdateRequest         => "update_request",
-        AttentionReason.ScheduleChangeRequest => "schedule_change_request",
-        AttentionReason.ChangeOrCancelRequest => "change_or_cancel_request",
-        AttentionReason.Complaint             => "complaint",
-        AttentionReason.FirstResponseDue      => "first_response_due",
-        AttentionReason.UnresolvedFeedback    => "unresolved_feedback",
-        AttentionReason.CallRequested         => "call_requested",
-        AttentionReason.TimingChangeRequested => "timing_change_requested",
-        AttentionReason.CancellationRequested => "cancellation_requested",
-        // Never persisted on KeepRequest — only reachable via KeepRequestDetailMapper's detail-only
-        // EffectiveAttention derivation (ADR-489/ADR-490). Kept here because the enum is shared.
-        AttentionReason.FollowUpDue           => "follow_up_due",
-        _ => throw new InvalidOperationException($"Unknown AttentionReason: {reason}")
-    };
 
     private static string MapFeedbackReviewAgeBucket(FeedbackReviewAgeBucket bucket) => bucket switch
     {

@@ -103,7 +103,7 @@ public sealed class GetKeepRequestRelatedWorkService(
             .Select(r => new KeepRequestRelatedWorkItem(
                 r.RequestId,
                 r.ReferenceCode,
-                KeepRequestDetailMapper.MapStatus(r.Status),
+                KeepRequestWireMappers.MapStatus(r.Status),
                 r.LatestActivityAtUtc))
             .ToList();
 

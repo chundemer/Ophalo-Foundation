@@ -123,12 +123,12 @@ public sealed class GetAvailableKeepRequestsService(
                 RequestId:          r.RequestId,
                 ReferenceCode:      r.ReferenceCode,
                 CustomerName:       r.CustomerName,
-                Status:             MapStatus(r.Status),
+                Status:             KeepRequestWireMappers.MapStatus(r.Status),
                 CreatedAtUtc:       r.CreatedAtUtc,
                 AttentionSinceUtc:  r.AttentionSinceUtc,
                 NextAttentionAtUtc: r.NextAttentionAtUtc,
                 PriorityBand:       MapPriorityBand(r.PriorityBand),
-                AttentionLevel:     MapAttentionLevel(r.AttentionLevel),
+                AttentionLevel:     KeepRequestWireMappers.MapAttentionLevel(r.AttentionLevel),
                 DescriptionPreview: BuildDescriptionPreview(r.RawDescriptionPrefix, r.DescriptionWasTruncated),
                 Version:            r.Version,
                 CanSelfAssign:      canWrite,
@@ -177,32 +177,11 @@ public sealed class GetAvailableKeepRequestsService(
         return sb.ToString();
     }
 
-    private static string MapStatus(KeepRequestStatus status) => status switch
-    {
-        KeepRequestStatus.Received        => "received",
-        KeepRequestStatus.Scheduled       => "scheduled",
-        KeepRequestStatus.InProgress      => "in_progress",
-        KeepRequestStatus.PendingCustomer => "pending_customer",
-        KeepRequestStatus.Resolved        => "resolved",
-        KeepRequestStatus.Closed          => "closed",
-        KeepRequestStatus.Cancelled       => "cancelled",
-        _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {status}")
-    };
-
     private static string MapPriorityBand(PriorityBand band) => band switch
     {
         PriorityBand.Priority => "priority",
         PriorityBand.Standard => "standard",
         _ => throw new InvalidOperationException($"Unknown PriorityBand: {band}")
-    };
-
-    private static string MapAttentionLevel(AttentionLevel level) => level switch
-    {
-        AttentionLevel.None           => "none",
-        AttentionLevel.Waiting        => "waiting",
-        AttentionLevel.NeedsAttention => "needs_attention",
-        AttentionLevel.Overdue        => "overdue",
-        _ => throw new InvalidOperationException($"Unknown AttentionLevel: {level}")
     };
 }
 

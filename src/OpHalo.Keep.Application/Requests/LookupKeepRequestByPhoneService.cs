@@ -161,23 +161,9 @@ public sealed class LookupKeepRequestByPhoneService(
     private static PhoneLookupActiveRequest MapActiveRequest(KeepRequest r) =>
         new(r.Id,
             r.ReferenceCode,
-            MapStatus(r.Status),
+            KeepRequestWireMappers.MapStatus(r.Status),
             r.Description,
             r.LastBusinessActivityAt > r.LastCustomerActivityAt
                 ? r.LastBusinessActivityAt
                 : r.LastCustomerActivityAt ?? r.LastBusinessActivityAt ?? (DateTime?)r.CreatedAtUtc);
-
-    private static string MapStatus(KeepRequestStatus status) => status switch
-    {
-        KeepRequestStatus.Received        => "received",
-        KeepRequestStatus.Scheduled       => "scheduled",
-        KeepRequestStatus.InProgress      => "in_progress",
-        KeepRequestStatus.PendingCustomer => "pending_customer",
-        KeepRequestStatus.Resolved        => "resolved",
-        KeepRequestStatus.Closed          => "closed",
-        KeepRequestStatus.Cancelled       => "cancelled",
-        KeepRequestStatus.Spam            => "spam",
-        KeepRequestStatus.Test            => "test",
-        _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {status}")
-    };
 }

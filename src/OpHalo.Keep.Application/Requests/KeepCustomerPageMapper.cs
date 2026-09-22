@@ -49,7 +49,7 @@ internal static class KeepCustomerPageMapper
             ReferenceCode: context.ReferenceCode,
             IsExpired: false,
             NewRequestUrl: null,
-            Status: MapStatus(context.Status),
+            Status: KeepRequestWireMappers.MapStatus(context.Status),
             Description: context.Description,
             CurrentStatusText: context.CurrentStatusText,
             IsTerminal: context.IsTerminal,
@@ -70,6 +70,9 @@ internal static class KeepCustomerPageMapper
             IntakeUrgency: MapIntakeUrgency(context.IntakeUrgency),
             Origin: MapOrigin(context.Origin));
 
+    // Intentionally not KeepRequestWireMappers.MapIntakeUrgency (maintainability review item 2.2):
+    // this customer-facing surface hides Routine from the customer and returns null instead of
+    // throwing on an unmapped value — a deliberate divergence from the staff-facing mapping.
     private static string? MapIntakeUrgency(IntakeUrgency urgency) => urgency switch
     {
         IntakeUrgency.Urgent => "urgent",
@@ -82,20 +85,6 @@ internal static class KeepCustomerPageMapper
         KeepRequestOrigin.Customer => "customer",
         KeepRequestOrigin.Business => "business",
         _ => throw new InvalidOperationException($"Unknown KeepRequestOrigin: {origin}")
-    };
-
-    internal static string MapStatus(KeepRequestStatus status) => status switch
-    {
-        KeepRequestStatus.Received        => "received",
-        KeepRequestStatus.Scheduled       => "scheduled",
-        KeepRequestStatus.InProgress      => "in_progress",
-        KeepRequestStatus.PendingCustomer => "pending_customer",
-        KeepRequestStatus.Resolved        => "resolved",
-        KeepRequestStatus.Closed          => "closed",
-        KeepRequestStatus.Cancelled       => "cancelled",
-        KeepRequestStatus.Spam            => "spam",
-        KeepRequestStatus.Test            => "test",
-        _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {status}")
     };
 
     /// <summary>
