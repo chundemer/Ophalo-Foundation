@@ -61,6 +61,19 @@ describe("ActualWorkHistoryCard", () => {
     expect(container.querySelector("svg")).toBeInTheDocument();
   });
 
+  it("renders the submitted-visit timestamp in the account timezone, not the device timezone", () => {
+    const state: ActualWorkHistoryState = {
+      status: "loaded",
+      submittedVisits: [
+        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-08-29T02:00:00Z", visitNote: null, lines: [] },
+      ],
+    };
+    render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} timeZone="America/Los_Angeles" />);
+
+    // Aug 29 02:00 UTC is Aug 28, 7:00 PM in the account's Pacific business timezone.
+    expect(screen.getByText("Aug 28, 7:00 PM")).toBeInTheDocument();
+  });
+
   it("pluralizes the locked-count summary for multiple submitted visits", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",

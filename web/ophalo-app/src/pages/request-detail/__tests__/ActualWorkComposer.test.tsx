@@ -126,6 +126,18 @@ beforeEach(() => {
 });
 
 describe("ActualWorkComposer", () => {
+  it("renders the locked submitted-visit timestamp in the account timezone, not the device timezone", () => {
+    renderComposer({
+      submittedVisits: [
+        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-08-29T02:00:00Z", visitNote: null, lines: [] },
+      ],
+      timeZone: "America/Los_Angeles",
+    });
+
+    // Aug 29 02:00 UTC is Aug 28, 7:00 PM in the account's Pacific business timezone.
+    expect(screen.getByText(/Aug 28, 7:00 PM/)).toBeInTheDocument();
+  });
+
   it("shows the icon-only close control at isWide and calls onClose", async () => {
     const user = userEvent.setup();
     const { onClose } = renderComposer({ isWide: true });

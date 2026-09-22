@@ -19,6 +19,7 @@ import {
   ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE,
   type ActualWorkHandoffOutcome,
 } from "./useActualWorkCapture";
+import { formatInstantShort } from "../../lib/businessTime";
 
 /** Mirrors `useActualWorkCapture`'s `setDefaultPerformer` return contract (kept local — the hook
  * declares it inline). `set` unmounts this gate on the parent's refetch; the rest stay in place. */
@@ -82,6 +83,10 @@ interface ActualWorkComposerProps {
   onSubmitted: () => void;
   onDiscarded: () => void;
   submittedVisits?: ActualWorkSubmittedVisitEntry[];
+  // Maintainability review item 2.1 Group B: account business timezone for the locked
+  // submitted-visits section's timestamps, so they render in the account's zone rather than the
+  // viewer's device zone.
+  timeZone?: string | null;
   // 4c-i-c-2 (ADR-494 D2): the caller's own account-user id, used only to render "you" in the
   // performer caption when the Draft's persisted default is the current user and its display name
   // has not yet been resolved by the projection.
@@ -132,6 +137,7 @@ export function ActualWorkComposer({
   onSubmitted,
   onDiscarded,
   submittedVisits = [],
+  timeZone = null,
   currentAccountUserId,
   onSetDefaultPerformer,
   onSetVisitNote,
@@ -552,7 +558,7 @@ export function ActualWorkComposer({
         {/* Prior visits are an audit trail, not part of the visit currently being recorded. Keep
             them available in the Request Detail/modal path, but omit them from the dedicated
             recording workspace so their lines cannot be mistaken for draft duplicates. */}
-        {!inline && <SubmittedVisits visits={submittedVisits} />}
+        {!inline && <SubmittedVisits visits={submittedVisits} timeZone={timeZone} />}
        </div>
       </div>
 
@@ -650,9 +656,9 @@ export function ActualWorkComposer({
   );
 }
 
-function SubmittedVisits({ visits }: { visits: ActualWorkSubmittedVisitEntry[] }) {
+function SubmittedVisits({ visits, timeZone }: { visits: ActualWorkSubmittedVisitEntry[]; timeZone: string | null }) {
   if (visits.length === 0) return null;
-  return <section className="border-t border-[var(--ophalo-border)] pt-4"><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-bold uppercase tracking-wide text-[var(--ophalo-muted)]">Submitted visits (locked)</h3><span className="text-[11px] text-[var(--ophalo-muted)]">Read-only audit record</span></div><div className="space-y-2">{visits.map((visit, index) => <details key={visit.id} className="group rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]"><summary className={`flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)] ${FOCUS_RING}`}><span className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-[var(--ophalo-muted)]" />Visit #{visits.length - index} · {visit.submittedAtUtc ? new Date(visit.submittedAtUtc).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Submitted"}<span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px]">{visit.lines.length} item{visit.lines.length === 1 ? "" : "s"}</span></span><ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" /></summary><div className="border-t border-[var(--ophalo-border)] px-3 py-2 space-y-1">{visit.visitNote ? <p className="text-xs text-[var(--ophalo-muted)]"><span className="font-semibold text-[var(--ophalo-ink)]">Visit note:</span> {visit.visitNote}</p> : null}{visit.lines.map((line) => <p key={line.id} className="text-xs text-[var(--ophalo-muted)]">{line.displayNameSnapshot} — {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""} · Performed by {line.performerDisplayName ?? "Unknown performer"}</p>)}</div></details>)}</div></section>;
+  return <section className="border-t border-[var(--ophalo-border)] pt-4"><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-bold uppercase tracking-wide text-[var(--ophalo-muted)]">Submitted visits (locked)</h3><span className="text-[11px] text-[var(--ophalo-muted)]">Read-only audit record</span></div><div className="space-y-2">{visits.map((visit, index) => <details key={visit.id} className="group rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]"><summary className={`flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)] ${FOCUS_RING}`}><span className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-[var(--ophalo-muted)]" />Visit #{visits.length - index} · {visit.submittedAtUtc ? formatInstantShort(visit.submittedAtUtc, timeZone) : "Submitted"}<span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px]">{visit.lines.length} item{visit.lines.length === 1 ? "" : "s"}</span></span><ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" /></summary><div className="border-t border-[var(--ophalo-border)] px-3 py-2 space-y-1">{visit.visitNote ? <p className="text-xs text-[var(--ophalo-muted)]"><span className="font-semibold text-[var(--ophalo-ink)]">Visit note:</span> {visit.visitNote}</p> : null}{visit.lines.map((line) => <p key={line.id} className="text-xs text-[var(--ophalo-muted)]">{line.displayNameSnapshot} — {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""} · Performed by {line.performerDisplayName ?? "Unknown performer"}</p>)}</div></details>)}</div></section>;
 }
 
 /** Slice 4d: a field recorder hands their own unsubmitted Draft to a chosen office member. The

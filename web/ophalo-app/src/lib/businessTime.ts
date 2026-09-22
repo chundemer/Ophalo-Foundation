@@ -45,6 +45,25 @@ export function formatInstant(isoUtc: string, timeZone: string | null): string {
   return timeZone ? formatted : `${formatted} UTC`;
 }
 
+const INSTANT_SHORT_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+};
+
+/**
+ * Maintainability review item 2.1 Group B: the compact, no-year sibling of `formatInstant` for
+ * submitted-visit timestamps ("Aug 29, 5:56 PM") — a shorter form than a full audit timestamp
+ * warrants, but still account-zone-aware with the same explicit UTC fallback label rather than a
+ * silent device-local guess.
+ */
+export function formatInstantShort(isoUtc: string, timeZone: string | null): string {
+  const zone = timeZone ?? "UTC";
+  const formatted = new Intl.DateTimeFormat("en-US", { ...INSTANT_SHORT_FORMAT_OPTIONS, timeZone: zone }).format(new Date(isoUtc));
+  return timeZone ? formatted : `${formatted} UTC`;
+}
+
 /**
  * DEF-037: account-local date only (no hour/minute), same zone-aware pattern as `formatInstant`
  * above but for quiet row-metadata text (e.g. "No meaningful activity since Aug 13") where a

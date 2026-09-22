@@ -19,6 +19,7 @@ import { ActualWorkReviewCard } from "./request-detail/ActualWorkReviewCard";
 import { useActualWorkWorkspace } from "./request-detail/useActualWorkWorkspace";
 import { useActualWorkPendingReviews } from "./request-detail/useActualWorkPendingReviews";
 import { useBusinessTimeZone } from "../hooks/useBusinessTimeZone";
+import { formatInstantShort } from "../lib/businessTime";
 // The one Contact customer drawer (QR handoff, direction/channel/outcome, "Log contact") — the
 // same overlay Request Detail owns; the workspace route reuses it, never a workspace-specific UI.
 import { LogContactModal } from "./RequestDetail";
@@ -287,6 +288,7 @@ export function ActualWorkWorkspacePage({
               void history.retry();
             }}
             onDiscarded={onExit}
+            timeZone={businessTimeZone}
             currentAccountUserId={meQuery.data?.accountUserId}
             onSetDefaultPerformer={capture.setDefaultPerformer}
             onSetVisitNote={capture.setVisitNote}
@@ -334,6 +336,7 @@ export function ActualWorkWorkspacePage({
         {readOnlyVisit && (
           <ReadOnlyVisit
             visit={readOnlyVisit}
+            timeZone={businessTimeZone}
             officeRegion={
               canReviewActualWork && !readOnlyVisit.superseded ? (
                 <ActualWorkReviewCard
@@ -497,15 +500,19 @@ function WorkspaceNotice({ state, onExit }: { state: string; onExit: () => void 
 function ReadOnlyVisit({
   visit,
   officeRegion,
+  timeZone,
 }: {
   visit: NonNullable<ReturnType<ReturnType<typeof useActualWorkWorkspace>["submittedVisit"]>>;
   /** BL136 4f-ii: the capability-gated office region (reused `ActualWorkReviewCard`), rendered
    *  line-adjacent below the visit note. Null for a non-reviewer or a superseded source. */
   officeRegion?: ReactNode;
+  // Maintainability review item 2.1 Group B: account business timezone, same shared
+  // submitted-visit timestamp format as ActualWorkHistoryCard/ActualWorkComposer.
+  timeZone: string | null;
 }) {
   const submittedAt = useMemo(
-    () => (visit.submittedAtUtc ? new Date(visit.submittedAtUtc).toLocaleString() : null),
-    [visit.submittedAtUtc],
+    () => (visit.submittedAtUtc ? formatInstantShort(visit.submittedAtUtc, timeZone) : null),
+    [visit.submittedAtUtc, timeZone],
   );
   return (
     <>

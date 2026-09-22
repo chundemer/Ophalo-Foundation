@@ -4,10 +4,14 @@ import { KeepButton } from "../../components/keep/KeepButton";
 import { ResponsiveSheet } from "../../components/keep/ResponsiveSheet";
 import type { ActualWorkSubmittedVisitEntry } from "../../lib/apiClient";
 import { type ActualWorkHistoryState } from "./useActualWorkHistory";
+import { formatInstantShort } from "../../lib/businessTime";
 
 interface ActualWorkHistoryCardProps {
   state: ActualWorkHistoryState;
   onRetry: () => void;
+  // Maintainability review item 2.1 Group B: account business timezone for submitted-visit
+  // timestamps, so they render in the account's zone rather than the viewer's device zone.
+  timeZone?: string | null;
   // bare: no outer card chrome — used when a parent shares one enclosing Work Execution module
   // with ActualWorkCard (locked exception, 2026-08-22).
   bare?: boolean;
@@ -20,9 +24,9 @@ interface ActualWorkHistoryCardProps {
   presentation?: "full" | "summary";
 }
 
-function formatSubmittedAt(iso: string | null): string {
+function formatSubmittedAt(iso: string | null, timeZone: string | null): string {
   if (!iso) return "Submitted";
-  return new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return formatInstantShort(iso, timeZone);
 }
 
 /**
@@ -54,14 +58,16 @@ function LineageBadge({ visit }: { visit: ActualWorkSubmittedVisitEntry }) {
 function SubmittedVisitDetails({
   visit,
   onOpenVisit,
+  timeZone,
 }: {
   visit: ActualWorkSubmittedVisitEntry;
   onOpenVisit?: (visitId: string) => void;
+  timeZone: string | null;
 }) {
   return (
     <details className="group rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]">
       <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)]">
-        <span>{formatSubmittedAt(visit.submittedAtUtc)}</span>
+        <span>{formatSubmittedAt(visit.submittedAtUtc, timeZone)}</span>
         <span className="flex items-center gap-2">
           <LineageBadge visit={visit} />
           <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-[var(--ophalo-muted)]">
@@ -116,7 +122,7 @@ function SubmittedVisitDetails({
  * (no visibility) never blocks the rest of request-detail; a transport/other failure renders a
  * compact retry affordance instead of a generic error card.
  */
-export function ActualWorkHistoryCard({ state, onRetry, bare = false, onOpenVisit, presentation = "full" }: ActualWorkHistoryCardProps) {
+export function ActualWorkHistoryCard({ state, onRetry, bare = false, onOpenVisit, presentation = "full", timeZone = null }: ActualWorkHistoryCardProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   if (state.status === "loading" || state.status === "hidden") {
     return null;
@@ -157,7 +163,7 @@ export function ActualWorkHistoryCard({ state, onRetry, bare = false, onOpenVisi
             <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ophalo-muted)]" aria-hidden="true" />
           </div>
           <div className="mt-3 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-xs text-[var(--ophalo-muted)]">
-            <p className="font-medium text-[var(--ophalo-ink)]">Latest · {formatSubmittedAt(latestVisit.submittedAtUtc)}</p>
+            <p className="font-medium text-[var(--ophalo-ink)]">Latest · {formatSubmittedAt(latestVisit.submittedAtUtc, timeZone)}</p>
             <p className="mt-0.5">{latestVisit.lines.length} line{latestVisit.lines.length === 1 ? "" : "s"} · locked record</p>
           </div>
           <button type="button" onClick={() => setHistoryOpen(true)} className="mt-3 w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm font-semibold text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2">
@@ -173,7 +179,7 @@ export function ActualWorkHistoryCard({ state, onRetry, bare = false, onOpenVisi
           >
             <div className="space-y-3">
               {state.submittedVisits.map((visit) => (
-                <SubmittedVisitDetails key={visit.id} visit={visit} onOpenVisit={onOpenVisit} />
+                <SubmittedVisitDetails key={visit.id} visit={visit} onOpenVisit={onOpenVisit} timeZone={timeZone} />
               ))}
             </div>
           </ResponsiveSheet>
@@ -193,7 +199,7 @@ export function ActualWorkHistoryCard({ state, onRetry, bare = false, onOpenVisi
       </div>
       <div className="mt-3 space-y-2">
         {state.submittedVisits.map((visit) => (
-          <SubmittedVisitDetails key={visit.id} visit={visit} onOpenVisit={onOpenVisit} />
+          <SubmittedVisitDetails key={visit.id} visit={visit} onOpenVisit={onOpenVisit} timeZone={timeZone} />
         ))}
       </div>
     </div>

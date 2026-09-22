@@ -148,6 +148,7 @@ export function RequestDetailActualWorkSection({
               // workspace (where the Owner/Admin office region now lives); below 1001px the
               // review card renders inline on this page instead, so no per-visit link is offered.
               onOpenVisit={onOpenVisit}
+              timeZone={timeZone}
               bare
             />
           )}

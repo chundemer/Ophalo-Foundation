@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ActualWorkWorkspacePage } from "../ActualWorkWorkspacePage";
+import { api } from "../../lib/apiClient";
 
 // BL136 4f-i: dedicated Actual Work Ticket Workspace route shell + field region.
 
@@ -150,6 +151,21 @@ describe("ActualWorkWorkspacePage", () => {
     expect(screen.getByText("Dana Tech")).toBeInTheDocument();
     expect(screen.getByText("Checked the condenser")).toBeInTheDocument();
     expect(screen.queryByText("MOCK COMPOSER")).not.toBeInTheDocument();
+  });
+
+  it("renders the read-only submitted-visit timestamp in the account timezone, not the device timezone", async () => {
+    (api.getMe as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      accountUserId: "u1",
+      timeZone: "America/Los_Angeles",
+    });
+    workspace.submittedVisit.mockReturnValue({
+      id: "aw-42", status: "Submitted", outcome: null, completionNote: null, visitNote: null,
+      submittedAtUtc: "2026-08-29T02:00:00Z", lines: [],
+    });
+    renderPage({ visit: "aw-42" });
+
+    // Aug 29 02:00 UTC is Aug 28, 7:00 PM in the account's Pacific business timezone.
+    expect(await screen.findByText(/Aug 28, 7:00 PM/)).toBeInTheDocument();
   });
 
   it("focuses the heading on mount for the read-only view", async () => {

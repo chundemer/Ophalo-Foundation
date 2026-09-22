@@ -279,6 +279,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       onRetry={() => void actualWorkHistory.retry()}
       onOpenVisit={useWorkspaceRoute ? (visitId) => props.onNavigateToActualWorkspace!(requestId, visitId) : undefined}
       presentation="summary"
+      timeZone={props.timeZone}
     />
   );
 
@@ -425,6 +426,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           }}
           onDiscarded={actualWorkCapture.onDraftDiscarded}
           submittedVisits={actualWorkHistory.state.status === "loaded" ? actualWorkHistory.state.submittedVisits : []}
+          timeZone={props.timeZone}
           currentAccountUserId={props.currentAccountUserId}
           onSetDefaultPerformer={actualWorkCapture.setDefaultPerformer}
           onSetVisitNote={actualWorkCapture.setVisitNote}
