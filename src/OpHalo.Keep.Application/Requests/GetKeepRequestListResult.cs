@@ -24,7 +24,12 @@ public sealed record KeepRequestViewCounts(
     int Unassigned,
     int NeedsAttention,
     int FeedbackReview,
-    int ReadyToClose);
+    int ReadyToClose,
+    // DEF-037: optional/defaulted so every existing 7-arg positional construction (EF
+    // persistence, test fakes) keeps compiling unchanged; GetKeepRequestListService sets it
+    // explicitly via a `with` expression, computed by the same shared predicate the
+    // needs_status_check queue itself uses — the count cannot drift from queue membership.
+    int NeedsStatusCheck = 0);
 
 /// <summary>Describes the query mode in effect for the returned page (ADR-253).</summary>
 public sealed record KeepRequestListContext(

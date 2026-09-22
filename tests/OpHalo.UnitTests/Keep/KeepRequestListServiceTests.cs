@@ -913,7 +913,10 @@ public class KeepRequestListServiceTests
         var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "closed_history"));
         Assert.True(result.IsSuccess);
         Assert.NotNull(p.LastHistoryFilters);
-        Assert.Null(p.LastActiveFilters);
+        // DEF-037: GetActiveViewRequestsAsync is still called once, unconditionally, for the
+        // needs_status_check count (every view gets that count, like readyToClose/feedbackReview) —
+        // but never for an active-view row dispatch on a history view.
+        Assert.Equal(ActiveViewKind.NeedsStatusCheck, p.LastActiveViewKind);
     }
 
     [Fact]
@@ -2222,6 +2225,117 @@ public class KeepRequestListServiceTests
         Assert.Equal(KeepRequestVisibilityScope.MyWork, p.LastActiveScope);
     }
 
+    // --- Tab count (DEF-037) --------------------------------------------------------
+
+    [Fact]
+    public async Task NeedsStatusCheckCount_matches_actual_queue_row_count()
+    {
+        var dueRequest1 = MakeDueRequest(daysOld: 5);
+        var dueRequest2 = MakeDueRequest(daysOld: 10);
+        var notDueRequest = MakeDueRequest(daysOld: 2);
+        var p = HappyPathPersistence([dueRequest1, dueRequest2, notDueRequest]);
+
+        var countResult = await BuildSut(p).ExecuteAsync(new KeepRequestListQuery(View: "default"));
+        var listResult = await BuildSut(p).ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(countResult.IsSuccess);
+        Assert.True(listResult.IsSuccess);
+        Assert.Equal(2, listResult.Value.Requests.Count);
+        Assert.Equal(listResult.Value.Requests.Count, countResult.Value.ViewCounts!.NeedsStatusCheck);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheckCount_uses_account_local_timezone_not_utc()
+    {
+        // Same fixture as the row-level UTC-boundary-crossing regression: naive UTC would
+        // count this as due; the correct Sydney-local comparison must not.
+        var request = MakeRequestWithActivity(new DateTime(2026, 6, 10, 23, 30, 0, DateTimeKind.Utc));
+        var p = HappyPathPersistence([request]);
+        p.StatusCheckPolicyToReturn = new StatusCheckPolicySnapshot("Australia/Sydney", 5);
+
+        var result = await BuildSut(p).ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, result.Value.ViewCounts!.NeedsStatusCheck);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheckCount_unresolvable_timezone_falls_back_to_utc_as_local()
+    {
+        var request = MakeDueRequest(daysOld: 5);
+        var p = HappyPathPersistence([request]);
+        p.StatusCheckPolicyToReturn = new StatusCheckPolicySnapshot("Not/A_Real_Zone", 5);
+
+        var result = await BuildSut(p).ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value.ViewCounts!.NeedsStatusCheck);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheckCount_respects_configured_threshold_days()
+    {
+        var request = MakeDueRequest(daysOld: 7);
+        var p = HappyPathPersistence([request]);
+        p.StatusCheckPolicyToReturn = new StatusCheckPolicySnapshot("UTC", 10);
+
+        var result = await BuildSut(p).ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, result.Value.ViewCounts!.NeedsStatusCheck);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheckCount_uses_mywork_scope_for_operator()
+    {
+        var p = HappyPathPersistence(role: AccountUserRole.Operator);
+
+        await BuildSut(p).ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        // Two GetActiveViewRequestsAsync calls: the count's (ActiveViewKind.NeedsStatusCheck)
+        // and the "default" view's own row fetch. Scope is computed once per request and
+        // passed to both, so this proves the count uses the same MyWork scope as the queue —
+        // the row-exclusion guarantee itself is enforced at the persistence/SQL layer.
+        Assert.Equal(2, p.GetActiveViewRequestsCallCount);
+        Assert.Equal(KeepRequestVisibilityScope.MyWork, p.LastActiveScope);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheckCount_not_computed_when_user_not_permitted()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p, userPermitted: false);
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(0, p.GetActiveViewRequestsCallCount);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheckCount_not_computed_when_account_blocked()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p, posture: AccountAccessPosture.Blocked);
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(0, p.GetActiveViewRequestsCallCount);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheckCount_not_computed_when_feature_not_enabled()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p, featureEnabled: false);
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(0, p.GetActiveViewRequestsCallCount);
+    }
+
     // --- Follow Up On attention (ADR-439) -----------------------------------------
 
     [Fact]
@@ -2594,10 +2708,13 @@ public class KeepRequestListServiceTests
             Guid accountId, bool includeClosedUnresolvedFeedback, CancellationToken ct) =>
             Task.FromResult(RequestsToReturn);
 
+        public int GetActiveViewRequestsCallCount { get; private set; }
+
         public Task<IReadOnlyList<KeepRequest>> GetActiveViewRequestsAsync(
             Guid accountId, Guid currentAccountUserId, ActiveViewKind view,
             KeepRequestListFilters filters, KeepRequestVisibilityScope scope, CancellationToken ct)
         {
+            GetActiveViewRequestsCallCount++;
             LastActiveViewKind = view;
             LastActiveFilters = filters;
             LastActiveScope = scope;

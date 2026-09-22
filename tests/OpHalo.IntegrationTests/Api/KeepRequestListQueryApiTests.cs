@@ -606,6 +606,140 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.Equal("KeepRequest.RequestListContradictoryParameters", code);
     }
 
+    // --- needs_status_check tab count (DEF-037) -----------------------------------
+
+    [Fact]
+    public async Task NeedsStatusCheck_view_count_included_in_response()
+    {
+        var res = await GetAsync("/keep/requests");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = await res.Content.ReadFromJsonAsync<ListResponseBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(body?.ViewCounts);
+        Assert.True(body!.ViewCounts!.NeedsStatusCheck >= 0);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_count_matches_returned_queue_rows_in_the_same_response()
+    {
+        // The account's timezone is Australia/Sydney (InitializeAsync) and no KeepResponsePolicy
+        // row is seeded, so the effective threshold is the ADR-339 default of 5 days. Two rows
+        // are clearly overdue (35 days old); one is recent and must not count.
+        var now = DateTime.UtcNow;
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var accountId = (await db.Accounts.FirstAsync()).Id;
+            var customer = KeepCustomer.Create(accountId, "Status Check Customer", "0499000200");
+            db.Set<KeepCustomer>().Add(customer);
+            await db.SaveChangesAsync();
+
+            var seeded = new List<(KeepRequest Request, int DaysOld)>();
+            foreach (var (suffix, daysOld) in new[] { ("A", 35), ("B", 40), ("C", 1) })
+            {
+                var req = KeepRequest.CreateFromCustomerIntake(
+                    accountId, customer.Id, "Status Check Customer", "0499000200", null,
+                    $"Idle request {suffix}", $"NSC-{suffix}", $"nsc_token_{suffix}",
+                    now, firstResponseTargetMinutes: 60);
+                db.Set<KeepRequest>().Add(req);
+                db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(req.Id, accountId, now));
+                seeded.Add((req, daysOld));
+            }
+            await db.SaveChangesAsync();
+
+            // OpHaloDbContext.SaveChangesAsync stamps CreatedAtUtc = clock.UtcNow on insert
+            // (EntityState.Added), overriding whatever the domain factory was given — so the
+            // backdate has to be a second, Modified-state save (which only re-stamps
+            // UpdatedAtUtc), exactly like the Account.TimeZone override pattern used elsewhere
+            // in this suite.
+            foreach (var (req, daysOld) in seeded)
+            {
+                var old = now.AddDays(-daysOld);
+                db.Entry(req).Property(nameof(KeepRequest.CreatedAtUtc)).CurrentValue = old;
+                db.Entry(req).Property(nameof(KeepRequest.LastCustomerActivityAt)).CurrentValue = old;
+            }
+            await db.SaveChangesAsync();
+        }
+
+        // Single response: requests and viewCounts.needsStatusCheck are computed from the same
+        // nowUtc inside one request execution — the strongest available anti-drift proof.
+        var res = await GetAsync("/keep/requests?view=needs_status_check");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = await res.Content.ReadFromJsonAsync<ListResponseBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        Assert.NotNull(body);
+        Assert.Equal(2, body!.Requests.Count);
+        Assert.Equal(body.Requests.Count, body.ViewCounts!.NeedsStatusCheck);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_count_excludes_another_operators_work()
+    {
+        var now = DateTime.UtcNow;
+        Guid operatorAId, operatorBId, accountId;
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            accountId = (await db.Accounts.FirstAsync()).Id;
+
+            var operatorBEmail = "operator-b@4a-query-tests.com";
+            var operatorBUser = User.CreateVerified(operatorBEmail, "4A Operator B", now);
+            var operatorBMember = AccountUser.CreatePendingInvite(
+                accountId, operatorBEmail, EmailNormalizer.Normalize(operatorBEmail),
+                AccountUserRole.Operator,
+                inviteTokenHash: "operator_b_4a_query",
+                inviteExpiresAtUtc: now.AddDays(7),
+                nowUtc: now);
+            operatorBMember.Activate(operatorBUser.Id, now);
+            db.Users.Add(operatorBUser);
+            db.AccountUsers.Add(operatorBMember);
+            await db.SaveChangesAsync();
+
+            var customer = KeepCustomer.Create(accountId, "Operator Scope Customer", "0499000300");
+            db.Set<KeepCustomer>().Add(customer);
+            await db.SaveChangesAsync();
+
+            var req = KeepRequest.CreateFromCustomerIntake(
+                accountId, customer.Id, "Operator Scope Customer", "0499000300", null,
+                "Assigned to Operator A only", "NSC-OPA", "nsc_opa_token",
+                now, firstResponseTargetMinutes: 60);
+            db.Set<KeepRequest>().Add(req);
+            db.Set<KeepRequestEvent>().Add(
+                KeepRequestEvent.CreateRequestCreated(req.Id, accountId, now));
+            await db.SaveChangesAsync();
+
+            // CreatedAtUtc is stamped from the real clock on insert; backdate in a second,
+            // Modified-state save (see the drift-proof test above for why).
+            var old = now.AddDays(-35);
+            db.Entry(req).Property(nameof(KeepRequest.CreatedAtUtc)).CurrentValue = old;
+            db.Entry(req).Property(nameof(KeepRequest.LastCustomerActivityAt)).CurrentValue = old;
+            await db.SaveChangesAsync();
+
+            operatorAId = await db.AccountUsers
+                .Where(u => u.AccountId == accountId && u.Role == AccountUserRole.Operator
+                            && u.Id != operatorBMember.Id)
+                .Select(u => u.Id)
+                .FirstAsync();
+            operatorBId = operatorBMember.Id;
+
+            db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+                req.Id, accountId, operatorAId, ParticipationType.Responsible,
+                notificationsEnabled: true, now.AddDays(-35)));
+            await db.SaveChangesAsync();
+        }
+
+        var operatorBCookie = await _factory.SeedSessionAsync(operatorBId, accountId);
+
+        var aBody = await (await GetAsAsync("/keep/requests", _operatorCookie)).Content
+            .ReadFromJsonAsync<ListResponseBody>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        var bBody = await (await GetAsAsync("/keep/requests", operatorBCookie)).Content
+            .ReadFromJsonAsync<ListResponseBody>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        Assert.Equal(1, aBody!.ViewCounts!.NeedsStatusCheck);
+        Assert.Equal(0, bBody!.ViewCounts!.NeedsStatusCheck);
+    }
+
     // --- ready_to_close view (P6f-2) ----------------------------------------
 
     [Fact]
@@ -987,7 +1121,8 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         int Unassigned,
         int NeedsAttention,
         int FeedbackReview,
-        int ReadyToClose);
+        int ReadyToClose,
+        int NeedsStatusCheck = 0);
 
     private sealed record ListContextBody(
         string View,

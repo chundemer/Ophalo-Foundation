@@ -274,8 +274,27 @@ public sealed class GetKeepRequestListService(
 
         // --- Fetch data ---
         var nowUtc = clock.UtcNow;
+        // DEF-037: computed once and shared by the needs_status_check row filter, the
+        // needs_status_check count, and every row's StatusCheck metadata, so all three can
+        // never disagree about "today."
+        var statusCheckLocalToday = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTimeFromUtc(nowUtc, statusCheckTimeZone));
         var isOffSeason = accountSnapshot.OperatingMode == AccountOperatingMode.OffSeason;
         var currentAccountUserId = userSnapshot.AccountUserId;
+
+        // DEF-037: needs_status_check count, computed unconditionally (every view, not just
+        // when it's the active one — matches readyToClose/feedbackReview). Reuses the exact
+        // same SQL-narrowed candidate fetch and in-memory IsNeedsStatusCheckDue predicate the
+        // queue itself uses (with an all-default filter set, so an active search/status filter
+        // on another tab never narrows the badge), and the same role-derived `scope`, so an
+        // Operator's MyWork count can never include another operator's work. Fetched here,
+        // before the active view's own GetActiveViewRequestsAsync call below, so it never
+        // shadows that call's persistence-fake call tracking.
+        var needsStatusCheckCandidates = await persistence.GetActiveViewRequestsAsync(
+            currentUser.AccountId, currentAccountUserId, ActiveViewKind.NeedsStatusCheck,
+            new KeepRequestListFilters(), scope, ct);
+        var needsStatusCheckCount = needsStatusCheckCandidates.Count(r =>
+            IsNeedsStatusCheckDue(r, statusCheckLocalToday, statusCheckTimeZone, statusCheckPolicy.ThresholdDays));
 
         var canOperate = userAccessPolicy.IsPermitted(
             userSnapshot.Role,
@@ -365,7 +384,7 @@ public sealed class GetKeepRequestListService(
 
             page = historyPageEntities
                 .Select(r => ToSummary(r, role, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
-                    statusCheckTimeZone, statusCheckPolicy.ThresholdDays,
+                    statusCheckLocalToday, statusCheckTimeZone, statusCheckPolicy.ThresholdDays,
                     histParticipants.GetValueOrDefault(r.Id), normalizedView))
                 .ToList();
 
@@ -380,21 +399,13 @@ public sealed class GetKeepRequestListService(
                 currentUser.AccountId, currentAccountUserId, activeViewKind, filters, scope, ct);
 
             // NeedsStatusCheck: DB returns candidates; apply full eligibility + threshold-day
-            // due check in memory, using account-local calendar days (DEF-037).
+            // due check in memory, using account-local calendar days (DEF-037). Shares
+            // IsNeedsStatusCheckDue with the count below — one predicate, both call sites.
             if (isNeedsStatusCheck)
             {
-                var localToday = DateOnly.FromDateTime(
-                    TimeZoneInfo.ConvertTimeFromUtc(nowUtc, statusCheckTimeZone));
-                var threshold = localToday.AddDays(-statusCheckPolicy.ThresholdDays);
                 rawRequests = rawRequests
-                    .Where(r =>
-                    {
-                        var inputs = r.GetNeedsStatusCheckInputs(localToday);
-                        return inputs.IsEligible
-                            && inputs.LatestMeaningfulActivityAtUtc.HasValue
-                            && DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
-                                inputs.LatestMeaningfulActivityAtUtc.Value, statusCheckTimeZone)) <= threshold;
-                    })
+                    .Where(r => IsNeedsStatusCheckDue(
+                        r, statusCheckLocalToday, statusCheckTimeZone, statusCheckPolicy.ThresholdDays))
                     .ToList();
             }
 
@@ -428,7 +439,7 @@ public sealed class GetKeepRequestListService(
 
             var allSummaries = rawRequests
                 .Select(r => ToSummary(r, role, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
-                    statusCheckTimeZone, statusCheckPolicy.ThresholdDays,
+                    statusCheckLocalToday, statusCheckTimeZone, statusCheckPolicy.ThresholdDays,
                     participants.GetValueOrDefault(r.Id), normalizedView))
                 .Order(comparer)
                 .ToList();
@@ -471,8 +482,9 @@ public sealed class GetKeepRequestListService(
         var pageInfo = new KeepRequestPageInfo(Limit: limit, HasMore: hasMore, NextCursor: nextCursor);
 
         // --- View counts (ADR-241/259) ---
-        var viewCounts = await persistence.GetViewCountsAsync(
-            currentUser.AccountId, currentAccountUserId, isOwnerOrAdmin, scope, ct);
+        var viewCounts = (await persistence.GetViewCountsAsync(
+            currentUser.AccountId, currentAccountUserId, isOwnerOrAdmin, scope, ct))
+            with { NeedsStatusCheck = needsStatusCheckCount };
 
         var listContext = new KeepRequestListContext(
             View: normalizedView,
@@ -728,6 +740,7 @@ public sealed class GetKeepRequestListService(
         bool isOwnerOrAdmin,
         bool isOffSeason,
         DateTime nowUtc,
+        DateOnly statusCheckLocalToday,
         TimeZoneInfo statusCheckTimeZone,
         int statusCheckThresholdDays,
         KeepRequestParticipantSummary? participation,
@@ -836,7 +849,7 @@ public sealed class GetKeepRequestListService(
             : (DateTime?)null;
 
         var timing = BuildTimingInfo(r, nowUtc);
-        var statusCheck = BuildStatusCheckInfo(r, nowUtc, statusCheckTimeZone, statusCheckThresholdDays);
+        var statusCheck = BuildStatusCheckInfo(r, statusCheckLocalToday, statusCheckTimeZone, statusCheckThresholdDays);
         var readyToClose = BuildReadyToCloseInfo(r);
 
         return new KeepRequestSummary(
@@ -1157,13 +1170,29 @@ public sealed class GetKeepRequestListService(
             HasFuturePlannedFor: hasFuturePlannedFor);
     }
 
-    // DEF-037: threshold days are account-local calendar days. An unresolvable stored
-    // timezone falls back to UTC-as-local (the caller's TimeZoneId.TryResolve default).
-    private static KeepRequestStatusCheckInfo BuildStatusCheckInfo(
-        KeepRequest r, DateTime nowUtc, TimeZoneInfo statusCheckTimeZone, int statusCheckThresholdDays)
+    // DEF-037: the single source of truth for needs_status_check membership. Used by both the
+    // row filter and the tab count, so the two can never disagree — same account-local today,
+    // same timezone (with the same UTC-as-local fallback), same threshold.
+    private static bool IsNeedsStatusCheckDue(
+        KeepRequest r, DateOnly localToday, TimeZoneInfo statusCheckTimeZone, int statusCheckThresholdDays)
     {
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(nowUtc, statusCheckTimeZone));
-        var inputs = r.GetNeedsStatusCheckInputs(today);
+        var inputs = r.GetNeedsStatusCheckInputs(localToday);
+        return inputs.IsEligible
+            && inputs.LatestMeaningfulActivityAtUtc.HasValue
+            && DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                inputs.LatestMeaningfulActivityAtUtc.Value, statusCheckTimeZone))
+                <= localToday.AddDays(-statusCheckThresholdDays);
+    }
+
+    // DEF-037: threshold days are account-local calendar days. localToday is the single
+    // account-local "today" shared by the row filter, the count, and this row metadata (see
+    // statusCheckLocalToday at its computation site) — never recomputed per row. An
+    // unresolvable stored timezone falls back to UTC-as-local (the caller's
+    // TimeZoneId.TryResolve default).
+    private static KeepRequestStatusCheckInfo BuildStatusCheckInfo(
+        KeepRequest r, DateOnly localToday, TimeZoneInfo statusCheckTimeZone, int statusCheckThresholdDays)
+    {
+        var inputs = r.GetNeedsStatusCheckInputs(localToday);
 
         if (!inputs.IsEligible || !inputs.LatestMeaningfulActivityAtUtc.HasValue)
         {
@@ -1179,8 +1208,8 @@ public sealed class GetKeepRequestListService(
         var sinceDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(sinceUtc, statusCheckTimeZone));
         var dueDate = sinceDate.AddDays(statusCheckThresholdDays);
         var dueAtUtc = LocalMidnightToUtcSafe(dueDate, statusCheckTimeZone);
-        var ageDays = today.DayNumber - sinceDate.DayNumber;
-        var isDue = sinceDate <= today.AddDays(-statusCheckThresholdDays);
+        var ageDays = localToday.DayNumber - sinceDate.DayNumber;
+        var isDue = sinceDate <= localToday.AddDays(-statusCheckThresholdDays);
 
         return new KeepRequestStatusCheckInfo(
             IsDue: isDue,
