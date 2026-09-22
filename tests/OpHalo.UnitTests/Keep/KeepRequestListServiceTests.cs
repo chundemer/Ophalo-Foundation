@@ -51,6 +51,7 @@ public class KeepRequestListServiceTests
     {
         UserSnapshotToReturn = new AccountUserSnapshot(UserId, AccountId, role, MembershipStatus.Active),
         AccountSnapshotToReturn = ActiveSnapshot(),
+        StatusCheckPolicyToReturn = new StatusCheckPolicySnapshot("UTC", 5),
         RequestsToReturn = requests ?? []
     };
 
@@ -2101,6 +2102,115 @@ public class KeepRequestListServiceTests
         Assert.Equal("active_attention", sc.ExclusionReason);
     }
 
+    // Creates a request whose latest meaningful activity (CreatedAtUtc) is the given UTC instant.
+    private static KeepRequest MakeRequestWithActivity(DateTime activityAtUtc) =>
+        KeepRequest.CreateFromCustomerIntake(
+            AccountId, Guid.NewGuid(), "Bob", "555-0001", null, "Desc",
+            "REF", "tok_" + Guid.NewGuid().ToString("N"),
+            activityAtUtc, firstResponseTargetMinutes: 60);
+
+    [Fact]
+    public async Task NeedsStatusCheck_account_local_timezone_changes_due_calculation_at_utc_boundary()
+    {
+        // Now = 2026-06-15T10:00:00Z. Activity at 2026-06-10T23:30:00Z.
+        // Naive UTC comparison: sinceDate=06-10, today=06-15, diff=5 -> due at a 5-day threshold.
+        // Sydney (AEST +10, no June DST): sinceDate local=06-11 09:30, today local=06-15 20:00,
+        // diff=4 -> NOT due. Proves the calculation uses the account timezone, not UTC.
+        var request = MakeRequestWithActivity(new DateTime(2026, 6, 10, 23, 30, 0, DateTimeKind.Utc));
+        var p = HappyPathPersistence([request]);
+        p.StatusCheckPolicyToReturn = new StatusCheckPolicySnapshot("Australia/Sydney", 5);
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Requests);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_respects_configured_threshold_days()
+    {
+        // 7 days old with a configured 10-day threshold: not due.
+        var request = MakeDueRequest(daysOld: 7);
+        var p = HappyPathPersistence([request]);
+        p.StatusCheckPolicyToReturn = new StatusCheckPolicySnapshot("UTC", 10);
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Requests);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_unresolvable_timezone_falls_back_to_utc_as_local()
+    {
+        var request = MakeDueRequest(daysOld: 5);
+        var p = HappyPathPersistence([request]);
+        p.StatusCheckPolicyToReturn = new StatusCheckPolicySnapshot("Not/A_Real_Zone", 5);
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value.Requests);
+        Assert.True(result.Value.Requests[0].StatusCheck.IsDue);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_due_at_utc_reflects_account_local_midnight()
+    {
+        var request = MakeRequestWithActivity(new DateTime(2026, 6, 10, 23, 30, 0, DateTimeKind.Utc));
+        var p = HappyPathPersistence([request]);
+        p.StatusCheckPolicyToReturn = new StatusCheckPolicySnapshot("Australia/Sydney", 5);
+        var sut = BuildSut(p);
+
+        // Default view so the row appears with StatusCheck metadata regardless of due-ness.
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        var sc = result.Value.Requests[0].StatusCheck;
+        // sinceUtc converted to Sydney local is 2026-06-11 09:30; +5 local days -> 2026-06-16
+        // local midnight, converted back to UTC (AEST +10) is 2026-06-15T14:00:00Z.
+        Assert.Equal(new DateTime(2026, 6, 15, 14, 0, 0, DateTimeKind.Utc), sc.DueAtUtc);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_due_at_utc_advances_past_invalid_dst_local_midnight()
+    {
+        // America/Havana springs forward at exactly local midnight on 2026-03-08: 00:00-00:59
+        // is an invalid local time. sinceDate 2026-03-03 + 5 days = due date 2026-03-08.
+        // Must not throw; must land on the first valid local instant (01:00 -04:00 = 05:00Z).
+        var request = MakeRequestWithActivity(new DateTime(2026, 3, 3, 12, 0, 0, DateTimeKind.Utc));
+        var p = HappyPathPersistence([request]);
+        p.StatusCheckPolicyToReturn = new StatusCheckPolicySnapshot("America/Havana", 5);
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        var sc = result.Value.Requests[0].StatusCheck;
+        Assert.Equal(new DateTime(2026, 3, 8, 5, 0, 0, DateTimeKind.Utc), sc.DueAtUtc);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_due_at_utc_resolves_ambiguous_dst_local_midnight_to_earliest_instant()
+    {
+        // America/Havana falls back at exactly local midnight on 2026-11-01: 00:00-00:59 occurs
+        // twice (offsets -04:00 then -05:00). sinceDate 2026-10-27 + 5 days = due date 2026-11-01.
+        // Must resolve to the earlier of the two UTC instants (-04:00 offset => 04:00Z).
+        var request = MakeRequestWithActivity(new DateTime(2026, 10, 27, 12, 0, 0, DateTimeKind.Utc));
+        var p = HappyPathPersistence([request]);
+        p.StatusCheckPolicyToReturn = new StatusCheckPolicySnapshot("America/Havana", 5);
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        var sc = result.Value.Requests[0].StatusCheck;
+        Assert.Equal(new DateTime(2026, 11, 1, 4, 0, 0, DateTimeKind.Utc), sc.DueAtUtc);
+    }
+
     [Fact]
     public async Task NeedsStatusCheck_operator_scope_is_mywork()
     {
@@ -2459,6 +2569,7 @@ public class KeepRequestListServiceTests
     {
         public AccountUserSnapshot? UserSnapshotToReturn { get; set; }
         public AccountAccessSnapshot? AccountSnapshotToReturn { get; set; }
+        public StatusCheckPolicySnapshot StatusCheckPolicyToReturn { get; set; } = new("UTC", 5);
         public IReadOnlyList<KeepRequest> RequestsToReturn { get; set; } = [];
 
         // Tracking for test assertions.
@@ -2475,6 +2586,9 @@ public class KeepRequestListServiceTests
 
         public Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(Guid accountId, CancellationToken ct) =>
             Task.FromResult(AccountSnapshotToReturn);
+
+        public Task<StatusCheckPolicySnapshot> GetStatusCheckPolicyAsync(Guid accountId, CancellationToken ct) =>
+            Task.FromResult(StatusCheckPolicyToReturn);
 
         public Task<IReadOnlyList<KeepRequest>> GetDefaultListRequestsAsync(
             Guid accountId, bool includeClosedUnresolvedFeedback, CancellationToken ct) =>

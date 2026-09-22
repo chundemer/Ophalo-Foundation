@@ -16,6 +16,12 @@ public interface IKeepRequestListPersistence
     Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(Guid accountId, CancellationToken ct);
 
     /// <summary>
+    /// Returns the account's stored timezone and effective StatusCheckThresholdDays
+    /// (DEF-037), defaulting to 5 when no KeepResponsePolicy row exists (ADR-339).
+    /// </summary>
+    Task<StatusCheckPolicySnapshot> GetStatusCheckPolicyAsync(Guid accountId, CancellationToken ct);
+
+    /// <summary>
     /// Returns the bounded candidate set for the default command-center list (Session 4A path,
     /// kept for interface stability; service uses GetActiveViewRequestsAsync from 4B onwards).
     /// </summary>

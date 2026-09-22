@@ -52,6 +52,25 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
             entitlements.PastDueGraceEndsAtUtc);
     }
 
+    public async Task<StatusCheckPolicySnapshot> GetStatusCheckPolicyAsync(
+        Guid accountId, CancellationToken ct)
+    {
+        var account = await dbContext.Accounts
+            .AsNoTracking()
+            .FirstAsync(a => a.Id == accountId, ct);
+
+        var thresholdDays = await dbContext.Set<KeepResponsePolicy>()
+            .AsNoTracking()
+            .Where(p => p.AccountId == accountId)
+            .Select(p => (int?)p.StatusCheckThresholdDays)
+            .FirstOrDefaultAsync(ct);
+
+        // No policy row yet: ADR-339 default of 5 days (mirrors KeepSetupService's
+        // DefaultStatusCheckThresholdDays; not centralized in KeepResponsePolicyDefaults,
+        // which only covers the response-target minutes).
+        return new StatusCheckPolicySnapshot(account.TimeZone, thresholdDays ?? 5);
+    }
+
     // Retained for interface stability; service uses GetActiveViewRequestsAsync from Session 4B.
     public async Task<IReadOnlyList<KeepRequest>> GetDefaultListRequestsAsync(
         Guid accountId, bool includeClosedUnresolvedFeedback, CancellationToken ct) =>

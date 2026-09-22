@@ -10,6 +10,7 @@ using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
+using OpHalo.SharedKernel.Time;
 
 namespace OpHalo.Keep.Application.Requests;
 
@@ -31,8 +32,6 @@ public sealed class GetKeepRequestListService(
     private const int HistorySortSentinel = 0;
     private const int FeedbackReviewSortSentinel = 99;
     private const int NeedsStatusCheckSortSentinel = 98;
-
-    private const int NeedsStatusCheckThresholdDays = 5;
 
     private static readonly Error Unauthorized =
         Error.Create("auth.unauthorized", "Authentication required.");
@@ -158,6 +157,15 @@ public sealed class GetKeepRequestListService(
 
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))
             return Result<GetKeepRequestListResult>.Failure(Forbidden);
+
+        // DEF-037: needs-status-check threshold days are account-local calendar days. An
+        // unresolvable stored timezone falls back to UTC-as-local (TimeZoneId.TryResolve's
+        // default) rather than excluding the row or logging per read; the review queue must
+        // stay visible, and invalid timezones are prevented at the settings-write boundary.
+        // Read after the permission/account-access/feature gates so a forbidden request
+        // doesn't pay for the extra read.
+        var statusCheckPolicy = await persistence.GetStatusCheckPolicyAsync(currentUser.AccountId, ct);
+        TimeZoneId.TryResolve(statusCheckPolicy.TimeZoneId, out var statusCheckTimeZone);
 
         // --- Query validation pipeline (ADR-257/258) ---
         // Order: unknown view → date format → status slug → attentionReason slug →
@@ -357,6 +365,7 @@ public sealed class GetKeepRequestListService(
 
             page = historyPageEntities
                 .Select(r => ToSummary(r, role, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
+                    statusCheckTimeZone, statusCheckPolicy.ThresholdDays,
                     histParticipants.GetValueOrDefault(r.Id), normalizedView))
                 .ToList();
 
@@ -370,18 +379,21 @@ public sealed class GetKeepRequestListService(
             var rawRequests = await persistence.GetActiveViewRequestsAsync(
                 currentUser.AccountId, currentAccountUserId, activeViewKind, filters, scope, ct);
 
-            // NeedsStatusCheck: DB returns candidates; apply full eligibility + 5-day due check in memory.
+            // NeedsStatusCheck: DB returns candidates; apply full eligibility + threshold-day
+            // due check in memory, using account-local calendar days (DEF-037).
             if (isNeedsStatusCheck)
             {
-                var today = DateOnly.FromDateTime(nowUtc);
-                var threshold = today.AddDays(-NeedsStatusCheckThresholdDays);
+                var localToday = DateOnly.FromDateTime(
+                    TimeZoneInfo.ConvertTimeFromUtc(nowUtc, statusCheckTimeZone));
+                var threshold = localToday.AddDays(-statusCheckPolicy.ThresholdDays);
                 rawRequests = rawRequests
                     .Where(r =>
                     {
-                        var inputs = r.GetNeedsStatusCheckInputs(today);
+                        var inputs = r.GetNeedsStatusCheckInputs(localToday);
                         return inputs.IsEligible
                             && inputs.LatestMeaningfulActivityAtUtc.HasValue
-                            && DateOnly.FromDateTime(inputs.LatestMeaningfulActivityAtUtc.Value) <= threshold;
+                            && DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                                inputs.LatestMeaningfulActivityAtUtc.Value, statusCheckTimeZone)) <= threshold;
                     })
                     .ToList();
             }
@@ -416,6 +428,7 @@ public sealed class GetKeepRequestListService(
 
             var allSummaries = rawRequests
                 .Select(r => ToSummary(r, role, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
+                    statusCheckTimeZone, statusCheckPolicy.ThresholdDays,
                     participants.GetValueOrDefault(r.Id), normalizedView))
                 .Order(comparer)
                 .ToList();
@@ -715,6 +728,8 @@ public sealed class GetKeepRequestListService(
         bool isOwnerOrAdmin,
         bool isOffSeason,
         DateTime nowUtc,
+        TimeZoneInfo statusCheckTimeZone,
+        int statusCheckThresholdDays,
         KeepRequestParticipantSummary? participation,
         string normalizedView)
     {
@@ -821,7 +836,7 @@ public sealed class GetKeepRequestListService(
             : (DateTime?)null;
 
         var timing = BuildTimingInfo(r, nowUtc);
-        var statusCheck = BuildStatusCheckInfo(r, nowUtc);
+        var statusCheck = BuildStatusCheckInfo(r, nowUtc, statusCheckTimeZone, statusCheckThresholdDays);
         var readyToClose = BuildReadyToCloseInfo(r);
 
         return new KeepRequestSummary(
@@ -1142,9 +1157,12 @@ public sealed class GetKeepRequestListService(
             HasFuturePlannedFor: hasFuturePlannedFor);
     }
 
-    private static KeepRequestStatusCheckInfo BuildStatusCheckInfo(KeepRequest r, DateTime nowUtc)
+    // DEF-037: threshold days are account-local calendar days. An unresolvable stored
+    // timezone falls back to UTC-as-local (the caller's TimeZoneId.TryResolve default).
+    private static KeepRequestStatusCheckInfo BuildStatusCheckInfo(
+        KeepRequest r, DateTime nowUtc, TimeZoneInfo statusCheckTimeZone, int statusCheckThresholdDays)
     {
-        var today = DateOnly.FromDateTime(nowUtc);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(nowUtc, statusCheckTimeZone));
         var inputs = r.GetNeedsStatusCheckInputs(today);
 
         if (!inputs.IsEligible || !inputs.LatestMeaningfulActivityAtUtc.HasValue)
@@ -1158,11 +1176,11 @@ public sealed class GetKeepRequestListService(
         }
 
         var sinceUtc = inputs.LatestMeaningfulActivityAtUtc.Value;
-        var sinceDate = DateOnly.FromDateTime(sinceUtc);
-        var dueAtUtc = sinceDate.AddDays(NeedsStatusCheckThresholdDays)
-            .ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var sinceDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(sinceUtc, statusCheckTimeZone));
+        var dueDate = sinceDate.AddDays(statusCheckThresholdDays);
+        var dueAtUtc = LocalMidnightToUtcSafe(dueDate, statusCheckTimeZone);
         var ageDays = today.DayNumber - sinceDate.DayNumber;
-        var isDue = sinceDate <= today.AddDays(-NeedsStatusCheckThresholdDays);
+        var isDue = sinceDate <= today.AddDays(-statusCheckThresholdDays);
 
         return new KeepRequestStatusCheckInfo(
             IsDue: isDue,
@@ -1170,6 +1188,41 @@ public sealed class GetKeepRequestListService(
             DueAtUtc: dueAtUtc,
             AgeDays: ageDays,
             ExclusionReason: null);
+    }
+
+    /// <summary>
+    /// Converts a local calendar date's midnight to UTC, safe against the IANA zones that
+    /// transition exactly at local midnight (e.g. America/Havana). A normal midnight converts
+    /// directly. An invalid midnight (inside a spring-forward gap) advances to the first valid
+    /// instant on that local date. An ambiguous midnight (inside a fall-back overlap) resolves
+    /// to the earliest of its two possible UTC instants. DueAtUtc is informational for a
+    /// passive review queue, not a stamped deadline, so "advance to first valid" / "earliest
+    /// of the two" are reasonable, low-drama choices rather than a locked policy.
+    /// </summary>
+    private static DateTime LocalMidnightToUtcSafe(DateOnly localDate, TimeZoneInfo timeZone)
+    {
+        var midnight = DateTime.SpecifyKind(
+            localDate.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
+
+        if (timeZone.IsAmbiguousTime(midnight))
+        {
+            return timeZone.GetAmbiguousTimeOffsets(midnight)
+                .Select(offset => DateTime.SpecifyKind(midnight - offset, DateTimeKind.Utc))
+                .Min();
+        }
+
+        if (timeZone.IsInvalidTime(midnight))
+        {
+            // The spring-forward gap is bounded (well under a day); step forward in whole
+            // minutes to the first valid local instant on this date.
+            var candidate = midnight;
+            var boundary = midnight.AddDays(1);
+            while (candidate < boundary && timeZone.IsInvalidTime(candidate))
+                candidate = candidate.AddMinutes(1);
+            return TimeZoneInfo.ConvertTimeToUtc(candidate, timeZone);
+        }
+
+        return TimeZoneInfo.ConvertTimeToUtc(midnight, timeZone);
     }
 
     private static KeepRequestReadyToCloseInfo BuildReadyToCloseInfo(KeepRequest r)

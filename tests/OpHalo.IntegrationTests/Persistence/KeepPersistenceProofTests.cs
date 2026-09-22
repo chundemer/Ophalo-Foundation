@@ -1643,4 +1643,45 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
 
         Assert.DoesNotContain(requestId, counts);
     }
+
+    // -------------------------------------------------------------------------
+    // GetStatusCheckPolicyAsync (DEF-037)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetStatusCheckPolicyAsync_defaults_threshold_to_five_when_no_policy_row_exists()
+    {
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        var snapshot = await sut.GetStatusCheckPolicyAsync(SecondAccountId, CancellationToken.None);
+
+        Assert.Equal("UTC", snapshot.TimeZoneId);
+        Assert.Equal(5, snapshot.ThresholdDays);
+    }
+
+    [Fact]
+    public async Task GetStatusCheckPolicyAsync_reads_stored_timezone_and_configured_threshold()
+    {
+        await using (var seedCtx = CreateContext())
+        {
+            var account = await seedCtx.Accounts.FirstAsync(a => a.Id == AccountId);
+            seedCtx.Entry(account).Property(a => a.TimeZone).CurrentValue = "Australia/Sydney";
+            await seedCtx.SaveChangesAsync();
+
+            seedCtx.Set<KeepResponsePolicy>().Add(
+                KeepResponsePolicy.Create(AccountId, 60, 240, 60, statusCheckThresholdDays: 10));
+            await seedCtx.SaveChangesAsync();
+        }
+
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        var snapshot = await sut.GetStatusCheckPolicyAsync(AccountId, CancellationToken.None);
+
+        Assert.Equal("Australia/Sydney", snapshot.TimeZoneId);
+        Assert.Equal(10, snapshot.ThresholdDays);
+    }
 }

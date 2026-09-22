@@ -4,12 +4,13 @@
 scope, sequencing, gates, and deferrals. Locked decisions are in
 [decision-index](decisions/decision-index.md); completed-work evidence is in `docs/build-log/`.
 
-**Updated 2026-09-21.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
-GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, GAP-048, GAP-049, and GAP-092 are
-complete. GAP-100 is the active item (batches 1-4 done — see below). The canonical scope, order,
-gates, and deferrals are in the [workboard](workboard.md).
+**Updated 2026-09-22.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
+GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, GAP-048, GAP-049, GAP-092, and
+GAP-100 are complete. DEF-037 is the active item (server-correctness slice code-complete, awaiting
+review — see below). The canonical scope, order, gates, and deferrals are in the
+[workboard](workboard.md).
 
-## Start here — GAP-100
+## Start here — DEF-037
 
 GAP-100 (promoted from DEF-025 — office-hours-aware signals the current pilot requires). ADR-505
 is locked and indexed. Batches 1-4 are done and pushed (defaults reconciliation, shared timezone
@@ -31,6 +32,8 @@ voicemail promises out of GAP-100; its calendar-aware replacement is recorded as
 GAP-100 closed (2026-09-22): focused business-clock/writer tests, viewer-independence proof, and initial live Business Hours & Closures testing satisfy its acceptance gate. The Sentry capture-test isolation fix passed the full integration suite, 1,755/1,755 (2026-09-21). Next: DEF-037 discovery/preflight.
 
 DEF-037 coding handoff (locked 2026-09-22): Needs Status Check is a **quiet human-review queue**, never an automatic customer update, status change, resolution, close, notification, or staffed-hours SLA. Preserve ADR-339's account-policy `StatusCheckThresholdDays` (default 5 only when no policy exists) as **account-local calendar days**: convert both `nowUtc` and latest meaningful activity to the account timezone, compare their local `DateOnly` values, and express any returned due instant as the corresponding account-local midnight converted to UTC. Do not count staffed hours, skip weekends, or apply closures—the point is to surface stale work even while the business is closed. GAP-100 supplies the account timezone; it does not alter this quiet-review policy. Existing backend work is partial: `GET /keep/requests?view=needs_status_check`, eligibility/suppressors, row metadata, and the settings field already exist, but `GetKeepRequestListService` currently hard-codes five UTC days and ignores the persisted threshold. First preflight a bounded server-correctness slice (threshold + account-local date semantics, with focused tests); separately preflight PWA resurfacing, because no web request-view consumer currently uses `needs_status_check`. Preserve exclusions: non-active/Resolved/terminal rows, active attention, future Follow Up On, future Planned For; retain centralized latest-meaningful-activity inputs.
+
+Next: the server-correctness slice is **code-complete, awaiting review, uncommitted** (6 files: new `StatusCheckPolicySnapshot`, `IKeepRequestListPersistence`/`KeepRequestListPersistence`, `GetKeepRequestListService` (incl. a DST-safe local-midnight-to-UTC helper and a gate-ordering fix so forbidden requests skip the extra read), plus unit and Postgres integration tests; 2,097 unit, 17 architecture, 128 targeted list-API/persistence integration tests passing); details in the workboard. Then PWA resurfacing preflight, separately.
 
 ## Next several sessions
 
