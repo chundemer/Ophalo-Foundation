@@ -41,7 +41,7 @@ Backend count slice is **done (`302840c8`)** (4 files: `GetKeepRequestListResult
 
 Frontend badge-rendering slice is **done (`61e47430`)** (9 files: tab in Secondary Views for all three roles, authoritative count wiring, restrained row text gated on `isDue` not just `sinceUtc`, and a shared `accountLocalDate` helper extracted into `businessTime.ts`; `tsc --noEmit` clean, full suite 142 files / 1,321 tests passing); details in the workboard. **DEF-037 is complete.**
 
-DEF-037 is complete. Maintainability/refactor review item 2.1 (both groups) is **complete** (2026-09-22, `d62c92cf` + Group B): all five confirmed account-timezone display bugs are fixed — `RequestRow.tsx`, `TimelineEvent.tsx` (Group A), and `ActualWorkHistoryCard.tsx`, `ActualWorkComposer.tsx`, `ActualWorkWorkspacePage.tsx` (Group B, via a new no-year `formatInstantShort` helper); details in the workboard. Next: item 2.2 (shared enum-to-wire-string mappers), then address the remaining items one at a time in the workboard's order.
+DEF-037 is complete. Maintainability/refactor review item 2.1 (both groups) is **complete** (2026-09-22, `d62c92cf` + `3d28bc64`): all five confirmed account-timezone display bugs are fixed — `RequestRow.tsx`, `TimelineEvent.tsx` (Group A), and `ActualWorkHistoryCard.tsx`, `ActualWorkComposer.tsx`, `ActualWorkWorkspacePage.tsx` (Group B, via a new no-year `formatInstantShort` helper); details in the workboard. Next: item 2.2 (shared enum-to-wire-string mappers), then address the remaining items one at a time in the workboard's order.
 
 ## Next several sessions
 
