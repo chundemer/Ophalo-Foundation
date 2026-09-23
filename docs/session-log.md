@@ -53,7 +53,11 @@ Item 5 is **complete** (baseline `73138f6e`, split `4d4acf07`): `KeepEndpoints.c
 
 Item 6 (`RequestDetail.tsx` decomposition) is **complete** (`5cbb2075`): `RequestDetail.tsx` shrinks from 934 to 285 lines (page orchestration only — already properly decomposed, needed no further splitting); `LogContactModal.tsx`, `ServiceLocationModal.tsx`, and a newly-standalone `SmsHandoffQr.tsx` (mirroring the existing `CallHandoffQr` pattern) move to `request-detail/`; details in the workboard.
 
-Item 7 is **complete** (slice 1 `0550dddd`, slice 2 `4b817dc5`): `ActualWorkComposer.tsx` shrinks from 2,141 to 645 lines — dead `ActualWorkHandoffControl` deleted, and eight sub-components extracted across the two slices (`ActualWorkSearchAndAdd`, `ActualWorkDraftLine`, `SubmittedVisits`, `ActualWorkPerformerGate`, `ActualWorkVisitNoteField`, `ActualWorkPerformerSummary`+`ActualWorkPerformerCaption`, `ActualWorkSubmitFooter`); details in the workboard. Next: item 8 (API response-DTO question — routes to the Decision Queue as an ADR). Once that's resolved, the maintainability/refactor review is fully closed and the workboard's foundation-first order moves to DEF-063.
+Item 7 is **complete** (slice 1 `0550dddd`, slice 2 `4b817dc5`): `ActualWorkComposer.tsx` shrinks from 2,141 to 645 lines — dead `ActualWorkHandoffControl` deleted, and eight sub-components extracted across the two slices (`ActualWorkSearchAndAdd`, `ActualWorkDraftLine`, `SubmittedVisits`, `ActualWorkPerformerGate`, `ActualWorkVisitNoteField`, `ActualWorkPerformerSummary`+`ActualWorkPerformerCaption`, `ActualWorkSubmitFooter`); details in the workboard.
+
+Item 8 is **complete** (`34aa516d`): new `KeepRequestSerializationContractTests` locks the exact top-level JSON field set of `GET /keep/requests` and `GET /keep/requests/{requestId}` as an explicit whitelist (interim guard); the actual DTO-policy question (dedicated response DTOs vs. direct `Results.Ok(result.Value)`, ~42 sites) is routed to the Decision Queue as an ADR, not decided here; details in the workboard.
+
+**The maintainability/refactor review (items 1–8) is now fully worked through.** Next: DEF-063 — the Request Detail ready-to-close customer-activity warning, using the existing server/list-row `HasCustomerActivityAfterResolution` signal. See the workboard's foundation-first order.
 
 ## Next several sessions
 
