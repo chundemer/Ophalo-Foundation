@@ -7,31 +7,43 @@ using Xunit;
 namespace OpHalo.IntegrationTests.Api;
 
 /// <summary>
-/// Maintainability review item 5 preflight: a route-inventory baseline for
-/// <see cref="OpHalo.Api.Keep.KeepEndpoints"/>, captured BEFORE the route-family split so the
-/// split's "no behavior change" claim is provable rather than asserted. Locks every route this
-/// file registers (path pattern + HTTP verb), whether it requires authentication (every route in
-/// this file uses either the bare default <c>.RequireAuthorization()</c> policy or none — no named
-/// policies exist here, so "auth-policy" collapses to that boolean), and its rate-limit policy name
-/// where one is attached (<c>.RequireRateLimiting(...)</c>) — a silent drop of that during a
-/// mechanical file split would be a real behavior change (rate-limit bypass), not just a code-shape
-/// change, so it belongs in the same baseline even though the workboard's shorthand names only
-/// "route+verb+auth-policy".
+/// Maintainability review item 5: a route-inventory baseline originally captured for
+/// <c>KeepEndpoints.cs</c> before its route-family split, proving the split changed no route's
+/// path, verb, auth requirement, or rate-limit policy. Locks every route (path pattern + HTTP verb),
+/// whether it requires authentication (every route here uses either the bare default
+/// <c>.RequireAuthorization()</c> policy or none — no named policies exist, so "auth-policy"
+/// collapses to that boolean), and its rate-limit policy name where one is attached
+/// (<c>.RequireRateLimiting(...)</c>) — a silent drop of that during a mechanical file split would
+/// be a real behavior change (rate-limit bypass), not just a code-shape change, so it belongs in the
+/// same baseline even though the workboard's shorthand names only "route+verb+auth-policy".
 ///
-/// Scoped to endpoints whose handler delegate is declared on <c>KeepEndpoints</c> specifically
-/// (including its compiler-generated closure classes) — <c>KeepEndpoints.cs</c> shares the
-/// <c>/keep</c> path prefix with a dozen sibling files already split by family (PriceBookEndpoints,
+/// Scoped to endpoints whose handler delegate is declared on one of the five route-family classes
+/// <c>KeepEndpoints.cs</c> was split into (<see cref="OpHalo.Api.Keep.PublicIntakeEndpoints"/>,
+/// <see cref="OpHalo.Api.Keep.SetupEndpoints"/>, <see cref="OpHalo.Api.Keep.RequestEndpoints"/>,
+/// <see cref="OpHalo.Api.Keep.ActualWorkEndpoints"/>, <see cref="OpHalo.Api.Keep.CustomerPageEndpoints"/>),
+/// including their compiler-generated closure classes — these share the <c>/keep</c> path prefix
+/// with a dozen other sibling files already split by family (PriceBookEndpoints,
 /// OfferingAssemblyEndpoints, etc.); this test must not assert on their routes.
 ///
-/// After the family split, this test's expected table moves unchanged (only DeclaringType strings
-/// inside the filter may need updating if handlers move to differently-named classes) — if it still
-/// passes, the split changed no route's path, verb, auth requirement, or rate-limit policy.
+/// The expected table below is unchanged from the pre-split baseline (`73138f6e`) — the split
+/// (`KeepEndpoints.cs` deleted; routes redistributed across the five files named above, called
+/// individually from <c>Program.cs</c>) changed no route's path, verb, auth requirement, or
+/// rate-limit policy, which this test passing after the split proves.
 /// </summary>
 public sealed class KeepEndpointsRouteInventoryTests : IClassFixture<KeepApiWebFactory>
 {
     private readonly KeepApiWebFactory _factory;
 
     public KeepEndpointsRouteInventoryTests(KeepApiWebFactory factory) => _factory = factory;
+
+    private static readonly string[] KeepFamilyDeclaringTypePrefixes =
+    [
+        "OpHalo.Api.Keep.PublicIntakeEndpoints",
+        "OpHalo.Api.Keep.SetupEndpoints",
+        "OpHalo.Api.Keep.RequestEndpoints",
+        "OpHalo.Api.Keep.ActualWorkEndpoints",
+        "OpHalo.Api.Keep.CustomerPageEndpoints",
+    ];
 
     private static readonly (string Method, string Route, bool RequiresAuth, string? RateLimitPolicy)[] Expected =
     [
@@ -138,11 +150,12 @@ public sealed class KeepEndpointsRouteInventoryTests : IClassFixture<KeepApiWebF
                 if (endpoint is not RouteEndpoint routeEndpoint) continue;
 
                 var declaringType = routeEndpoint.Metadata.GetMetadata<System.Reflection.MethodInfo>()?.DeclaringType;
-                var isKeepEndpointsHandler = declaringType is not null
+                var isKeepFamilyHandler = declaringType is not null
                     && declaringType.FullName is not null
-                    && (declaringType.FullName == "OpHalo.Api.Keep.KeepEndpoints"
-                        || declaringType.FullName.StartsWith("OpHalo.Api.Keep.KeepEndpoints+", StringComparison.Ordinal));
-                if (!isKeepEndpointsHandler) continue;
+                    && KeepFamilyDeclaringTypePrefixes.Any(prefix =>
+                        declaringType.FullName == prefix
+                        || declaringType.FullName.StartsWith(prefix + "+", StringComparison.Ordinal));
+                if (!isKeepFamilyHandler) continue;
 
                 var httpMethods = routeEndpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods
                     ?? throw new InvalidOperationException($"Route {routeEndpoint.RoutePattern.RawText} has no HTTP method metadata.");

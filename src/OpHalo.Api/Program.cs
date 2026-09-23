@@ -468,7 +468,13 @@ if (app.Environment.IsEnvironment("Testing"))
 }
 
 // --- Routes ---
-app.MapKeepEndpoints();
+// KeepEndpoints.cs was split by route family (maintainability review item 5): PublicIntake, Setup,
+// Request, ActualWork, CustomerPage.
+app.MapPublicIntakeEndpoints();
+app.MapSetupEndpoints();
+app.MapRequestEndpoints();
+app.MapActualWorkEndpoints();
+app.MapCustomerPageEndpoints();
 app.MapPriceBookEndpoints();
 app.MapOfferingAssemblyEndpoints();
 app.MapProposedScopeEndpoints();
