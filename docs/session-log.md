@@ -53,7 +53,7 @@ Item 5 is **complete** (baseline `73138f6e`, split `4d4acf07`): `KeepEndpoints.c
 
 Item 6 (`RequestDetail.tsx` decomposition) is **complete** (`5cbb2075`): `RequestDetail.tsx` shrinks from 934 to 285 lines (page orchestration only — already properly decomposed, needed no further splitting); `LogContactModal.tsx`, `ServiceLocationModal.tsx`, and a newly-standalone `SmsHandoffQr.tsx` (mirroring the existing `CallHandoffQr` pattern) move to `request-detail/`; details in the workboard.
 
-Item 7 slice 1 is **done** (`0550dddd`): `ActualWorkComposer.tsx` shrinks from 2,141 to 1,083 lines — dead `ActualWorkHandoffControl` deleted, `ActualWorkSearchAndAdd.tsx` and `ActualWorkDraftLine.tsx` extracted; details in the workboard. Next: item 7 slice 2 (remaining `ActualWorkComposer.tsx` pieces) or item 8 (API response-DTO question — routes to the Decision Queue as an ADR).
+Item 7 is **complete** (slice 1 `0550dddd`, slice 2 `4b817dc5`): `ActualWorkComposer.tsx` shrinks from 2,141 to 645 lines — dead `ActualWorkHandoffControl` deleted, and eight sub-components extracted across the two slices (`ActualWorkSearchAndAdd`, `ActualWorkDraftLine`, `SubmittedVisits`, `ActualWorkPerformerGate`, `ActualWorkVisitNoteField`, `ActualWorkPerformerSummary`+`ActualWorkPerformerCaption`, `ActualWorkSubmitFooter`); details in the workboard. Next: item 8 (API response-DTO question — routes to the Decision Queue as an ADR). Once that's resolved, the maintainability/refactor review is fully closed and the workboard's foundation-first order moves to DEF-063.
 
 ## Next several sessions
 
