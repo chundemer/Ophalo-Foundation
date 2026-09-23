@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CallHandoffQr } from "../CallHandoffQr";
-import { LogContactModal } from "../../RequestDetail";
+import { LogContactModal } from "../LogContactModal";
 import { mockRequestDetails } from "../../../mocks/fixtures";
 
 // GAP-020 / ADR-448: the desktop call QR must always encode the opaque handoffUrl minted from

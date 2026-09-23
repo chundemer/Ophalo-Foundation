@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ServiceLocationModal } from "../../RequestDetail";
+import { ServiceLocationModal } from "../ServiceLocationModal";
 import { mockRequestDetails } from "../../../mocks/fixtures";
 
 const mockUpdateServiceLocation = vi.fn();

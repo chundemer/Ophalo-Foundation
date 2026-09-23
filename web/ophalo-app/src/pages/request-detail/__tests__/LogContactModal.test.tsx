@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { LogContactModal } from "../../RequestDetail";
+import { LogContactModal } from "../LogContactModal";
 import { mockRequestDetails } from "../../../mocks/fixtures";
 
 const mockLogExternalContact = vi.fn();

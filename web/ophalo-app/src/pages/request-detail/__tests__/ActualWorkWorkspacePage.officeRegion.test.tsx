@@ -109,7 +109,7 @@ vi.mock("../ActualWorkComposer", () => ({
 }));
 // The shared Contact customer drawer is exercised by its own suite; here we only assert the
 // workspace opens the real component with the right initial channel.
-vi.mock("../../RequestDetail", () => ({
+vi.mock("../LogContactModal", () => ({
   LogContactModal: ({ initialChannel, initialDirection }: Record<string, string>) => (
     <div>
       CONTACT DRAWER {initialDirection}/{initialChannel}

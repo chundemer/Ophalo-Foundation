@@ -22,7 +22,7 @@ import { useBusinessTimeZone } from "../hooks/useBusinessTimeZone";
 import { formatInstantShort } from "../lib/businessTime";
 // The one Contact customer drawer (QR handoff, direction/channel/outcome, "Log contact") — the
 // same overlay Request Detail owns; the workspace route reuses it, never a workspace-specific UI.
-import { LogContactModal } from "./RequestDetail";
+import { LogContactModal } from "./request-detail/LogContactModal";
 
 // Same 1001px protected-workspace minimum RequestWorkbenchShell measures (build-log 133 §13).
 const WIDE_QUERY = "(min-width: 1001px)";

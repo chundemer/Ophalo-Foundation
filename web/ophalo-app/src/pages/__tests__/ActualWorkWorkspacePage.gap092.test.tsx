@@ -62,7 +62,7 @@ const workspace = {
 
 vi.mock("../request-detail/useActualWorkWorkspace", () => ({ useActualWorkWorkspace: () => workspace }));
 vi.mock("../request-detail/ActualWorkComposer", () => ({ ActualWorkComposer: () => <div>MOCK COMPOSER</div> }));
-vi.mock("../RequestDetail", () => ({ LogContactModal: () => <div>CONTACT DRAWER</div> }));
+vi.mock("../request-detail/LogContactModal", () => ({ LogContactModal: () => <div>CONTACT DRAWER</div> }));
 
 let capturedFinancialWorkspaceTimeZone: string | null | undefined = "not-called";
 vi.mock("../request-detail/ActualWorkFinancialReviewWorkspace", () => ({
