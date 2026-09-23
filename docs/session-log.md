@@ -49,7 +49,7 @@ Item 2.3 (staffed-hours reachability validation scaffolding) is **complete** (`4
 
 Item 4 (`GetKeepRequestListService` ranking/severity/quick-action extraction) is **complete** (`065fe82f`): new `KeepRequestRankingAndActionsBuilder` (Application/Requests, same static-collaborator shape as item 2.2) holds `ComputeRankingGroup`, `ComputeSeverity`, `BuildQuickActions`, and `BuildContactActions`; `ComputeRowContext` stays on the service (out of this item's named scope); 34 new direct unit tests added alongside the existing 200 indirect tests; details in the workboard.
 
-Item 5's route-inventory baseline is **done** (`73138f6e`): new `KeepEndpointsRouteInventoryTests` locks all 86 `KeepEndpoints.cs` routes (path, verb, auth requirement, rate-limit policy) against the live app, scoped to exclude the dozen sibling files that already share the `/keep` prefix; details in the workboard. The route-family split itself is deferred to its own session against this locked baseline. Next: either that split, or continue with items 6–8 in the workboard's order.
+Item 5 is **complete** (baseline `73138f6e`, split `4d4acf07`): `KeepEndpoints.cs` (1,568 lines, 86 routes) is deleted, routes redistributed across five family files (`PublicIntakeEndpoints`, `SetupEndpoints`, `RequestEndpoints`, `ActualWorkEndpoints`, `CustomerPageEndpoints`), each called individually from `Program.cs`; the locked route-inventory test's expected table is unchanged and passed unmodified against the split app, proving no route's path/verb/auth/rate-limit changed; details in the workboard. Next: items 6–8 in the workboard's order (item 6, `RequestDetail.tsx` decomposition).
 
 ## Next several sessions
 
