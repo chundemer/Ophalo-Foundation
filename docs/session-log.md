@@ -51,7 +51,9 @@ Item 4 (`GetKeepRequestListService` ranking/severity/quick-action extraction) is
 
 Item 5 is **complete** (baseline `73138f6e`, split `4d4acf07`): `KeepEndpoints.cs` (1,568 lines, 86 routes) is deleted, routes redistributed across five family files (`PublicIntakeEndpoints`, `SetupEndpoints`, `RequestEndpoints`, `ActualWorkEndpoints`, `CustomerPageEndpoints`), each called individually from `Program.cs`; the locked route-inventory test's expected table is unchanged and passed unmodified against the split app, proving no route's path/verb/auth/rate-limit changed; details in the workboard.
 
-Item 6 (`RequestDetail.tsx` decomposition) is **complete** (`5cbb2075`): `RequestDetail.tsx` shrinks from 934 to 285 lines (page orchestration only — already properly decomposed, needed no further splitting); `LogContactModal.tsx`, `ServiceLocationModal.tsx`, and a newly-standalone `SmsHandoffQr.tsx` (mirroring the existing `CallHandoffQr` pattern) move to `request-detail/`; details in the workboard. Next: item 7 (`ActualWorkComposer.tsx`, already a separately-decided slice) or item 8 (API response-DTO question — routes to the Decision Queue as an ADR).
+Item 6 (`RequestDetail.tsx` decomposition) is **complete** (`5cbb2075`): `RequestDetail.tsx` shrinks from 934 to 285 lines (page orchestration only — already properly decomposed, needed no further splitting); `LogContactModal.tsx`, `ServiceLocationModal.tsx`, and a newly-standalone `SmsHandoffQr.tsx` (mirroring the existing `CallHandoffQr` pattern) move to `request-detail/`; details in the workboard.
+
+Item 7 slice 1 is **done** (`0550dddd`): `ActualWorkComposer.tsx` shrinks from 2,141 to 1,083 lines — dead `ActualWorkHandoffControl` deleted, `ActualWorkSearchAndAdd.tsx` and `ActualWorkDraftLine.tsx` extracted; details in the workboard. Next: item 7 slice 2 (remaining `ActualWorkComposer.tsx` pieces) or item 8 (API response-DTO question — routes to the Decision Queue as an ADR).
 
 ## Next several sessions
 
