@@ -375,6 +375,68 @@ public sealed class EfKeepResponsePolicyPersistenceTests : IClassFixture<KeepApi
         Assert.Equal(ResponseTimingBasis.StaffedHours, policy.PriorityResponseTimingBasis);
     }
 
+    // Maintainability review item 2.3: the three tests below each lock in the shared
+    // ValidateStaffedHoursReachability helper's per-path error code, so an extraction that merges
+    // scaffolding cannot accidentally collapse a distinct code into another path's.
+
+    [Fact]
+    public async Task UpdatePolicyTargetsAsync_rejects_staffed_hours_with_no_weekly_interval()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("policy-no-interval");
+
+        var result = await WritePolicyAsync(accountId, ownerId, 60, 240, 60, 5,
+            ResponseTimingBasis.StaffedHours, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous,
+            await CurrentSettingsVersionAsync(_factory, accountId));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(KeepResponsePolicyErrors.StaffedTimingRequiresWeeklyInterval, result.Error);
+    }
+
+    [Fact]
+    public async Task UpdateCalendarAsync_rejects_removing_the_last_weekly_interval_while_staffed_hours_is_active()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("calendar-no-interval");
+        await SeedWeeklyIntervalAsync(accountId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(17, 0));
+        Assert.True((await WritePolicyAsync(accountId, ownerId, 60, 240, 60, 5,
+            ResponseTimingBasis.StaffedHours, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous,
+            await CurrentSettingsVersionAsync(_factory, accountId))).IsSuccess);
+
+        // Removing the only weekly interval while First Response is still staffed-hours-based.
+        var result = await WriteCalendarAsync(accountId, ownerId, [], [], [],
+            await CurrentSettingsVersionAsync(_factory, accountId));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(KeepResponsePolicyErrors.LastWeeklyIntervalRequired, result.Error);
+    }
+
+    [Fact]
+    public async Task UpdateTimeZoneAsync_rejects_a_zone_change_with_staffed_hours_and_no_weekly_interval()
+    {
+        var (accountId, ownerId) = await SeedAccountAsync("tz-no-interval");
+
+        // Force First Response into StaffedHours directly (bypassing UpdatePolicyTargetsAsync's
+        // own structural gate, same pattern as the unreachable test below) with zero weekly
+        // intervals ever seeded — isolates UpdateTimeZoneAsync's own reachability re-preflight.
+        await using (var mutateScope = _factory.CreateScope())
+        {
+            var db = mutateScope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var policy = KeepResponsePolicy.Create(accountId, 60, 240, 60, 5);
+            policy.UpdateTargetsAndTimingBasis(
+                60, 240, 60, 5,
+                ResponseTimingBasis.StaffedHours, ResponseTimingBasis.Continuous, ResponseTimingBasis.Continuous);
+            db.Set<KeepResponsePolicy>().Add(policy);
+            await db.SaveChangesAsync();
+        }
+
+        await using var scope = _factory.CreateScope();
+        var persistence = scope.ServiceProvider.GetRequiredService<IKeepResponsePolicyPersistence>();
+        var result = await persistence.UpdateTimeZoneAsync(
+            accountId, ownerId, "Owner", "America/New_York", DateTime.UtcNow, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(KeepResponsePolicyErrors.StaffedTimingRequiresWeeklyInterval, result.Error);
+    }
+
     [Fact]
     public async Task UpdateTimeZoneAsync_blocks_the_change_when_a_staffed_target_becomes_unreachable()
     {

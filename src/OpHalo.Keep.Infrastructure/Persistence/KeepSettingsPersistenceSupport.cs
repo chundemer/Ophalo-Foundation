@@ -39,6 +39,45 @@ internal static class KeepSettingsPersistenceSupport
                 closures.ToList()));
 
     /// <summary>
+    /// Maintainability review item 2.3: the shared staffed-hours-reachability preflight used by
+    /// every settings-mutation path that can leave a staffed-hours response target unreachable —
+    /// <see cref="EfKeepResponsePolicyPersistence"/>'s policy save and calendar save, and this
+    /// class's own <see cref="StageTimeZoneChangeAsync"/>. A caller with no staffed targets always
+    /// succeeds trivially. <paramref name="noWeeklyIntervalError"/> lets each caller keep its own
+    /// distinct code for the "you need at least one weekly interval" case — policy save and
+    /// calendar save intentionally return different codes for it
+    /// (<see cref="KeepResponsePolicyErrors.StaffedTimingRequiresWeeklyInterval"/> vs.
+    /// <see cref="KeepResponsePolicyErrors.LastWeeklyIntervalRequired"/>), which this
+    /// parameterization preserves rather than collapses. The five-year-unreachable case always
+    /// returns <see cref="KeepResponsePolicyErrors.StaffedHoursTargetUnreachable"/> regardless of
+    /// caller, since every path already agreed on that one.
+    /// </summary>
+    public static Result ValidateStaffedHoursReachability(
+        IReadOnlyList<int> staffedTargets,
+        IReadOnlyCollection<(DayOfWeek Weekday, TimeOnly OpensAt, TimeOnly ClosesAt)> weeklyIntervals,
+        IReadOnlyCollection<DateOnly> closureDates,
+        DateTime occurredAtUtc,
+        TimeZoneInfo timeZone,
+        Error noWeeklyIntervalError)
+    {
+        if (staffedTargets.Count == 0)
+            return Result.Success();
+
+        if (weeklyIntervals.Count == 0)
+            return Result.Failure(noWeeklyIntervalError);
+
+        var fromLocalDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(occurredAtUtc, timeZone));
+
+        foreach (var minutes in staffedTargets)
+        {
+            if (!StaffedHoursReachability.IsReachable(weeklyIntervals, closureDates, minutes, fromLocalDate, timeZone))
+                return Result.Failure(KeepResponsePolicyErrors.StaffedHoursTargetUnreachable);
+        }
+
+        return Result.Success();
+    }
+
+    /// <summary>
     /// Stages a timezone change on <paramref name="account"/> (already tracked by
     /// <paramref name="dbContext"/>) and its settings-audit row, WITHOUT opening or committing a
     /// transaction — the caller owns that, so this can be composed with other already-staged
@@ -90,14 +129,23 @@ internal static class KeepSettingsPersistenceSupport
                 .Select(c => c.ClosureDate)
                 .ToListAsync(ct);
 
-            var fromLocalDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(occurredAtUtc, newTimeZone));
-            var intervalTuples = weeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)).ToList();
-
-            foreach (var minutes in staffedTargets)
-            {
-                if (!StaffedHoursReachability.IsReachable(intervalTuples, closureDates, minutes, fromLocalDate, newTimeZone))
-                    return Result.Failure(KeepResponsePolicyErrors.StaffedHoursTargetUnreachable);
-            }
+            // Maintainability review item 2.3: previously this path had no zero-weekly-interval
+            // fast-fail at all — it fell straight through to IsReachable, which does return false
+            // for an empty calendar (so the account was never left silently able to keep staffed
+            // hours with no interval), but surfaced the generic "unreachable" error instead of the
+            // specific "you need a weekly interval" one every other settings path already gives.
+            // Reuses StaffedTimingRequiresWeeklyInterval (not LastWeeklyIntervalRequired, which
+            // stays exclusive to the calendar-save path) — same "trying to keep staffed hours with
+            // no weekly window" configuration error as the policy-save path.
+            var reachabilityResult = ValidateStaffedHoursReachability(
+                staffedTargets,
+                weeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)).ToList(),
+                closureDates,
+                occurredAtUtc,
+                newTimeZone,
+                KeepResponsePolicyErrors.StaffedTimingRequiresWeeklyInterval);
+            if (reachabilityResult.IsFailure)
+                return reachabilityResult;
         }
 
         var updateResult = account.UpdateProfile(account.BusinessName, normalizedTimeZoneId);

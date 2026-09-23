@@ -130,22 +130,16 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
         if (standardBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(standardResponseTargetMinutes);
         if (priorityBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(priorityResponseTargetMinutes);
 
-        if (staffedTargets.Count > 0 && weeklyIntervals.Count == 0)
-            return Result.Failure(KeepResponsePolicyErrors.StaffedTimingRequiresWeeklyInterval);
-
-        if (staffedTargets.Count > 0)
-        {
-            TimeZoneId.TryResolve(account.TimeZone, out var timeZone);
-            var fromLocalDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(occurredAtUtc, timeZone));
-
-            var intervalTuples = weeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)).ToList();
-
-            foreach (var minutes in staffedTargets)
-            {
-                if (!StaffedHoursReachability.IsReachable(intervalTuples, closures.Select(c => c.Date).ToList(), minutes, fromLocalDate, timeZone))
-                    return Result.Failure(KeepResponsePolicyErrors.StaffedHoursTargetUnreachable);
-            }
-        }
+        TimeZoneId.TryResolve(account.TimeZone, out var timeZone);
+        var reachabilityResult = KeepSettingsPersistenceSupport.ValidateStaffedHoursReachability(
+            staffedTargets,
+            weeklyIntervals.Select(i => (i.Weekday, i.OpensAt, i.ClosesAt)).ToList(),
+            closures.Select(c => c.Date).ToList(),
+            occurredAtUtc,
+            timeZone,
+            KeepResponsePolicyErrors.StaffedTimingRequiresWeeklyInterval);
+        if (reachabilityResult.IsFailure)
+            return reachabilityResult;
 
         // Audit content is computed from the pre-mutation state (ADR-506 §4): changed fields only,
         // fixed order, "field: before -> after"; a first policy records every field as unset -> value.
@@ -272,26 +266,22 @@ public sealed class EfKeepResponsePolicyPersistence(OpHaloDbContext dbContext) :
             if (policy.PriorityResponseTimingBasis == ResponseTimingBasis.StaffedHours) staffedTargets.Add(policy.PriorityResponseTargetMinutes);
         }
 
-        if (staffedTargets.Count > 0 && weeklyIntervals.Count == 0)
-            return Result.Failure(KeepResponsePolicyErrors.LastWeeklyIntervalRequired);
+        TimeZoneId.TryResolve(account.TimeZone, out var timeZone);
+        var prospectiveClosures = existingClosures
+            .Select(c => c.ClosureDate)
+            .Except(closureDatesToRemove)
+            .Union(closureDatesToSet)
+            .ToList();
 
-        if (staffedTargets.Count > 0)
-        {
-            TimeZoneId.TryResolve(account.TimeZone, out var timeZone);
-            var fromLocalDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(occurredAtUtc, timeZone));
-
-            var prospectiveClosures = existingClosures
-                .Select(c => c.ClosureDate)
-                .Except(closureDatesToRemove)
-                .Union(closureDatesToSet)
-                .ToList();
-
-            foreach (var minutes in staffedTargets)
-            {
-                if (!StaffedHoursReachability.IsReachable(weeklyIntervals, prospectiveClosures, minutes, fromLocalDate, timeZone))
-                    return Result.Failure(KeepResponsePolicyErrors.StaffedHoursTargetUnreachable);
-            }
-        }
+        var reachabilityResult = KeepSettingsPersistenceSupport.ValidateStaffedHoursReachability(
+            staffedTargets,
+            weeklyIntervals,
+            prospectiveClosures,
+            occurredAtUtc,
+            timeZone,
+            KeepResponsePolicyErrors.LastWeeklyIntervalRequired);
+        if (reachabilityResult.IsFailure)
+            return reachabilityResult;
 
         ApplyWeeklyIntervalDiff(accountId, actorAccountUserId, actorDisplayName, existingIntervals, weeklyIntervals, occurredAtUtc);
         ApplyClosureDiff(accountId, actorAccountUserId, actorDisplayName, existingClosures, closuresToSet, closureDatesToRemove, occurredAtUtc);
