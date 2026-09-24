@@ -59,11 +59,20 @@ and App Store/Play submission) remain deferred until the foundation and closed l
 | --- | --- |
 | GAP-069 — durable Data Protection and narrow proxy trust | Start roughly two weeks before Keep becomes the pilot's authoritative record for live requests, completed work, or customer follow-up—or before any released customer-approval flow relies on protected links. Founder upgrades Railway to Pro, enables daily backups and PITR, and waits for the first PITR recovery window. Then implement the PostgreSQL-backed, certificate-encrypted key ring with a stable production application discriminator and narrowly process `X-Forwarded-Proto` from the measured Railway ingress boundary; preserve `ClientIpResolver` as the client-IP authority. Prove a ciphertext from API instance A unprotects after a redeploy to instance B, verify forged forwarded headers fail safely, and run a safe restore drill. See [authoritative-pilot-release-readiness.md](runbook/authoritative-pilot-release-readiness.md). |
 
-**Planned maintenance — `ophalo-web` Next 16.3.** [BL151](build-log/151-ophalo-web-next-16-3-maintenance-preflight.md)
-locks the isolated routine upgrade from Next `16.2.9` to `16.3.4`, with a Node `22.x` engine pin and
-regenerated lockfile/`next-env.d.ts`. React 19.3 and .NET SDK/container pinning are explicitly
-separate follow-ups. This is not a pilot gate and must not be batched with GAP-073; Vercel preview
-acceptance remains the deployment gate.
+**Maintenance — `ophalo-app` security remediation (done, 2026-09-24, `906667b4`).** `pnpm audit`
+went from 14 advisories (6 high, 8 moderate) to 0: `vitest` `4.1.10`→`4.1.11`, `postcss`
+`8.4.0`→`8.5.23`, and `pnpm-workspace.yaml` overrides pinning the transitive-only `nanoid`,
+`browserslist`, `baseline-browser-mapping`, `undici` to their patched releases. `jsdom` and the
+Node runtime were untouched; Vercel preview confirmed the runtime satisfies the overridden
+`undici`'s Node requirement.
+
+**Maintenance — `ophalo-web` Next 16.3 (done, 2026-09-24, `610fb4f0`).** [BL151](build-log/151-ophalo-web-next-16-3-maintenance-preflight.md)
+Slice A: Next `16.2.9`→`16.3.6` (upgraded from the brief's `16.3.4` after confirming `16.3.5`/
+`16.3.6` are non-breaking patches; `16.3.6` also fixes a real RCE in `next/og ImageResponse`,
+`GHSA-vcvr-r3jv-pc5j`), added a Node `22.x` engine pin, regenerated lockfile/`next-env.d.ts`.
+React stayed at `19.2.7`. Vercel preview passed; merged to `main`. BL151 Slice B (.NET SDK
+`global.json` pin + Docker image tag decision) remains a separate, non-urgent follow-up — not
+scheduled.
 
 ## Decision queue
 

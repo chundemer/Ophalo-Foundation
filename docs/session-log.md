@@ -8,35 +8,18 @@ scope, sequencing, gates, and deferrals. Locked decisions are in
 maintainability/refactor review (items 1–8), and DEF-063 are all done. DEF-063's policy and
 implementation evidence are recorded in workboard Next item 4 (`82254b20`, `c1e9a4ff`).
 
-The `ophalo-app` security-maintenance preflight is **complete** (2026-09-24, `906667b4`, merged to
-`main`): `pnpm audit` went from 14 advisories (6 high, 8 moderate) to 0. Direct-dep bumps `vitest`
-^4.1.10→^4.1.11 and `postcss` ^8.4.0→^8.5.23; `pnpm-workspace.yaml` overrides pin the
-transitive-only packages `nanoid` 3.3.18, `browserslist` 4.29.0, `baseline-browser-mapping`
-2.11.25, `undici` 7.29.0 (compatible with `jsdom` 29.1.1's own range, so `jsdom`/Node are
-unchanged). Verified clean: `pnpm typecheck`, `pnpm build`, full Vitest suite (143 files / 1,329
-tests), and the `app.ophalo.com` Vercel preview (Node runtime confirmed compatible with the
-overridden `undici`'s `>=20.18.1` requirement).
+Both preflighted maintenance sessions are **complete**: `ophalo-app` security remediation
+(`906667b4` — `pnpm audit` 14→0 advisories) and BL151 Slice A, the `ophalo-web` Next 16.3 update
+(`610fb4f0` — Next `16.2.9`→`16.3.6`, upgraded from the brief's `16.3.4` after confirming the
+extra patches are non-breaking and `16.3.6` fixes a real RCE). Both merged to `main`, Vercel
+preview verified. Evidence is in the workboard's maintenance notes. BL151 Slice B (.NET
+`global.json` + Docker tag decision) remains separate and unscheduled.
 
-## Start here — `ophalo-web` Next 16.3 update
+## Start here — Proposed Work & Commercial Quotes decision session
 
-Implement the already preflighted public-site-only maintenance slice in
-[BL151](build-log/151-ophalo-web-next-16-3-maintenance-preflight.md):
-
-- Scope is only `web/ophalo-web` (public marketing/auth/intake site), not `web/ophalo-app`, mobile,
-  or the API.
-- Update Next `16.2.9` → `16.3.4`, add the Node `22.x` engine declaration, regenerate the local
-  pnpm lockfile and `next-env.d.ts` if changed.
-- Keep React/React DOM at `19.2.7`; do not combine React 19.3, an App Router/caching migration,
-  `vercel.json`, or .NET pinning.
-- Run the local build/typecheck and public-site smoke, then use Vercel preview acceptance as the
-  founder-controlled deployment gate.
-
-## Later, separate maintenance
-
-BL151 Slice B remains a distinct, non-urgent .NET reproducibility decision: add root
-`global.json` for SDK `10.0.301` (`rollForward: "latestFeature"`), then separately decide whether
-the Docker SDK/runtime image tags remain floating or are pinned to a patch/digest. Do not batch it
-with either web maintenance session.
+Entry point: the workboard's [Decision queue](workboard.md#decision-queue) entry "Proposed Work &
+Commercial Quotes" and its "current state" table just below it, plus the cited ADR-488, BL127, and
+BL130. Agree the pilot finish-line and sequencing before any implementation session.
 
 ## Pilot posture and release gate
 
