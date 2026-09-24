@@ -1,12 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.IntegrationTests.Api;
 
@@ -24,6 +26,7 @@ public sealed class KeepRequestDetailTests : IClassFixture<KeepApiWebFactory>, I
     private Guid _accountId;
     private Guid _requestId;
     private Guid _seededVersion;
+    private Guid _ownerAccountUserId;
     private string _ownerCookie = string.Empty;
 
     public KeepRequestDetailTests(KeepApiWebFactory factory)
@@ -82,6 +85,7 @@ public sealed class KeepRequestDetailTests : IClassFixture<KeepApiWebFactory>, I
 
         _requestId = request.Id;
         _seededVersion = request.ConcurrencyVersion;
+        _ownerAccountUserId = graph.Owner.Id;
 
         var rawToken = await _factory.SeedSessionAsync(graph.Owner.Id, graph.Account.Id);
         _ownerCookie = $"{AuthConstants.CookieName}={rawToken}";
@@ -259,6 +263,75 @@ public sealed class KeepRequestDetailTests : IClassFixture<KeepApiWebFactory>, I
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         // LastBusinessActivityAt is null — derivation must return null, not true/false
         Assert.Equal(JsonValueKind.Null, body.GetProperty("customerPageViewedAfterLatestUpdate").ValueKind);
+    }
+
+    // =========================================================================
+    // DEF-063 — ready-to-close customer-activity warning signal on the detail DTO
+    // (ReadyToCloseActivityPolicy, shared with the list row's identical signal)
+    // =========================================================================
+
+    private async Task ResolveAndBackdateActivityAsync(DateTime customerActivityAtUtc, DateTime businessActivityAtUtc)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+
+        var request = await db.Set<KeepRequest>().FirstAsync(r => r.Id == _requestId);
+        var changeResult = request.ChangeStatus(
+            KeepRequestStatus.Resolved, null, _ownerAccountUserId, "Detail Owner", DateTime.UtcNow);
+        Assert.True(changeResult.IsSuccess);
+        if (changeResult.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(changeResult.Value.StatusChangedEvent);
+        await db.SaveChangesAsync();
+
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE keep_requests SET last_customer_activity_at = {0}, last_business_activity_at = {1} WHERE id = {2}",
+            customerActivityAtUtc, businessActivityAtUtc, _requestId);
+    }
+
+    [Fact]
+    public async Task GetDetail_ResolvedWithCustomerActivityAfterBusiness_ReadyToCloseWarningIsTrue()
+    {
+        var now = DateTime.UtcNow;
+        await ResolveAndBackdateActivityAsync(customerActivityAtUtc: now, businessActivityAtUtc: now.AddHours(-1));
+
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_requestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("readyToClose").GetProperty("hasCustomerActivityAfterResolution").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GetDetail_ResolvedWithBusinessActivityAfterCustomer_ReadyToCloseWarningIsFalse()
+    {
+        var now = DateTime.UtcNow;
+        await ResolveAndBackdateActivityAsync(customerActivityAtUtc: now.AddHours(-1), businessActivityAtUtc: now);
+
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_requestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(body.GetProperty("readyToClose").GetProperty("hasCustomerActivityAfterResolution").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GetDetail_NotResolved_ReadyToCloseWarningIsFalseEvenWithQualifyingTimestamps()
+    {
+        var now = DateTime.UtcNow;
+        // Seeded request starts life as Received (never resolved); only backdate the timestamps.
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE keep_requests SET last_customer_activity_at = {0}, last_business_activity_at = {1} WHERE id = {2}",
+                now, now.AddHours(-1), _requestId);
+        }
+
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_requestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(body.GetProperty("readyToClose").GetProperty("hasCustomerActivityAfterResolution").GetBoolean());
     }
 
     // =========================================================================

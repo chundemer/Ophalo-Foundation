@@ -23,7 +23,7 @@ vi.mock("../useActualWorkPendingReviews", () => ({
   }),
 }));
 
-vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null, DetailHero: () => null }));
+vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null, DetailHero: () => null, ReadyToCloseActivityWarning: () => null }));
 vi.mock("../DetailPanels", () => ({
   ProminentFeedbackCard: () => null,
   HeroAttentionBanner: () => null,

@@ -11,7 +11,7 @@ import type { UnifiedComposerHandle } from "../UnifiedComposer";
 // locked region order, and the desktop/mobile swap of the Activity vs Record-details tail — with
 // every region supplied as an opaque node so nothing here exercises data or policy.
 
-vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null }));
+vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null, ReadyToCloseActivityWarning: () => null }));
 vi.mock("../DetailPanels", () => ({
   ProminentFeedbackCard: () => null,
   HeroAttentionBanner: ({ inlineComposer }: { inlineComposer?: React.ReactNode }) => <div data-testid="region-attention">{inlineComposer}</div>,

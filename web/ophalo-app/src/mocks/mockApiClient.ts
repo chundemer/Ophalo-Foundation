@@ -340,6 +340,7 @@ export function installMockApi(): void {
       createdAtUtc: now,
       lastBusinessActivityAt: now,
       lastCustomerActivityAt: null,
+      readyToClose: { hasCustomerActivityAfterResolution: false },
       terminatedAtUtc: null,
       followUpOnDate: null,
       followUpOnReason: null,

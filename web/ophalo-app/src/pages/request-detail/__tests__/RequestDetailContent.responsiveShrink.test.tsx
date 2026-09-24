@@ -17,7 +17,7 @@ import type { KeepRequestDetailResult } from "../../../lib/apiClient";
 // switch the Device Toolbar to Pixel 8 without refreshing — the attention card must wrap its
 // primary action onto a second line and every card must fit within the viewport.
 
-vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null }));
+vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null, ReadyToCloseActivityWarning: () => null }));
 vi.mock("../DetailPanels", () => ({
   ProminentFeedbackCard: () => null,
   HeroAttentionBanner: () => <div data-testid="section-attention" />,

@@ -9,7 +9,7 @@ import type { KeepRequestDetailResult } from "../../../lib/apiClient";
 // content with a centered max-width wrapper (max-w-4xl mx-auto w-full), rather than rendering
 // edge to edge at wide desktop widths.
 
-vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null }));
+vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null, ReadyToCloseActivityWarning: () => null }));
 vi.mock("../DetailPanels", () => ({
   ProminentFeedbackCard: () => null,
   HeroAttentionBanner: () => <div data-testid="section-attention" />,

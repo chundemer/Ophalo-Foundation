@@ -6,7 +6,7 @@ import {
   OriginalRequestCard,
   WorkControlsGroup,
 } from "./DetailPanels";
-import { TodayPromiseBanner } from "./DetailHero";
+import { TodayPromiseBanner, ReadyToCloseActivityWarning } from "./DetailHero";
 import { MobileContactLocationCard } from "./MobileContactLocationCard";
 import { UnifiedComposer, type UnifiedComposerHandle } from "./UnifiedComposer";
 import { MarkWorkDoneSecondarySlot } from "./PrimaryActionControl";
@@ -96,6 +96,7 @@ export function RequestDetailWorkCanvas({
         timeZone={timeZone}
       />
       <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} timeZone={timeZone} />
+      <ReadyToCloseActivityWarning detail={detail} />
     </div>
   );
 

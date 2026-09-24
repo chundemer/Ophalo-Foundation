@@ -122,9 +122,9 @@ public sealed class KeepRequestSerializationContractTests : IClassFixture<KeepAp
         "followUpOnDate", "followUpOnNote", "followUpOnReason", "intakeUrgency",
         "lastBusinessActivityAt", "lastCustomerActivityAt", "navigation", "needsShare",
         "nextAttentionAtUtc", "origin", "pageToken", "participants", "pendingNotification",
-        "plannedForDate", "priorityBand", "referenceCode", "requestId", "serviceAddressLine1",
-        "serviceAddressLine2", "serviceCity", "serviceState", "serviceZip", "source", "status",
-        "terminatedAtUtc", "validation", "version", "waitingDirection",
+        "plannedForDate", "priorityBand", "readyToClose", "referenceCode", "requestId",
+        "serviceAddressLine1", "serviceAddressLine2", "serviceCity", "serviceState", "serviceZip",
+        "source", "status", "terminatedAtUtc", "validation", "version", "waitingDirection",
     ];
 
     [Fact]

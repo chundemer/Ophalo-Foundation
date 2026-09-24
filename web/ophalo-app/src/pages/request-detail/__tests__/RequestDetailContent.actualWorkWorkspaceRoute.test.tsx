@@ -12,7 +12,7 @@ import type { KeepRequestDetailResult } from "../../../lib/apiClient";
 const mockCreateDraft = vi.fn().mockResolvedValue("created");
 const mockStartCapture = vi.fn();
 
-vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null }));
+vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null, ReadyToCloseActivityWarning: () => null }));
 vi.mock("../DetailPanels", () => ({
   ProminentFeedbackCard: () => null,
   HeroAttentionBanner: () => null,

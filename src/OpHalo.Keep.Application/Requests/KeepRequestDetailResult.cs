@@ -20,6 +20,10 @@ public sealed record KeepRequestDetailResult(
     DateTime CreatedAtUtc,
     DateTime? LastBusinessActivityAt,
     DateTime? LastCustomerActivityAt,
+    // DEF-063: server-authoritative ready-to-close customer-activity warning signal, computed by
+    // the same ReadyToCloseActivityPolicy as the list row's KeepRequestSummary.ReadyToClose.
+    // Informational only — does not affect close eligibility, status transitions, or attention.
+    KeepRequestReadyToCloseInfo ReadyToClose,
     DateTime? TerminatedAtUtc,
     DateOnly? FollowUpOnDate,
     string? FollowUpOnReason,

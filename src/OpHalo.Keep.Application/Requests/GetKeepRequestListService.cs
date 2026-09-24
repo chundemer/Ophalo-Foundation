@@ -1091,17 +1091,9 @@ public sealed class GetKeepRequestListService(
         return TimeZoneInfo.ConvertTimeToUtc(midnight, timeZone);
     }
 
-    private static KeepRequestReadyToCloseInfo BuildReadyToCloseInfo(KeepRequest r)
-    {
-        var hasCustomerActivityAfterResolution =
-            r.Status == KeepRequestStatus.Resolved
-            && r.LastCustomerActivityAt.HasValue
-            && r.LastBusinessActivityAt.HasValue
-            && r.LastCustomerActivityAt.Value > r.LastBusinessActivityAt.Value;
-
-        return new KeepRequestReadyToCloseInfo(
-            HasCustomerActivityAfterResolution: hasCustomerActivityAfterResolution);
-    }
+    private static KeepRequestReadyToCloseInfo BuildReadyToCloseInfo(KeepRequest r) =>
+        new(HasCustomerActivityAfterResolution: ReadyToCloseActivityPolicy.HasCustomerActivityAfterResolution(
+            r.Status, r.LastCustomerActivityAt, r.LastBusinessActivityAt));
 
     private static string ComputeFutureFollowUpLabel(DateOnly date, FollowUpReason? reason, DateOnly today)
     {

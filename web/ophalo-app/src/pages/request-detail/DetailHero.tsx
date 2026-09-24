@@ -148,6 +148,34 @@ export function TodayPromiseBanner({ detail, onRecordFollowUp, timeZone = null }
   );
 }
 
+// DEF-063: ready-to-close customer-activity warning. Persistent, non-dismissible — staff may
+// otherwise acknowledge attention without completing real business follow-up. Server-authoritative
+// (ReadyToCloseActivityPolicy, shared with the identical list-row signal); this banner never
+// recomputes the condition client-side. Deliberately has no "safe to close" success-state
+// counterpart — absence of the warning is sufficient, and a success message would imply a
+// guarantee beyond the server's actual close-eligibility authorization.
+interface ReadyToCloseActivityWarningProps {
+  detail: KeepRequestDetailResult;
+}
+
+export function ReadyToCloseActivityWarning({ detail }: ReadyToCloseActivityWarningProps) {
+  if (detail.status !== "resolved") return null;
+  if (!detail.readyToClose.hasCustomerActivityAfterResolution) return null;
+
+  return (
+    <div className="rounded-xl border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-4 py-3">
+      <p className="text-sm font-semibold text-[var(--ophalo-attention)] flex items-center gap-1.5">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        Customer activity since resolution
+      </p>
+      <p className="text-xs text-[var(--ophalo-attention)] mt-0.5">
+        The customer has been in touch since this was marked resolved. Confirm the work is actually
+        done before closing.
+      </p>
+    </div>
+  );
+}
+
 interface DetailHeroProps {
   detail: KeepRequestDetailResult;
   // GAP-092 2b: account business IANA zone, owned by the page. Only DetailHeroName reads it

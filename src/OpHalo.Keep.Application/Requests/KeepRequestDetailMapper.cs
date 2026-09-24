@@ -86,6 +86,9 @@ internal static class KeepRequestDetailMapper
         CreatedAtUtc: request.CreatedAtUtc,
         LastBusinessActivityAt: request.LastBusinessActivityAt,
         LastCustomerActivityAt: request.LastCustomerActivityAt,
+        ReadyToClose: new KeepRequestReadyToCloseInfo(
+            HasCustomerActivityAfterResolution: ReadyToCloseActivityPolicy.HasCustomerActivityAfterResolution(
+                request.Status, request.LastCustomerActivityAt, request.LastBusinessActivityAt)),
         TerminatedAtUtc: request.TerminatedAtUtc,
         FollowUpOnDate:   request.FollowUpOnDate,
         FollowUpOnReason: request.FollowUpReason.HasValue ? KeepRequestWireMappers.MapFollowUpReason(request.FollowUpReason.Value) : null,

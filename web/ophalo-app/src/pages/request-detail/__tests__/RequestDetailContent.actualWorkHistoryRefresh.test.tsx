@@ -17,6 +17,7 @@ const mockOpenReplacementDraft = vi.fn();
 vi.mock("../DetailHero", () => ({
   TodayPromiseBanner: () => null,
   DetailHero: () => null,
+  ReadyToCloseActivityWarning: () => null,
 }));
 vi.mock("../DetailPanels", () => ({
   ProminentFeedbackCard: () => null,

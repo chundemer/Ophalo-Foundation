@@ -324,6 +324,10 @@ export interface EffectiveAttentionInfo {
   guidanceKey: string | null;
 }
 
+export interface KeepRequestReadyToCloseInfo {
+  hasCustomerActivityAfterResolution: boolean;
+}
+
 export interface KeepRequestDetailResult {
   requestId: string;
   referenceCode: string;
@@ -343,6 +347,9 @@ export interface KeepRequestDetailResult {
   createdAtUtc: string;
   lastBusinessActivityAt: string | null;
   lastCustomerActivityAt: string | null;
+  // DEF-063: server-authoritative ready-to-close customer-activity warning signal, computed by
+  // the same rule as the list row's identical field. Informational only.
+  readyToClose: KeepRequestReadyToCloseInfo;
   terminatedAtUtc: string | null;
   followUpOnDate: string | null;
   followUpOnReason: string | null;

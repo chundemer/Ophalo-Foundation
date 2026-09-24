@@ -4,13 +4,30 @@
 scope, sequencing, gates, and deferrals. Locked decisions are in
 [decision-index](decisions/decision-index.md); completed-work evidence is in `docs/build-log/`.
 
-**Updated 2026-09-22.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
+**Updated 2026-09-24.** The foundation-first sequence is active. GAP-039 Batch 4, GAP-038,
 GAP-093, GAP-095, GAP-098, GAP-073, GAP-094, GAP-099, GAP-063, GAP-048, GAP-049, GAP-092,
-GAP-100, and DEF-037 are complete. The queued maintainability/refactor review (see below) is
-next, then DEF-063. The canonical scope, order, gates, and deferrals are in the
-[workboard](workboard.md).
+GAP-100, DEF-037, the maintainability/refactor review (items 1–8), and DEF-063 are all complete.
+The locked foundation-first order (workboard Next) has no further queued item; the next active
+item is the **Proposed Work & Commercial Quotes decision session** (workboard Decision Queue —
+its first deliverable is a decision record, not code). The canonical scope, order, gates, and
+deferrals are in the [workboard](workboard.md).
 
-## Start here — DEF-037
+## Start here — Proposed Work & Commercial Quotes decision session
+
+Entry point: the workboard's [Decision queue](workboard.md#decision-queue) entry "Proposed Work &
+Commercial Quotes" and its "current state" table just below it, plus the cited ADR-488, BL127, and
+BL130. Agree the pilot finish-line and sequencing before any implementation session.
+
+## DEF-063 — ready-to-close customer-activity warning (complete, 2026-09-24)
+
+Policy locked (ADR-128 addendum): `Resolved` stays a monitored grace period, not feedback-eligible;
+`Closed` remains the sole feedback-eligible terminal state (ADR-127 not reopened). New
+`ReadyToCloseActivityPolicy` (Core/Domain) is the sole definition of the signal, shared by the list
+row and a new `KeepRequestDetailResult.ReadyToClose` field; a non-dismissible Request Detail banner
+renders only when `status === "resolved"` and the flag is true, with no "safe to close" success
+state. Full file/test evidence is in the workboard's Next item 4 entry.
+
+## Prior — maintainability/refactor review (items 1–8, complete) and DEF-037 (complete)
 
 GAP-100 (promoted from DEF-025 — office-hours-aware signals the current pilot requires). ADR-505
 is locked and indexed. Batches 1-4 are done and pushed (defaults reconciliation, shared timezone
